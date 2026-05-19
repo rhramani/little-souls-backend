@@ -1,0 +1,908 @@
+{
+  "info": {
+    "_postman_id": "8f8b53ff-da88-41fb-9f5c-b2599a17876b",
+    "name": "Little Souls B2B API Suite",
+    "description": "Comprehensive B2B e-commerce wholesale operations Postman Collection, covering Auth, Dynamic Wholesale Tier Pricing, Checkout pipeline, double-entry Customer Ledger, Bulk Imports, Sales Staff Incentive performance, Logistics and Helpdesk support.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01. Authentication & Users",
+      "item": [
+        {
+          "name": "Register B2B Customer Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"wholesale@ecostore.com\",\n  \"password\": \"Password123!\",\n  \"name\": \"Sarah Connor\",\n  \"businessName\": \"Little Souls Eco Store\",\n  \"businessType\": \"Retail Store\",\n  \"mainContactNumber\": \"+919876543210\",\n  \"gstin\": \"27AAAAA1111A1Z1\",\n  \"billingAddressLine1\": \"123 Green Boulevard\",\n  \"billingCity\": \"Mumbai\",\n  \"billingState\": \"Maharashtra\",\n  \"billingPincode\": \"400001\",\n  \"billingCountry\": \"India\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register-customer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register-customer"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Register Sales Staff User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alex.m@littlesouls.com\",\n  \"password\": \"Password123!\",\n  \"name\": \"Alex Mercer\",\n  \"employeeCode\": \"EMP-2026-004\",\n  \"mobile\": \"+919876543211\",\n  \"designation\": \"Key Account Manager\",\n  \"department\": \"Wholesale Sales\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register-staff",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register-staff"
+              ]
+            }
+          }
+        },
+        {
+          "name": "User Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.token) {",
+                  "    pm.environment.set(\"token\", jsonData.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"wholesale@ecostore.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Current User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "profile"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Categories",
+      "item": [
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Eco Toys\",\n  \"description\": \"Organic and safe sustainable wooden toys\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/category",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "category"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Categories Tree Hierarchy",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/category",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "category"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Products",
+      "item": [
+        {
+          "name": "Create Product with stock levels",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"LS-WOOD-BLOCKS\",\n  \"name\": \"100pcs Sustainable Wooden Building Blocks\",\n  \"description\": \"Crafted from sustainable beechwood with child-safe watercolor tints.\",\n  \"categoryId\": \"RESOLVED_CATEGORY_UUID_HERE\",\n  \"stockQuantity\": 60,\n  \"moq\": 5,\n  \"taxPercent\": 12,\n  \"unit\": \"SET\",\n  \"brand\": \"Little Souls Eco\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/product",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Products Catalog (Resolves B2B prices dynamically)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product?page=1&limit=10&search=blocks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "search",
+                  "value": "blocks"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Pricing Tiers Setup",
+      "item": [
+        {
+          "name": "Create Pricing Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Premium Gold Wholesalers\",\n  \"code\": \"GOLD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pricing/group",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pricing",
+                "group"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Setup Custom B2B Tier Price",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"RESOLVED_PRODUCT_UUID_HERE\",\n  \"pricingGroupId\": \"RESOLVED_GROUP_UUID_HERE\",\n  \"price\": 180.00,\n  \"mrp\": 299.00,\n  \"discountPercent\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pricing/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pricing",
+                "setup"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Cart Pipeline",
+      "item": [
+        {
+          "name": "Add Items to Cart (Validates MoQ & Tiers)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"RESOLVED_PRODUCT_UUID_HERE\",\n  \"quantity\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cart",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cart"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Current B2B Cart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cart",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cart"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Checkout & Orders",
+      "item": [
+        {
+          "name": "Place B2B Order (Converts Cart & Allocates Shortages)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deliveryAddress\": \"G-04, Ground Floor, Central B2B Warehouse, Mumbai, MH, 400001\",\n  \"notes\": \"Deliver on weekday mornings please.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/order/checkout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "checkout"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Orders (Sales staff sees all, customers see own)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Staff Action: Approve and progress Order",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPROVED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/order/RESOLVED_ORDER_UUID_HERE/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "RESOLVED_ORDER_UUID_HERE",
+                "status"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Billing, Invoices & Running Ledgers",
+      "item": [
+        {
+          "name": "Staff: Generate Invoice from Approved Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/billing/invoice/generate/RESOLVED_ORDER_UUID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "billing",
+                "invoice",
+                "generate",
+                "RESOLVED_ORDER_UUID_HERE"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Customer: Submit Online B2B Payment Proof",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"RESOLVED_CUSTOMER_UUID_HERE\",\n  \"amount\": 1500.00,\n  \"paymentMode\": \"BANK_TRANSFER\",\n  \"transactionDate\": \"2026-05-18T12:00:00Z\",\n  \"referenceNumber\": \"TXN983274982\",\n  \"notes\": \"Sent UPI / IMPS to main bank account. Receipt screenshot attached.\",\n  \"attachmentUrl\": \"https://s3.aws.com/receipts/txn_receipt.png\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/billing/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "billing",
+                "payment"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Staff: Verify B2B Payment (Posts CREDIT Ledger & reduces balance)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/billing/payment/RESOLVED_PAYMENT_UUID_HERE/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "billing",
+                "payment",
+                "RESOLVED_PAYMENT_UUID_HERE",
+                "verify"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Customer Account Balance & Credit Limit Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/billing/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "billing",
+                "balance"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Customer Running Ledger Statements",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/billing/ledger?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "billing",
+                "ledger"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "08. Catalog Bulk Imports",
+      "item": [
+        {
+          "name": "Staff: Start Bulk Catalog Creation Spreadsheet Import",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileUrl\": \"https://s3.aws.com/catalogs/new_collection_2026.csv\",\n  \"importType\": \"PRODUCT_CREATE\",\n  \"rows\": [\n    {\n      \"sku\": \"LS-TEE-BLU-S\",\n      \"name\": \"Organic Cotton Tee - Ocean Blue (Small)\",\n      \"categoryName\": \"Eco Toys\",\n      \"brand\": \"Little Souls\",\n      \"stockQuantity\": 120,\n      \"moq\": 10\n    },\n    {\n      \"sku\": \"LS-TEE-BLU-M\",\n      \"name\": \"Organic Cotton Tee - Ocean Blue (Medium)\",\n      \"categoryName\": \"Eco Toys\",\n      \"brand\": \"Little Souls\",\n      \"stockQuantity\": 90,\n      \"moq\": 10\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "import"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Staff: Get Bulk Catalog Import Tracking Progress and row errors",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/import/RESOLVED_IMPORT_UUID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "import",
+                "RESOLVED_IMPORT_UUID_HERE"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09. Sales Staff Mappings & Incentives",
+      "item": [
+        {
+          "name": "Staff Manager: Assign Sales Representative to Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"RESOLVED_CUSTOMER_UUID_HERE\",\n  \"salesStaffId\": \"RESOLVED_STAFF_USER_UUID_HERE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/staff/assign-customer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "staff",
+                "assign-customer"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Logged-in Staff performance & earned commissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/staff/performance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "staff",
+                "performance"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Manager Action: Get B2B Wholesale Staff Performance Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/staff/leaderboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "staff",
+                "leaderboard"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Logistics Replenishments & Suppliers",
+      "item": [
+        {
+          "name": "Staff: Create a Supplier profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Super Spindle Cotton Mills\",\n  \"email\": \"spindle@cottonmills.com\",\n  \"mobile\": \"+919988776655\",\n  \"gstin\": \"27BCBCB2222B2Z2\",\n  \"address\": \"Industrial park block 4, Surat, Gujarat\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/purchase-order/supplier",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-order",
+                "supplier"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Staff: Issue a Replenishment Purchase Order (PO)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierId\": \"RESOLVED_SUPPLIER_UUID_HERE\",\n  \"items\": [\n    {\n      \"productId\": \"RESOLVED_PRODUCT_UUID_HERE\",\n      \"quantity\": 100,\n      \"costPrice\": 120.00,\n      \"taxPercent\": 5\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/purchase-order",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-order"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Staff: Receive goods in warehouse (Increments stock & logs movements)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"RECEIVED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/purchase-order/RESOLVED_PO_UUID_HERE/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-order",
+                "RESOLVED_PO_UUID_HERE",
+                "status"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. B2B Client Support CRM",
+      "item": [
+        {
+          "name": "Customer: Raise Helpdesk Support Ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"Shortage of delivered items on Order LS-10495\",\n  \"message\": \"My invoice lists 10 blocks, but only 8 arrived in the box. Please verify and resolve.\",\n  \"priority\": \"HIGH\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/support",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "support"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Support Tickets Statement (B2B clients isolated, Staff see all)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/support?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "support"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "PASTE_JWT_TOKEN_HERE_OR_LOG_IN_TO_SET",
+      "type": "string"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+import { Controller, Post, Get, Body, Req, UseGuards, Ip, Headers, HttpCode, HttpStatus } from '@nestjs/common';
+import type { Request } from 'express';
+import { AuthService } from './auth.service';
+import { RegisterCustomerDto } from './dto/register-customer.dto';
+import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { GetUser } from './decorators/get-user.decorator';
+
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Post('register-customer')
+  @HttpCode(HttpStatus.CREATED)
+  async registerCustomer(@Body() dto: RegisterCustomerDto) {
+    return this.authService.registerCustomer(dto);
+  }
+
+  @Post('register-staff')
+  @HttpCode(HttpStatus.CREATED)
+  async registerStaff(@Body() dto: import('./dto/register-staff.dto').RegisterStaffDto) {
+    return this.authService.registerStaff(dto);
+  }
+
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Ip() ipAddress: string,
+  ) {
+    const userAgent = req.headers['user-agent'];
+    return this.authService.login(dto, userAgent, ipAddress);
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async logout(@GetUser('id') userId: string, @GetUser('sessionId') sessionId?: string) {
+    return this.authService.logout(userId, sessionId);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
+  }
+
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getProfile(@GetUser('id') userId: string) {
+    return this.authService.getProfile(userId);
+  }
+}
