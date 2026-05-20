@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { PricingService } from './pricing.service';
 import { CreatePricingGroupDto } from './dto/create-pricing-group.dto';
 import { UpdatePricingGroupDto } from './dto/update-pricing-group.dto';
@@ -38,7 +49,10 @@ export class PricingController {
   @Patch('group/:id')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async updateGroup(@Param('id') id: string, @Body() dto: UpdatePricingGroupDto) {
+  async updateGroup(
+    @Param('id') id: string,
+    @Body() dto: UpdatePricingGroupDto,
+  ) {
     return this.pricingService.updateGroup(id, dto);
   }
 
@@ -52,7 +66,10 @@ export class PricingController {
   @Post('setup')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async setProductPrice(@Body() dto: SetProductPricingDto, @GetUser('id') userId: string) {
+  async setProductPrice(
+    @Body() dto: SetProductPricingDto,
+    @GetUser('id') userId: string,
+  ) {
     return this.pricingService.setProductPrice(dto, userId);
   }
 

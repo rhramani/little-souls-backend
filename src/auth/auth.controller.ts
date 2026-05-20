@@ -1,10 +1,23 @@
-import { Controller, Post, Get, Body, Req, UseGuards, Ip, Headers, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Req,
+  UseGuards,
+  Ip,
+  Headers,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterCustomerDto } from './dto/register-customer.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { SendOtpDto } from './dto/send-otp.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { GetUser } from './decorators/get-user.decorator';
 
@@ -20,7 +33,9 @@ export class AuthController {
 
   @Post('register-staff')
   @HttpCode(HttpStatus.CREATED)
-  async registerStaff(@Body() dto: import('./dto/register-staff.dto').RegisterStaffDto) {
+  async registerStaff(
+    @Body() dto: import('./dto/register-staff.dto').RegisterStaffDto,
+  ) {
     return this.authService.registerStaff(dto);
   }
 
@@ -38,7 +53,10 @@ export class AuthController {
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async logout(@GetUser('id') userId: string, @GetUser('sessionId') sessionId?: string) {
+  async logout(
+    @GetUser('id') userId: string,
+    @GetUser('sessionId') sessionId?: string,
+  ) {
     return this.authService.logout(userId, sessionId);
   }
 
@@ -59,5 +77,22 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async getProfile(@GetUser('id') userId: string) {
     return this.authService.getProfile(userId);
+  }
+
+  @Post('otp/send')
+  @HttpCode(HttpStatus.OK)
+  async sendOtp(@Body() dto: SendOtpDto) {
+    return this.authService.sendOtp(dto.mobile);
+  }
+
+  @Post('otp/verify')
+  @HttpCode(HttpStatus.OK)
+  async verifyOtp(
+    @Body() dto: VerifyOtpDto,
+    @Req() req: Request,
+    @Ip() ipAddress: string,
+  ) {
+    const userAgent = req.headers['user-agent'];
+    return this.authService.verifyOtp(dto.mobile, dto.otp, userAgent, ipAddress);
   }
 }

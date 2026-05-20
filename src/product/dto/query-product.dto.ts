@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsUUID, IsInt, IsBoolean, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsUUID,
+  IsInt,
+  IsBoolean,
+  IsEnum,
+} from 'class-validator';
 import { StockStatus } from '@prisma/client';
 
 export class QueryProductDto {

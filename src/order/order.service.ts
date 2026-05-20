@@ -1,12 +1,21 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 import { Prisma } from '@prisma/client';
+import { WhatsappService } from '../notification/whatsapp.service';
 
 @Injectable()
 export class OrderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly whatsappService: WhatsappService,
+  ) {}
 
   async checkout(customerId: string, contactId: string, dto: CheckoutDto) {
     // 1. Get active cart
@@ -71,7 +80,7 @@ export class OrderService {
     const orderNumber = `LS-${Date.now().toString().slice(-8)}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     // 4. Calculate prices, inventory checks, and compile items inside Transaction
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       let totalQuantity = 0;
       let subTotal = new Prisma.Decimal(0);
       let taxTotal = new Prisma.Decimal(0);
@@ -84,14 +93,18 @@ export class OrderService {
       for (const item of cart.items) {
         const product = item.product;
         if (!product || !product.isActive) {
-          throw new BadRequestException(`Product '${product?.name || 'Unknown'}' is no longer available.`);
+          throw new BadRequestException(
+            `Product '${product?.name || 'Unknown'}' is no longer available.`,
+          );
         }
 
         const quantity = item.quantity;
         totalQuantity += quantity;
 
         // Resolve tax percent
-        const taxPercent = product.taxPercent ? new Prisma.Decimal(product.taxPercent) : new Prisma.Decimal(0);
+        const taxPercent = product.taxPercent
+          ? new Prisma.Decimal(product.taxPercent)
+          : new Prisma.Decimal(0);
 
         // Fetch B2B product custom pricing group definition
         const customer = await tx.customer.findUnique({
@@ -100,7 +113,9 @@ export class OrderService {
         });
 
         if (!customer || !customer.pricingGroupId) {
-          throw new BadRequestException('B2B custom pricing group is missing on your customer profile.');
+          throw new BadRequestException(
+            'B2B custom pricing group is missing on your customer profile.',
+          );
         }
 
         const pricing = await tx.productPricing.findUnique({
@@ -113,12 +128,15 @@ export class OrderService {
         });
 
         if (!pricing) {
-          throw new BadRequestException(`Price not defined for B2B product: ${product.name}`);
+          throw new BadRequestException(
+            `Price not defined for B2B product: ${product.name}`,
+          );
         }
 
         const price = pricing.price;
         const mrp = pricing.mrp || null;
-        const discountPercent = pricing.discountPercent || new Prisma.Decimal(0);
+        const discountPercent =
+          pricing.discountPercent || new Prisma.Decimal(0);
 
         // Calculations exclusive of tax
         const lineSubTotal = price.mul(quantity);
@@ -134,7 +152,9 @@ export class OrderService {
 
         // Inventory check
         if (product.stockQuantity < quantity) {
-          throw new BadRequestException(`Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, requested: ${quantity}. Please reduce quantity or select a different product before placing your order.`);
+          throw new BadRequestException(
+            `Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, requested: ${quantity}. Please reduce quantity or select a different product before placing your order.`,
+          );
         }
 
         orderItemsData.push({
@@ -158,7 +178,10 @@ export class OrderService {
       }
 
       // Final calculations
-      const grandTotal = subTotal.add(taxTotal).sub(discountTotal).add(shippingCharge);
+      const grandTotal = subTotal
+        .add(taxTotal)
+        .sub(discountTotal)
+        .add(shippingCharge);
 
       // Create Order
       const order = await tx.order.create({
@@ -209,9 +232,27 @@ export class OrderService {
         include: {
           items: true,
           statusHistory: true,
+          customer: true,
         },
       });
     });
+    
+    // Fetch customer's primary contact number asynchronously for WhatsApp
+    const primaryContact = await this.prisma.customerContact.findFirst({
+      where: { customerId: result?.customerId },
+      orderBy: { isPrimary: 'desc' },
+    });
+    
+    const whatsappNumber = primaryContact?.whatsappNumber || primaryContact?.mobile;
+    if (whatsappNumber && result?.customer) {
+      this.whatsappService.sendOrderConfirmation(
+        whatsappNumber,
+        result.orderNumber,
+        result.customer.businessName
+      ).catch(console.error); // Fire and forget
+    }
+    
+    return result;
   }
 
   async findAll(query: QueryOrderDto, customerId?: string) {
@@ -284,7 +325,9 @@ export class OrderService {
     }
 
     if (customerId && order.customerId !== customerId) {
-      throw new ForbiddenException('You do not have access to view this order.');
+      throw new ForbiddenException(
+        'You do not have access to view this order.',
+      );
     }
 
     return order;
@@ -301,7 +344,9 @@ export class OrderService {
     }
 
     if (order.orderStatus === 'CANCELLED') {
-      throw new BadRequestException('Cannot update status of a cancelled order.');
+      throw new BadRequestException(
+        'Cannot update status of a cancelled order.',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -313,11 +358,15 @@ export class OrderService {
           });
 
           if (!product) {
-            throw new NotFoundException(`Product '${item.productName}' not found during order approval.`);
+            throw new NotFoundException(
+              `Product '${item.productName}' not found during order approval.`,
+            );
           }
 
           if (product.stockQuantity < item.quantity) {
-            throw new BadRequestException(`Cannot approve order: Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, Ordered: ${item.quantity}.`);
+            throw new BadRequestException(
+              `Cannot approve order: Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, Ordered: ${item.quantity}.`,
+            );
           }
 
           const newStock = product.stockQuantity - item.quantity;
@@ -327,7 +376,12 @@ export class OrderService {
             where: { id: product.id },
             data: {
               stockQuantity: newStock,
-              stockStatus: newStock === 0 ? 'OUT_OF_STOCK' : newStock <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
+              stockStatus:
+                newStock === 0
+                  ? 'OUT_OF_STOCK'
+                  : newStock <= 5
+                    ? 'LOW_STOCK'
+                    : 'IN_STOCK',
             },
           });
 
@@ -369,7 +423,12 @@ export class OrderService {
     });
   }
 
-  async cancel(id: string, reason: string, userId: string, customerId?: string) {
+  async cancel(
+    id: string,
+    reason: string,
+    userId: string,
+    customerId?: string,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: { items: true },
@@ -380,7 +439,9 @@ export class OrderService {
     }
 
     if (customerId && order.customerId !== customerId) {
-      throw new ForbiddenException('You do not have authorization to cancel this order.');
+      throw new ForbiddenException(
+        'You do not have authorization to cancel this order.',
+      );
     }
 
     if (order.orderStatus === 'CANCELLED') {
@@ -389,7 +450,9 @@ export class OrderService {
 
     const uncancelableStatuses = ['SHIPPED', 'DELIVERED'];
     if (uncancelableStatuses.includes(order.orderStatus)) {
-      throw new BadRequestException(`Cannot cancel order once it has been ${order.orderStatus.toLowerCase()}.`);
+      throw new BadRequestException(
+        `Cannot cancel order once it has been ${order.orderStatus.toLowerCase()}.`,
+      );
     }
 
     // Process cancellation and restore inventory stock in Transaction
@@ -427,7 +490,12 @@ export class OrderService {
               where: { id: item.productId },
               data: {
                 stockQuantity: restoredStock,
-                stockStatus: restoredStock > 5 ? 'IN_STOCK' : restoredStock > 0 ? 'LOW_STOCK' : 'OUT_OF_STOCK',
+                stockStatus:
+                  restoredStock > 5
+                    ? 'IN_STOCK'
+                    : restoredStock > 0
+                      ? 'LOW_STOCK'
+                      : 'OUT_OF_STOCK',
               },
             });
 
@@ -452,6 +520,169 @@ export class OrderService {
       }
 
       return updatedOrder;
+    });
+  }
+
+  async approveBackorder(id: string, userId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID '${id}' not found.`);
+    }
+
+    if (order.orderStatus !== 'SUBMITTED') {
+      throw new BadRequestException('Only SUBMITTED orders can be backorder approved.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedOrder = await tx.order.update({
+        where: { id },
+        data: {
+          orderStatus: 'APPROVED',
+          approvedBy: userId,
+          approvedAt: new Date(),
+          notes: (order.notes ? order.notes + '\n' : '') + `[SYSTEM] Backorder approved by User ${userId}`,
+        },
+      });
+
+      // Log status change
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: id,
+          oldStatus: order.orderStatus,
+          newStatus: 'APPROVED',
+        },
+      });
+
+      // Adjust inventory, allowing negative stock
+      for (const item of order.items) {
+        const product = await tx.product.findUnique({
+          where: { id: item.productId },
+        });
+
+        if (product) {
+          const newStock = product.stockQuantity - item.quantity;
+          await tx.product.update({
+            where: { id: product.id },
+            data: {
+              stockQuantity: newStock,
+              stockStatus: newStock <= 0 ? 'OUT_OF_STOCK' : newStock <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
+            },
+          });
+          
+          await tx.stockMovement.create({
+            data: {
+              productId: product.id,
+              movementType: 'ORDER_OUT',
+              referenceType: 'ORDER',
+              referenceId: order.id,
+              quantity: item.quantity,
+              stockBefore: product.stockQuantity,
+              stockAfter: newStock,
+              note: `Stock allocated for Backorder-Approved Order '${order.orderNumber}'`,
+              createdBy: userId,
+            },
+          });
+        }
+      }
+
+      return updatedOrder;
+    });
+  }
+
+  async createPackingSlip(id: string, notes: string | undefined, userId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID '${id}' not found.`);
+    }
+
+    if (order.orderStatus !== 'APPROVED' && order.orderStatus !== 'PACKED') {
+      throw new BadRequestException(`Cannot pack an order in ${order.orderStatus} status.`);
+    }
+
+    const packingSlipNumber = `PS-${Date.now().toString().slice(-8)}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const slip = await tx.packingSlip.create({
+        data: {
+          orderId: id,
+          packingSlipNumber,
+          packedBy: userId,
+          packedAt: new Date(),
+          status: 'PACKED',
+          notes,
+        },
+      });
+
+      if (order.orderStatus === 'APPROVED') {
+        await tx.order.update({
+          where: { id },
+          data: { orderStatus: 'PACKED' },
+        });
+
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: id,
+            oldStatus: 'APPROVED',
+            newStatus: 'PACKED',
+          },
+        });
+      }
+
+      return slip;
+    });
+  }
+
+  async createShipment(id: string, dto: any, userId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID '${id}' not found.`);
+    }
+
+    if (order.orderStatus !== 'PACKED' && order.orderStatus !== 'SHIPPED') {
+      throw new BadRequestException(`Cannot ship an order in ${order.orderStatus} status. Must be PACKED first.`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const shipment = await tx.shipment.create({
+        data: {
+          orderId: id,
+          courierName: dto.courierName,
+          trackingNumber: dto.trackingNumber,
+          trackingUrl: dto.trackingUrl,
+          shippingProvider: dto.shippingProvider,
+          shippingCost: dto.shippingCost ? new Prisma.Decimal(dto.shippingCost) : null,
+          shipmentStatus: 'SHIPPED',
+          shippedAt: new Date(),
+          createdBy: userId,
+        },
+      });
+
+      if (order.orderStatus === 'PACKED') {
+        await tx.order.update({
+          where: { id },
+          data: { orderStatus: 'SHIPPED' },
+        });
+
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: id,
+            oldStatus: 'PACKED',
+            newStatus: 'SHIPPED',
+          },
+        });
+      }
+
+      return shipment;
     });
   }
 }

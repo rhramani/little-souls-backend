@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePricingGroupDto } from './dto/create-pricing-group.dto';
 import { UpdatePricingGroupDto } from './dto/update-pricing-group.dto';
@@ -17,7 +22,9 @@ export class PricingService {
       where: { code },
     });
     if (existing) {
-      throw new ConflictException(`Pricing Group with code '${code}' already exists.`);
+      throw new ConflictException(
+        `Pricing Group with code '${code}' already exists.`,
+      );
     }
 
     return this.prisma.pricingGroup.create({
@@ -68,7 +75,9 @@ export class PricingService {
           where: { code },
         });
         if (existing) {
-          throw new ConflictException(`Pricing Group with code '${code}' already exists.`);
+          throw new ConflictException(
+            `Pricing Group with code '${code}' already exists.`,
+          );
         }
       }
     }
@@ -92,7 +101,9 @@ export class PricingService {
       where: { pricingGroupId: id },
     });
     if (customersCount > 0) {
-      throw new BadRequestException(`Cannot delete pricing group that is currently assigned to ${customersCount} customer(s).`);
+      throw new BadRequestException(
+        `Cannot delete pricing group that is currently assigned to ${customersCount} customer(s).`,
+      );
     }
 
     // 2. Check if active product pricings exist
@@ -100,7 +111,9 @@ export class PricingService {
       where: { pricingGroupId: id },
     });
     if (pricingsCount > 0) {
-      throw new BadRequestException(`Cannot delete pricing group with ${pricingsCount} active product price definition(s).`);
+      throw new BadRequestException(
+        `Cannot delete pricing group with ${pricingsCount} active product price definition(s).`,
+      );
     }
 
     await this.prisma.pricingGroup.delete({
@@ -116,7 +129,9 @@ export class PricingService {
       where: { id: dto.productId },
     });
     if (!product) {
-      throw new NotFoundException(`Product with ID '${dto.productId}' not found.`);
+      throw new NotFoundException(
+        `Product with ID '${dto.productId}' not found.`,
+      );
     }
 
     // 2. Verify Pricing Group exists
@@ -124,12 +139,16 @@ export class PricingService {
       where: { id: dto.pricingGroupId },
     });
     if (!group) {
-      throw new NotFoundException(`Pricing Group with ID '${dto.pricingGroupId}' not found.`);
+      throw new NotFoundException(
+        `Pricing Group with ID '${dto.pricingGroupId}' not found.`,
+      );
     }
 
     const price = new Prisma.Decimal(dto.price);
     const mrp = dto.mrp ? new Prisma.Decimal(dto.mrp) : null;
-    const discountPercent = dto.discountPercent ? new Prisma.Decimal(dto.discountPercent) : null;
+    const discountPercent = dto.discountPercent
+      ? new Prisma.Decimal(dto.discountPercent)
+      : null;
 
     // 3. Upsert Product Pricing record
     return this.prisma.productPricing.upsert({

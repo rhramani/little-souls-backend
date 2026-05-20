@@ -14,10 +14,43 @@ import { StaffModule } from './staff/staff.module';
 import { PurchaseOrderModule } from './purchase-order/purchase-order.module';
 import { SupportModule } from './support/support.module';
 import { ConfigModule } from '@nestjs/config';
+import { UploadModule } from './upload/upload.module';
+import { CustomerModule } from './customer/customer.module';
+import { NotificationModule } from './notification/notification.module';
+
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
+import { ReportModule } from './report/report.module';
+import { ImageCleaningModule } from './image-cleaning/image-cleaning.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, CategoryModule, ProductModule, PricingModule, CartModule, OrderModule, BillingModule, ImportModule, StaffModule, PurchaseOrderModule, SupportModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    AuthModule,
+    CategoryModule,
+    ProductModule,
+    PricingModule,
+    CartModule,
+    OrderModule,
+    BillingModule,
+    ImportModule,
+    StaffModule,
+    PurchaseOrderModule,
+    SupportModule,
+    UploadModule,
+    CustomerModule,
+    NotificationModule,
+    ReportModule,
+    ImageCleaningModule,
+  ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
+  ],
 })
 export class AppModule {}

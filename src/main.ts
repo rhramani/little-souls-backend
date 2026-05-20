@@ -28,6 +28,8 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  console.log(`[Little Souls Backend] Running successfully on port ${port} (API Prefix: /api)`);
+  console.log(
+    `[Little Souls Backend] Running successfully on port ${port} (API Prefix: /api)`,
+  );
 }
 bootstrap();

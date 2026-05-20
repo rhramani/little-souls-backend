@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
@@ -48,7 +52,9 @@ export class PurchaseOrderService {
       where: { id: dto.supplierId },
     });
     if (!supplier) {
-      throw new NotFoundException(`Supplier with ID '${dto.supplierId}' not found.`);
+      throw new NotFoundException(
+        `Supplier with ID '${dto.supplierId}' not found.`,
+      );
     }
 
     // 2. Validate all products exist
@@ -58,7 +64,9 @@ export class PurchaseOrderService {
     });
 
     if (products.length !== productIds.length) {
-      throw new BadRequestException('One or more products specified in purchase items do not exist.');
+      throw new BadRequestException(
+        'One or more products specified in purchase items do not exist.',
+      );
     }
 
     const poNumber = `PO-${Date.now().toString().slice(-8)}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -130,17 +138,23 @@ export class PurchaseOrderService {
     });
 
     if (!po) {
-      throw new NotFoundException(`Purchase Order with ID '${poId}' not found.`);
+      throw new NotFoundException(
+        `Purchase Order with ID '${poId}' not found.`,
+      );
     }
 
     // Terminal state checks
     if (po.status === 'RECEIVED' || po.status === 'CANCELLED') {
-      throw new BadRequestException(`Cannot change status of a terminal Purchase Order (currently in '${po.status}' state).`);
+      throw new BadRequestException(
+        `Cannot change status of a terminal Purchase Order (currently in '${po.status}' state).`,
+      );
     }
 
     const validStatuses = ['DRAFT', 'SENT', 'RECEIVED', 'CANCELLED'];
     if (!validStatuses.includes(status)) {
-      throw new BadRequestException(`Invalid status transitions requested: '${status}'.`);
+      throw new BadRequestException(
+        `Invalid status transitions requested: '${status}'.`,
+      );
     }
 
     if (status === 'RECEIVED') {
@@ -152,7 +166,9 @@ export class PurchaseOrderService {
           });
 
           if (!product) {
-            throw new NotFoundException(`Product with ID '${item.productId}' not found during stock receiving.`);
+            throw new NotFoundException(
+              `Product with ID '${item.productId}' not found during stock receiving.`,
+            );
           }
 
           const stockBefore = product.stockQuantity;

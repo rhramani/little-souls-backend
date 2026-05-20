@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Put, Patch, Body, Param, UseGuards, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { PurchaseOrderService } from './purchase-order.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
@@ -36,7 +48,10 @@ export class PurchaseOrderController {
 
   @Put('supplier/:id')
   @HttpCode(HttpStatus.OK)
-  async updateSupplier(@Param('id') id: string, @Body() dto: CreateSupplierDto) {
+  async updateSupplier(
+    @Param('id') id: string,
+    @Body() dto: CreateSupplierDto,
+  ) {
     return this.poService.updateSupplier(id, dto);
   }
 
@@ -44,7 +59,10 @@ export class PurchaseOrderController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async createPurchaseOrder(@Body() dto: CreatePurchaseOrderDto, @GetUser('id') userId: string) {
+  async createPurchaseOrder(
+    @Body() dto: CreatePurchaseOrderDto,
+    @GetUser('id') userId: string,
+  ) {
     return this.poService.createPurchaseOrder(dto, userId);
   }
 
@@ -54,7 +72,10 @@ export class PurchaseOrderController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.poService.findAllPOs(page ? Number(page) : 1, limit ? Number(limit) : 10);
+    return this.poService.findAllPOs(
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 10,
+    );
   }
 
   @Get(':id')

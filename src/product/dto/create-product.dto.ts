@@ -1,10 +1,24 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsInt, IsBoolean, IsDecimal, IsDateString, IsEnum, ValidateNested, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsInt,
+  IsBoolean,
+  IsDecimal,
+  IsDateString,
+  IsEnum,
+  ValidateNested,
+  IsArray,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { StockStatus } from '@prisma/client';
+import { IsR2Url } from '../../upload/decorators/is-r2-url.decorator';
 
 class ProductImageDto {
   @IsString()
   @IsNotEmpty()
+  @IsR2Url()
   originalUrl: string;
 
   @IsString()

@@ -1,4 +1,12 @@
-import { IsUUID, IsNumber, Min, IsEnum, IsString, IsOptional } from 'class-validator';
+import {
+  IsUUID,
+  IsNumber,
+  Min,
+  IsEnum,
+  IsString,
+  IsOptional,
+} from 'class-validator';
+import { IsR2Url } from '../../upload/decorators/is-r2-url.decorator';
 
 export class RecordPaymentDto {
   @IsUUID('4')
@@ -20,6 +28,7 @@ export class RecordPaymentDto {
 
   @IsString()
   @IsOptional()
+  @IsR2Url()
   attachmentUrl?: string;
 
   @IsString()

@@ -1,8 +1,22 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Query,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductDto } from './dto/query-product.dto';
+import { AddProductVideoDto } from './dto/add-product-video.dto';
+import { AddProductCatalogDto } from './dto/add-product-catalog.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -18,7 +32,10 @@ export class ProductController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() createProductDto: CreateProductDto, @GetUser('id') userId: string) {
+  async create(
+    @Body() createProductDto: CreateProductDto,
+    @GetUser('id') userId: string,
+  ) {
     return this.productService.create(createProductDto, userId);
   }
 
@@ -64,5 +81,29 @@ export class ProductController {
   @HttpCode(HttpStatus.OK)
   async remove(@Param('id') id: string) {
     return this.productService.remove(id);
+  }
+
+  @Post(':id/video')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.CREATED)
+  async addVideo(
+    @Param('id') id: string,
+    @Body() dto: AddProductVideoDto,
+    @GetUser('id') userId: string,
+  ) {
+    return this.productService.addVideo(id, dto, userId);
+  }
+
+  @Post(':id/catalog')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.CREATED)
+  async addCatalog(
+    @Param('id') id: string,
+    @Body() dto: AddProductCatalogDto,
+    @GetUser('id') userId: string,
+  ) {
+    return this.productService.addCatalog(id, dto, userId);
   }
 }

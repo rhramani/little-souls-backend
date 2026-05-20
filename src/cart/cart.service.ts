@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddToCartDto } from './dto/add-to-cart.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
@@ -55,7 +59,10 @@ export class CartService {
     return cart;
   }
 
-  async getB2BProductPrice(productId: string, customerId: string): Promise<Prisma.Decimal> {
+  async getB2BProductPrice(
+    productId: string,
+    customerId: string,
+  ): Promise<Prisma.Decimal> {
     // 1. Get customer and their pricing group
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
@@ -67,7 +74,9 @@ export class CartService {
     }
 
     if (!customer.pricingGroupId) {
-      throw new BadRequestException('Pricing group is not configured for this B2B customer profile.');
+      throw new BadRequestException(
+        'Pricing group is not configured for this B2B customer profile.',
+      );
     }
 
     // 2. Fetch price defined for the group
@@ -81,7 +90,9 @@ export class CartService {
     });
 
     if (!pricing) {
-      throw new BadRequestException('Pricing is not defined for this product under your B2B pricing group.');
+      throw new BadRequestException(
+        'Pricing is not defined for this product under your B2B pricing group.',
+      );
     }
 
     return pricing.price;
@@ -101,12 +112,16 @@ export class CartService {
 
     // 2. Verify Minimum Order Quantity (MOQ)
     if (quantity < product.moq) {
-      throw new BadRequestException(`The minimum order quantity (MOQ) for this product is ${product.moq} units.`);
+      throw new BadRequestException(
+        `The minimum order quantity (MOQ) for this product is ${product.moq} units.`,
+      );
     }
 
     // 2b. Verify Stock Availability
     if (quantity > product.stockQuantity) {
-      throw new BadRequestException(`Quantity requested '${quantity}' exceeds available stock of ${product.stockQuantity} units. Please reduce quantity or select a different product.`);
+      throw new BadRequestException(
+        `Quantity requested '${quantity}' exceeds available stock of ${product.stockQuantity} units. Please reduce quantity or select a different product.`,
+      );
     }
 
     // 3. Resolve customized B2B price
@@ -116,12 +131,16 @@ export class CartService {
     const cart = await this.getOrCreateCart(customerId, contactId);
 
     // 5. Add or update item in cart
-    const existingItem = cart.items.find((item) => item.productId === productId);
+    const existingItem = cart.items.find(
+      (item) => item.productId === productId,
+    );
 
     if (existingItem) {
       const newQuantity = existingItem.quantity + quantity;
       if (newQuantity > product.stockQuantity) {
-        throw new BadRequestException(`Total quantity in cart '${newQuantity}' would exceed available stock of ${product.stockQuantity} units. Please reduce quantity.`);
+        throw new BadRequestException(
+          `Total quantity in cart '${newQuantity}' would exceed available stock of ${product.stockQuantity} units. Please reduce quantity.`,
+        );
       }
       const lineTotal = price.mul(newQuantity);
 
@@ -151,7 +170,12 @@ export class CartService {
     return this.getOrCreateCart(customerId, contactId);
   }
 
-  async updateItemQuantity(customerId: string, contactId: string, cartItemId: string, dto: UpdateCartItemDto) {
+  async updateItemQuantity(
+    customerId: string,
+    contactId: string,
+    cartItemId: string,
+    dto: UpdateCartItemDto,
+  ) {
     const { quantity } = dto;
 
     // 1. Verify Cart item exists and belongs to this active cart
@@ -165,12 +189,16 @@ export class CartService {
     // 2. Verify MOQ against product definition
     const product = cartItem.product;
     if (quantity < product.moq) {
-      throw new BadRequestException(`The minimum order quantity (MOQ) for ${product.name} is ${product.moq} units.`);
+      throw new BadRequestException(
+        `The minimum order quantity (MOQ) for ${product.name} is ${product.moq} units.`,
+      );
     }
 
     // 2b. Verify Stock Availability
     if (quantity > product.stockQuantity) {
-      throw new BadRequestException(`Quantity requested '${quantity}' exceeds available stock of ${product.stockQuantity} units for ${product.name}. Please reduce quantity.`);
+      throw new BadRequestException(
+        `Quantity requested '${quantity}' exceeds available stock of ${product.stockQuantity} units for ${product.name}. Please reduce quantity.`,
+      );
     }
 
     // 3. Re-resolve B2B custom pricing to verify no changes occurred

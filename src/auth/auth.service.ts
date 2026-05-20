@@ -1,4 +1,10 @@
-import { Injectable, ConflictException, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterCustomerDto } from './dto/register-customer.dto';
@@ -20,15 +26,14 @@ export class AuthService {
   async registerStaff(dto: RegisterStaffDto) {
     const existingUser = await this.prisma.user.findFirst({
       where: {
-        OR: [
-          { mobile: dto.mobile },
-          { email: dto.email },
-        ]
+        OR: [{ mobile: dto.mobile }, { email: dto.email }],
       },
     });
 
     if (existingUser) {
-      throw new ConflictException('A user with this email or mobile number already exists');
+      throw new ConflictException(
+        'A user with this email or mobile number already exists',
+      );
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
@@ -85,7 +90,9 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new ConflictException('A user with this email or mobile number already exists');
+      throw new ConflictException(
+        'A user with this email or mobile number already exists',
+      );
     }
 
     // Check if GSTIN is already registered
@@ -206,10 +213,7 @@ export class AuthService {
     // 1. Find User by mobile or email
     const user = await this.prisma.user.findFirst({
       where: {
-        OR: [
-          { mobile: dto.email },
-          { email: dto.email },
-        ],
+        OR: [{ mobile: dto.email }, { email: dto.email }],
       },
       include: {
         customer: true,
@@ -222,11 +226,16 @@ export class AuthService {
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Your account has been deactivated. Please contact support.');
+      throw new UnauthorizedException(
+        'Your account has been deactivated. Please contact support.',
+      );
     }
 
     // 2. Compare passwords
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid login credentials');
     }
@@ -304,17 +313,17 @@ export class AuthService {
   async forgotPassword(dto: ForgotPasswordDto) {
     const user = await this.prisma.user.findFirst({
       where: {
-        OR: [
-          { mobile: dto.identifier },
-          { email: dto.identifier },
-        ],
+        OR: [{ mobile: dto.identifier }, { email: dto.identifier }],
       },
     });
 
     if (!user) {
       // To prevent user enumeration, we return success even if user not found,
       // but under the hood, we don't send anything.
-      return { message: 'If a matching account exists, a password reset link has been generated.' };
+      return {
+        message:
+          'If a matching account exists, a password reset link has been generated.',
+      };
     }
 
     // Generate numeric 6-digit verification code or token
@@ -336,7 +345,7 @@ export class AuthService {
     return {
       message: 'Password reset code generated.',
       // For development, we return token. In production, we'd omit this.
-      resetCode: token, 
+      resetCode: token,
     };
   }
 
@@ -415,6 +424,90 @@ export class AuthService {
     return {
       ...user,
       role: user.userType,
+    };
+  }
+
+  async sendOtp(mobile: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { mobile },
+    });
+
+    if (!user) {
+      throw new NotFoundException('No account found with this mobile number.');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('Account is inactive.');
+    }
+
+    // Mocking OTP sending
+    console.log(`[AUTH] Mock OTP for ${mobile} is 123456`);
+
+    return {
+      message: 'OTP sent successfully to your mobile number.',
+    };
+  }
+
+  async verifyOtp(mobile: string, otp: string, userAgent?: string, ipAddress?: string) {
+    if (otp !== '123456') {
+      throw new BadRequestException('Invalid OTP.');
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: { mobile },
+      include: {
+        customer: true,
+        customerContact: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('No account found with this mobile number.');
+    }
+
+    // Create session & JWT just like login
+    const sessionToken = crypto.randomBytes(40).toString('hex');
+    const session = await this.prisma.userSession.create({
+      data: {
+        userId: user.id,
+        refreshToken: sessionToken,
+        ipAddress,
+        userAgent,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      },
+    });
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      mobile: user.mobile,
+      type: user.userType,
+      customerId: user.customerId,
+      contactId: user.customerContactId,
+      sessionId: session.id,
+    };
+
+    const token = this.jwtService.sign(payload);
+
+    return {
+      message: 'OTP verified successfully. Logged in.',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        mobile: user.mobile,
+        userType: user.userType,
+        isVerified: user.isVerified,
+        customerId: user.customerId,
+        customerContactId: user.customerContactId,
+        customerApprovalStatus: user.customer?.approvalStatus,
+      },
+      token,
     };
   }
 }

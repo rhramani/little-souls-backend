@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -27,7 +32,9 @@ export class ProductService {
       where: { sku: dto.sku },
     });
     if (skuExists) {
-      throw new ConflictException(`Product with SKU '${dto.sku}' already exists.`);
+      throw new ConflictException(
+        `Product with SKU '${dto.sku}' already exists.`,
+      );
     }
 
     // 2. Verify Slug uniqueness
@@ -35,7 +42,9 @@ export class ProductService {
       where: { slug },
     });
     if (slugExists) {
-      throw new ConflictException(`Product with slug '${slug}' already exists.`);
+      throw new ConflictException(
+        `Product with slug '${slug}' already exists.`,
+      );
     }
 
     // 3. Verify Category exists
@@ -43,7 +52,9 @@ export class ProductService {
       where: { id: dto.categoryId },
     });
     if (!category) {
-      throw new NotFoundException(`Category with ID '${dto.categoryId}' not found.`);
+      throw new NotFoundException(
+        `Category with ID '${dto.categoryId}' not found.`,
+      );
     }
 
     // 4. Create Product with relations inside Transaction
@@ -65,11 +76,15 @@ export class ProductService {
           unit: dto.unit || 'PCS',
           hsnCode: dto.hsnCode,
           weight: dto.weight ? new Prisma.Decimal(dto.weight) : null,
-          taxPercent: dto.taxPercent ? new Prisma.Decimal(dto.taxPercent) : null,
+          taxPercent: dto.taxPercent
+            ? new Prisma.Decimal(dto.taxPercent)
+            : null,
           stockQuantity: dto.stockQuantity || 0,
           stockStatus: dto.stockStatus || 'IN_STOCK',
           allowBackorder: dto.allowBackorder || false,
-          expectedRestockDate: dto.expectedRestockDate ? new Date(dto.expectedRestockDate) : null,
+          expectedRestockDate: dto.expectedRestockDate
+            ? new Date(dto.expectedRestockDate)
+            : null,
           tags: dto.tags,
           isActive: dto.isActive !== undefined ? dto.isActive : true,
           isFeatured: dto.isFeatured !== undefined ? dto.isFeatured : false,
@@ -102,7 +117,9 @@ export class ProductService {
             pricingGroupId: prc.pricingGroupId,
             price: new Prisma.Decimal(prc.price),
             mrp: prc.mrp ? new Prisma.Decimal(prc.mrp) : null,
-            discountPercent: prc.discountPercent ? new Prisma.Decimal(prc.discountPercent) : null,
+            discountPercent: prc.discountPercent
+              ? new Prisma.Decimal(prc.discountPercent)
+              : null,
             minQuantity: prc.minQuantity,
             maxQuantity: prc.maxQuantity,
             createdBy: userId,
@@ -126,7 +143,18 @@ export class ProductService {
   }
 
   async findAll(query: QueryProductDto, userPricingGroupId?: string) {
-    const { page = 1, limit = 10, search, categoryId, brand, stockStatus, isActive, isFeatured, sortBy, sortOrder } = query;
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      categoryId,
+      brand,
+      stockStatus,
+      isActive,
+      isFeatured,
+      sortBy,
+      sortOrder,
+    } = query;
     const skip = (page - 1) * limit;
 
     // Build filters
@@ -204,7 +232,10 @@ export class ProductService {
     const formattedProducts = products.map((product) => {
       let activePrice: any = null;
       if (userPricingGroupId) {
-        activePrice = product.pricing.find((p) => p.pricingGroupId === userPricingGroupId) || null;
+        activePrice =
+          product.pricing.find(
+            (p) => p.pricingGroupId === userPricingGroupId,
+          ) || null;
       }
 
       return {
@@ -246,7 +277,9 @@ export class ProductService {
 
     let activePrice: any = null;
     if (userPricingGroupId) {
-      activePrice = product.pricing.find((p) => p.pricingGroupId === userPricingGroupId) || null;
+      activePrice =
+        product.pricing.find((p) => p.pricingGroupId === userPricingGroupId) ||
+        null;
     }
 
     return {
@@ -277,7 +310,9 @@ export class ProductService {
 
     let activePrice: any = null;
     if (userPricingGroupId) {
-      activePrice = product.pricing.find((p) => p.pricingGroupId === userPricingGroupId) || null;
+      activePrice =
+        product.pricing.find((p) => p.pricingGroupId === userPricingGroupId) ||
+        null;
     }
 
     return {
@@ -300,7 +335,9 @@ export class ProductService {
         where: { id: dto.categoryId },
       });
       if (!category) {
-        throw new NotFoundException(`Category with ID '${dto.categoryId}' not found.`);
+        throw new NotFoundException(
+          `Category with ID '${dto.categoryId}' not found.`,
+        );
       }
     }
 
@@ -317,7 +354,9 @@ export class ProductService {
         where: { slug },
       });
       if (slugExists) {
-        throw new ConflictException(`Product with slug '${slug}' already exists.`);
+        throw new ConflictException(
+          `Product with slug '${slug}' already exists.`,
+        );
       }
     }
 
@@ -327,7 +366,9 @@ export class ProductService {
         where: { sku: dto.sku },
       });
       if (skuExists) {
-        throw new ConflictException(`Product with SKU '${dto.sku}' already exists.`);
+        throw new ConflictException(
+          `Product with SKU '${dto.sku}' already exists.`,
+        );
       }
     }
 
@@ -351,11 +392,15 @@ export class ProductService {
           unit: dto.unit,
           hsnCode: dto.hsnCode,
           weight: dto.weight ? new Prisma.Decimal(dto.weight) : undefined,
-          taxPercent: dto.taxPercent ? new Prisma.Decimal(dto.taxPercent) : undefined,
+          taxPercent: dto.taxPercent
+            ? new Prisma.Decimal(dto.taxPercent)
+            : undefined,
           stockQuantity: dto.stockQuantity,
           stockStatus: dto.stockStatus,
           allowBackorder: dto.allowBackorder,
-          expectedRestockDate: dto.expectedRestockDate ? new Date(dto.expectedRestockDate) : undefined,
+          expectedRestockDate: dto.expectedRestockDate
+            ? new Date(dto.expectedRestockDate)
+            : undefined,
           tags: dto.tags,
           isActive: dto.isActive,
           isFeatured: dto.isFeatured,
@@ -392,7 +437,9 @@ export class ProductService {
               pricingGroupId: prc.pricingGroupId,
               price: new Prisma.Decimal(prc.price),
               mrp: prc.mrp ? new Prisma.Decimal(prc.mrp) : null,
-              discountPercent: prc.discountPercent ? new Prisma.Decimal(prc.discountPercent) : null,
+              discountPercent: prc.discountPercent
+                ? new Prisma.Decimal(prc.discountPercent)
+                : null,
               minQuantity: prc.minQuantity,
               maxQuantity: prc.maxQuantity,
               createdBy: userId,
@@ -429,7 +476,9 @@ export class ProductService {
       where: { productId: id },
     });
     if (ordersCount > 0) {
-      throw new BadRequestException('Cannot delete product that has active customer orders associated with it.');
+      throw new BadRequestException(
+        'Cannot delete product that has active customer orders associated with it.',
+      );
     }
 
     // 2. Safe deletion of relations in cascade (Prisma handles model-level Cascades if configured, or manual delete)
@@ -438,5 +487,44 @@ export class ProductService {
     });
 
     return { message: 'Product deleted successfully' };
+  }
+
+  async addVideo(productId: string, dto: any, userId: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product) {
+      throw new NotFoundException(`Product with ID '${productId}' not found.`);
+    }
+
+    return this.prisma.productVideo.create({
+      data: {
+        productId,
+        videoUrl: dto.videoUrl,
+        videoType: dto.videoType,
+        title: dto.title,
+        thumbnailUrl: dto.thumbnailUrl,
+        createdBy: userId,
+      },
+    });
+  }
+
+  async addCatalog(productId: string, dto: any, userId: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product) {
+      throw new NotFoundException(`Product with ID '${productId}' not found.`);
+    }
+
+    return this.prisma.productCatalogFile.create({
+      data: {
+        productId,
+        fileUrl: dto.fileUrl,
+        title: dto.title,
+        fileType: dto.fileType,
+        createdBy: userId,
+      },
+    });
   }
 }

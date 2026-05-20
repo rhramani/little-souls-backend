@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { QueryBillingDto } from './dto/query-billing.dto';
@@ -14,7 +20,9 @@ export class BillingService {
       where: { orderId },
     });
     if (existingInvoice) {
-      throw new ConflictException(`An invoice already exists for order ID '${orderId}'.`);
+      throw new ConflictException(
+        `An invoice already exists for order ID '${orderId}'.`,
+      );
     }
 
     // 2. Fetch the order details
@@ -40,30 +48,38 @@ export class BillingService {
 
     const invoiceNumber = `INV-${Date.now().toString().slice(-8)}-${Math.floor(1000 + Math.random() * 9000)}`;
     const invoiceDate = new Date();
-    
+
     // Credit terms: Due in 15 days standard
     const dueDate = new Date();
     dueDate.setDate(invoiceDate.getDate() + 15);
 
     // Concatenate address parts
     const customer = order.customer;
-    const billingAddress = [
-      customer.billingAddressLine1,
-      customer.billingAddressLine2,
-      customer.billingCity,
-      customer.billingState,
-      customer.billingPincode,
-      customer.billingCountry,
-    ].filter(Boolean).join(', ') || null;
+    const billingAddress =
+      [
+        customer.billingAddressLine1,
+        customer.billingAddressLine2,
+        customer.billingCity,
+        customer.billingState,
+        customer.billingPincode,
+        customer.billingCountry,
+      ]
+        .filter(Boolean)
+        .join(', ') || null;
 
-    const shippingAddress = order.deliveryAddress || [
-      customer.shippingAddressLine1,
-      customer.shippingAddressLine2,
-      customer.shippingCity,
-      customer.shippingState,
-      customer.shippingPincode,
-      customer.shippingCountry,
-    ].filter(Boolean).join(', ') || null;
+    const shippingAddress =
+      order.deliveryAddress ||
+      [
+        customer.shippingAddressLine1,
+        customer.shippingAddressLine2,
+        customer.shippingCity,
+        customer.shippingState,
+        customer.shippingPincode,
+        customer.shippingCountry,
+      ]
+        .filter(Boolean)
+        .join(', ') ||
+      null;
 
     // Transaction-wrapped Invoice generation and balance posting
     return this.prisma.$transaction(async (tx) => {
@@ -114,7 +130,9 @@ export class BillingService {
         select: { currentBalance: true },
       });
 
-      const newBalance = (currentCust?.currentBalance || new Prisma.Decimal(0)).add(order.grandTotal);
+      const newBalance = (
+        currentCust?.currentBalance || new Prisma.Decimal(0)
+      ).add(order.grandTotal);
 
       await tx.customer.update({
         where: { id: order.customerId },
@@ -146,13 +164,19 @@ export class BillingService {
     });
   }
 
-  async recordPayment(dto: RecordPaymentDto, userId: string, isVerified = false) {
+  async recordPayment(
+    dto: RecordPaymentDto,
+    userId: string,
+    isVerified = false,
+  ) {
     const customer = await this.prisma.customer.findUnique({
       where: { id: dto.customerId },
     });
 
     if (!customer) {
-      throw new NotFoundException(`Customer with ID '${dto.customerId}' not found.`);
+      throw new NotFoundException(
+        `Customer with ID '${dto.customerId}' not found.`,
+      );
     }
 
     const paymentNumber = `PAY-${Date.now().toString().slice(-8)}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -185,7 +209,9 @@ export class BillingService {
           select: { currentBalance: true },
         });
 
-        const newBalance = (currentCust?.currentBalance || new Prisma.Decimal(0)).sub(amountDec);
+        const newBalance = (
+          currentCust?.currentBalance || new Prisma.Decimal(0)
+        ).sub(amountDec);
 
         await tx.customer.update({
           where: { id: dto.customerId },
@@ -234,11 +260,15 @@ export class BillingService {
     });
 
     if (!payment) {
-      throw new NotFoundException(`Payment record with ID '${paymentId}' not found.`);
+      throw new NotFoundException(
+        `Payment record with ID '${paymentId}' not found.`,
+      );
     }
 
     if (payment.paymentStatus !== 'PENDING') {
-      throw new BadRequestException(`Payment is already verified or processed with status: ${payment.paymentStatus}`);
+      throw new BadRequestException(
+        `Payment is already verified or processed with status: ${payment.paymentStatus}`,
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -257,7 +287,9 @@ export class BillingService {
         select: { currentBalance: true },
       });
 
-      const newBalance = (currentCust?.currentBalance || new Prisma.Decimal(0)).sub(payment.amount);
+      const newBalance = (
+        currentCust?.currentBalance || new Prisma.Decimal(0)
+      ).sub(payment.amount);
 
       await tx.customer.update({
         where: { id: payment.customerId },
@@ -290,11 +322,15 @@ export class BillingService {
     });
 
     if (!payment) {
-      throw new NotFoundException(`Payment record with ID '${paymentId}' not found.`);
+      throw new NotFoundException(
+        `Payment record with ID '${paymentId}' not found.`,
+      );
     }
 
     if (payment.paymentStatus !== 'PENDING') {
-      throw new BadRequestException(`Cannot reject payment in status: ${payment.paymentStatus}`);
+      throw new BadRequestException(
+        `Cannot reject payment in status: ${payment.paymentStatus}`,
+      );
     }
 
     return this.prisma.payment.update({
@@ -362,7 +398,9 @@ export class BillingService {
     }
 
     if (customerId && invoice.customerId !== customerId) {
-      throw new ForbiddenException('You do not have permission to view this invoice.');
+      throw new ForbiddenException(
+        'You do not have permission to view this invoice.',
+      );
     }
 
     return invoice;
@@ -455,9 +493,109 @@ export class BillingService {
     });
 
     if (!customer) {
-      throw new NotFoundException(`Customer with ID '${customerId}' not found.`);
+      throw new NotFoundException(
+        `Customer with ID '${customerId}' not found.`,
+      );
     }
 
     return customer;
+  }
+
+  async createCreditNote(dto: any, userId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.findUnique({
+        where: { id: dto.customerId },
+      });
+
+      if (!customer) throw new NotFoundException('Customer not found');
+
+      const noteNumber = `CN-${Date.now().toString().slice(-8)}`;
+      const amount = new Prisma.Decimal(dto.amount);
+
+      const note = await tx.creditDebitNote.create({
+        data: {
+          customerId: dto.customerId,
+          noteNumber,
+          noteType: 'CREDIT_NOTE',
+          amount,
+          reason: dto.reason,
+          referenceType: 'MANUAL',
+          createdBy: userId,
+        },
+      });
+
+      const newBalance = (customer.currentBalance || new Prisma.Decimal(0)).sub(amount);
+
+      await tx.customer.update({
+        where: { id: dto.customerId },
+        data: { currentBalance: newBalance },
+      });
+
+      await tx.ledgerEntry.create({
+        data: {
+          customerId: dto.customerId,
+          entryDate: new Date(),
+          entryType: 'CREDIT_NOTE',
+          referenceType: 'MANUAL',
+          referenceId: note.id,
+          debit: new Prisma.Decimal(0),
+          credit: amount,
+          balanceAfterEntry: newBalance,
+          description: `Credit Note ${noteNumber} issued: ${dto.reason}`,
+          createdBy: userId,
+        },
+      });
+
+      return note;
+    });
+  }
+
+  async createDebitNote(dto: any, userId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.findUnique({
+        where: { id: dto.customerId },
+      });
+
+      if (!customer) throw new NotFoundException('Customer not found');
+
+      const noteNumber = `DN-${Date.now().toString().slice(-8)}`;
+      const amount = new Prisma.Decimal(dto.amount);
+
+      const note = await tx.creditDebitNote.create({
+        data: {
+          customerId: dto.customerId,
+          noteNumber,
+          noteType: 'DEBIT_NOTE',
+          amount,
+          reason: dto.reason,
+          referenceType: 'MANUAL',
+          createdBy: userId,
+        },
+      });
+
+      const newBalance = (customer.currentBalance || new Prisma.Decimal(0)).add(amount);
+
+      await tx.customer.update({
+        where: { id: dto.customerId },
+        data: { currentBalance: newBalance },
+      });
+
+      await tx.ledgerEntry.create({
+        data: {
+          customerId: dto.customerId,
+          entryDate: new Date(),
+          entryType: 'DEBIT_NOTE',
+          referenceType: 'MANUAL',
+          referenceId: note.id,
+          debit: amount,
+          credit: new Prisma.Decimal(0),
+          balanceAfterEntry: newBalance,
+          description: `Debit Note ${noteNumber} issued: ${dto.reason}`,
+          createdBy: userId,
+        },
+      });
+
+      return note;
+    });
   }
 }

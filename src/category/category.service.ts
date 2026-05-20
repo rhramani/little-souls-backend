@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -25,7 +30,9 @@ export class CategoryService {
       where: { slug },
     });
     if (existing) {
-      throw new ConflictException(`Category with slug '${slug}' already exists.`);
+      throw new ConflictException(
+        `Category with slug '${slug}' already exists.`,
+      );
     }
 
     // 2. If parent category exists, verify it
@@ -34,7 +41,9 @@ export class CategoryService {
         where: { id: dto.parentCategoryId },
       });
       if (!parent) {
-        throw new NotFoundException(`Parent category with ID '${dto.parentCategoryId}' not found.`);
+        throw new NotFoundException(
+          `Parent category with ID '${dto.parentCategoryId}' not found.`,
+        );
       }
     }
 
@@ -142,7 +151,9 @@ export class CategoryService {
         where: { slug },
       });
       if (existing) {
-        throw new ConflictException(`Category with slug '${slug}' already exists.`);
+        throw new ConflictException(
+          `Category with slug '${slug}' already exists.`,
+        );
       }
     }
 
@@ -155,7 +166,9 @@ export class CategoryService {
         where: { id: dto.parentCategoryId },
       });
       if (!parent) {
-        throw new NotFoundException(`Parent category with ID '${dto.parentCategoryId}' not found.`);
+        throw new NotFoundException(
+          `Parent category with ID '${dto.parentCategoryId}' not found.`,
+        );
       }
     }
 
@@ -164,7 +177,8 @@ export class CategoryService {
       data: {
         name: dto.name,
         slug,
-        parentCategoryId: dto.parentCategoryId !== undefined ? dto.parentCategoryId : undefined,
+        parentCategoryId:
+          dto.parentCategoryId !== undefined ? dto.parentCategoryId : undefined,
         imageUrl: dto.imageUrl,
         bannerUrl: dto.bannerUrl,
         isActive: dto.isActive,
@@ -182,7 +196,9 @@ export class CategoryService {
       where: { parentCategoryId: id },
     });
     if (childrenCount > 0) {
-      throw new BadRequestException('Cannot delete category with active subcategories.');
+      throw new BadRequestException(
+        'Cannot delete category with active subcategories.',
+      );
     }
 
     // 2. Check if it has associated products
@@ -190,7 +206,9 @@ export class CategoryService {
       where: { categoryId: id },
     });
     if (productsCount > 0) {
-      throw new BadRequestException('Cannot delete category that contains active products.');
+      throw new BadRequestException(
+        'Cannot delete category that contains active products.',
+      );
     }
 
     // 3. Delete category

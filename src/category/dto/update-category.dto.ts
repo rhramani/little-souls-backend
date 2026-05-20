@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsUUID, IsBoolean, IsInt } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsUUID,
+  IsBoolean,
+  IsInt,
+} from 'class-validator';
+import { IsR2Url } from '../../upload/decorators/is-r2-url.decorator';
 
 export class UpdateCategoryDto {
   @IsString()
@@ -15,10 +22,12 @@ export class UpdateCategoryDto {
 
   @IsString()
   @IsOptional()
+  @IsR2Url()
   imageUrl?: string;
 
   @IsString()
   @IsOptional()
+  @IsR2Url()
   bannerUrl?: string;
 
   @IsBoolean()

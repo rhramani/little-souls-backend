@@ -22,12 +22,21 @@ export class ImportService {
     });
 
     // 2. Trigger asynchronous background row-by-row processor
-    setTimeout(() => this.processImport(catalogImport.id, dto.importType, dto.rows, userId), 0);
+    setTimeout(
+      () =>
+        this.processImport(catalogImport.id, dto.importType, dto.rows, userId),
+      0,
+    );
 
     return catalogImport;
   }
 
-  async processImport(importId: string, importType: string, rows: any[], userId: string) {
+  async processImport(
+    importId: string,
+    importType: string,
+    rows: any[],
+    userId: string,
+  ) {
     let successCount = 0;
     let failedCount = 0;
 
@@ -59,7 +68,9 @@ export class ImportService {
             let categoryId = rowData.categoryId;
             if (rowData.categoryName) {
               const category = await this.prisma.category.findFirst({
-                where: { name: { equals: rowData.categoryName, mode: 'insensitive' } },
+                where: {
+                  name: { equals: rowData.categoryName, mode: 'insensitive' },
+                },
               });
               if (category) {
                 categoryId = category.id;
@@ -67,11 +78,17 @@ export class ImportService {
             }
 
             if (!categoryId) {
-              throw new Error('A valid categoryId or categoryName must be provided.');
+              throw new Error(
+                'A valid categoryId or categoryName must be provided.',
+              );
             }
 
             // Generate slug
-            const slug = rowData.slug || this.slugify(rowData.name) + '-' + Math.floor(100 + Math.random() * 900);
+            const slug =
+              rowData.slug ||
+              this.slugify(rowData.name) +
+                '-' +
+                Math.floor(100 + Math.random() * 900);
 
             // Create product in database
             const product = await this.prisma.product.create({
@@ -89,11 +106,22 @@ export class ImportService {
                 unit: rowData.unit || 'PCS',
                 hsnCode: rowData.hsnCode || null,
                 moq: rowData.moq ? parseInt(rowData.moq) : 1,
-                weight: rowData.weight ? new Prisma.Decimal(rowData.weight) : null,
-                taxPercent: rowData.taxPercent ? new Prisma.Decimal(rowData.taxPercent) : null,
-                stockQuantity: rowData.stockQuantity ? parseInt(rowData.stockQuantity) : 0,
-                stockStatus: rowData.stockQuantity && parseInt(rowData.stockQuantity) > 0 ? StockStatus.IN_STOCK : StockStatus.OUT_OF_STOCK,
-                allowBackorder: rowData.allowBackorder === true || rowData.allowBackorder === 'true',
+                weight: rowData.weight
+                  ? new Prisma.Decimal(rowData.weight)
+                  : null,
+                taxPercent: rowData.taxPercent
+                  ? new Prisma.Decimal(rowData.taxPercent)
+                  : null,
+                stockQuantity: rowData.stockQuantity
+                  ? parseInt(rowData.stockQuantity)
+                  : 0,
+                stockStatus:
+                  rowData.stockQuantity && parseInt(rowData.stockQuantity) > 0
+                    ? StockStatus.IN_STOCK
+                    : StockStatus.OUT_OF_STOCK,
+                allowBackorder:
+                  rowData.allowBackorder === true ||
+                  rowData.allowBackorder === 'true',
                 createdBy: userId,
               },
             });
@@ -106,7 +134,9 @@ export class ImportService {
                   pricingGroupId: rowData.pricingGroupId,
                   price: new Prisma.Decimal(rowData.price),
                   mrp: rowData.mrp ? new Prisma.Decimal(rowData.mrp) : null,
-                  discountPercent: rowData.discountPercent ? new Prisma.Decimal(rowData.discountPercent) : null,
+                  discountPercent: rowData.discountPercent
+                    ? new Prisma.Decimal(rowData.discountPercent)
+                    : null,
                   createdBy: userId,
                 },
               });
@@ -135,8 +165,12 @@ export class ImportService {
                 unit: rowData.unit || undefined,
                 hsnCode: rowData.hsnCode || undefined,
                 moq: rowData.moq ? parseInt(rowData.moq) : undefined,
-                weight: rowData.weight ? new Prisma.Decimal(rowData.weight) : undefined,
-                taxPercent: rowData.taxPercent ? new Prisma.Decimal(rowData.taxPercent) : undefined,
+                weight: rowData.weight
+                  ? new Prisma.Decimal(rowData.weight)
+                  : undefined,
+                taxPercent: rowData.taxPercent
+                  ? new Prisma.Decimal(rowData.taxPercent)
+                  : undefined,
                 updatedBy: userId,
               },
             });
@@ -151,7 +185,10 @@ export class ImportService {
               throw new Error(`Product with SKU '${sku}' not found.`);
             }
 
-            if (rowData.stockQuantity === undefined || rowData.stockQuantity === null) {
+            if (
+              rowData.stockQuantity === undefined ||
+              rowData.stockQuantity === null
+            ) {
               throw new Error('stockQuantity is required for stock updates.');
             }
 
@@ -183,7 +220,9 @@ export class ImportService {
             }
 
             if (!rowData.pricingGroupCode) {
-              throw new Error('pricingGroupCode is required for price updates.');
+              throw new Error(
+                'pricingGroupCode is required for price updates.',
+              );
             }
 
             if (!rowData.price) {
@@ -191,16 +230,22 @@ export class ImportService {
             }
 
             const pricingGroup = await this.prisma.pricingGroup.findUnique({
-              where: { code: rowData.pricingGroupCode.toString().toUpperCase() },
+              where: {
+                code: rowData.pricingGroupCode.toString().toUpperCase(),
+              },
             });
 
             if (!pricingGroup) {
-              throw new Error(`Pricing Group with code '${rowData.pricingGroupCode}' not found.`);
+              throw new Error(
+                `Pricing Group with code '${rowData.pricingGroupCode}' not found.`,
+              );
             }
 
             const price = new Prisma.Decimal(rowData.price);
             const mrp = rowData.mrp ? new Prisma.Decimal(rowData.mrp) : null;
-            const discountPercent = rowData.discountPercent ? new Prisma.Decimal(rowData.discountPercent) : null;
+            const discountPercent = rowData.discountPercent
+              ? new Prisma.Decimal(rowData.discountPercent)
+              : null;
 
             await this.prisma.productPricing.upsert({
               where: {
@@ -302,5 +347,77 @@ export class ImportService {
       .replace(/\s+/g, '-')
       .replace(/[^\w\-]+/g, '')
       .replace(/\-\-+/g, '-');
+  }
+
+  async exportCatalog(): Promise<Buffer> {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    
+    // Products Sheet
+    const productsSheet = workbook.addWorksheet('Products');
+    productsSheet.columns = [
+      { header: 'SKU', key: 'sku', width: 20 },
+      { header: 'Name', key: 'name', width: 40 },
+      { header: 'Description', key: 'description', width: 50 },
+      { header: 'Category ID', key: 'categoryId', width: 30 },
+      { header: 'Category Name', key: 'categoryName', width: 30 },
+      { header: 'MOQ', key: 'moq', width: 10 },
+      { header: 'Barcode', key: 'barcode', width: 20 },
+      { header: 'Brand', key: 'brand', width: 20 },
+      { header: 'Size', key: 'size', width: 15 },
+      { header: 'Color', key: 'color', width: 15 },
+      { header: 'Unit', key: 'unit', width: 10 },
+      { header: 'Stock Quantity', key: 'stockQuantity', width: 15 },
+      { header: 'Tax Percent', key: 'taxPercent', width: 15 },
+    ];
+
+    const products = await this.prisma.product.findMany({
+      include: { category: true }
+    });
+
+    products.forEach((p) => {
+      productsSheet.addRow({
+        sku: p.sku,
+        name: p.name,
+        description: p.description,
+        categoryId: p.categoryId,
+        categoryName: p.category.name,
+        moq: p.moq,
+        barcode: p.barcode,
+        brand: p.brand,
+        size: p.size,
+        color: p.color,
+        unit: p.unit,
+        stockQuantity: p.stockQuantity,
+        taxPercent: p.taxPercent ? p.taxPercent.toString() : '0',
+      });
+    });
+
+    // Pricing Sheet
+    const pricingSheet = workbook.addWorksheet('Pricing');
+    pricingSheet.columns = [
+      { header: 'SKU', key: 'sku', width: 20 },
+      { header: 'Pricing Group Code', key: 'pricingGroupCode', width: 25 },
+      { header: 'Price', key: 'price', width: 15 },
+      { header: 'MRP', key: 'mrp', width: 15 },
+      { header: 'Discount Percent', key: 'discountPercent', width: 15 },
+    ];
+
+    const pricings = await this.prisma.productPricing.findMany({
+      include: { product: true, pricingGroup: true }
+    });
+
+    pricings.forEach((p) => {
+      pricingSheet.addRow({
+        sku: p.product.sku,
+        pricingGroupCode: p.pricingGroup.code,
+        price: p.price.toString(),
+        mrp: p.mrp ? p.mrp.toString() : '',
+        discountPercent: p.discountPercent ? p.discountPercent.toString() : '',
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return buffer as Buffer;
   }
 }

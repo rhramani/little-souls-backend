@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { StaffService } from './staff.service';
 import { AssignCustomerDto } from './dto/assign-customer.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -45,5 +54,31 @@ export class StaffController {
   @HttpCode(HttpStatus.OK)
   async getMyCustomers(@GetUser('id') userId: string) {
     return this.staffService.findAssignedCustomers(userId);
+  }
+
+  @Post('attendance/check-in')
+  @Roles(UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async checkIn(@GetUser('id') userId: string, @Body('note') note?: string) {
+    return this.staffService.checkInAttendance(userId, note);
+  }
+
+  @Post('attendance/check-out')
+  @Roles(UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async checkOut(@GetUser('id') userId: string) {
+    return this.staffService.checkOutAttendance(userId);
+  }
+
+  @Post('payroll/calculate/:staffId')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async calculatePayroll(
+    @Param('staffId') staffId: string,
+    @Body('month') month: number,
+    @Body('year') year: number,
+    @GetUser('id') userId: string,
+  ) {
+    return this.staffService.calculatePayroll(staffId, month, year, userId);
   }
 }

@@ -1,5 +1,13 @@
-import { IsString, IsNotEmpty, IsEmail, IsOptional, IsEnum, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEmail,
+  IsOptional,
+  IsEnum,
+  MinLength,
+} from 'class-validator';
 import { UserType } from '@prisma/client';
+import { IsR2Url } from '../../upload/decorators/is-r2-url.decorator';
 
 export class RegisterCustomerDto {
   @IsString()
@@ -82,6 +90,7 @@ export class RegisterCustomerDto {
 
   @IsString()
   @IsOptional()
+  @IsR2Url()
   storePhotoUrl?: string;
 
   @IsString()

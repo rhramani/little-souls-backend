@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { QueryTicketDto } from './dto/query-ticket.dto';
@@ -10,7 +15,8 @@ export class SupportService {
 
   async createTicket(dto: CreateTicketDto, user: any) {
     const ticketNumber = `TKT-${Date.now().toString().slice(-8)}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const customerId = user.userType === UserType.CUSTOMER ? user.customerId : null;
+    const customerId =
+      user.userType === UserType.CUSTOMER ? user.customerId : null;
 
     return this.prisma.supportTicket.create({
       data: {
@@ -39,12 +45,16 @@ export class SupportService {
     });
 
     if (!ticket) {
-      throw new NotFoundException(`Support ticket with ID '${ticketId}' not found.`);
+      throw new NotFoundException(
+        `Support ticket with ID '${ticketId}' not found.`,
+      );
     }
 
     const validStatuses = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
     if (!validStatuses.includes(status)) {
-      throw new BadRequestException(`Invalid ticket status requested: '${status}'.`);
+      throw new BadRequestException(
+        `Invalid ticket status requested: '${status}'.`,
+      );
     }
 
     return this.prisma.supportTicket.update({
@@ -59,12 +69,16 @@ export class SupportService {
     });
 
     if (!ticket) {
-      throw new NotFoundException(`Support ticket with ID '${ticketId}' not found.`);
+      throw new NotFoundException(
+        `Support ticket with ID '${ticketId}' not found.`,
+      );
     }
 
     const validPriorities = ['LOW', 'MEDIUM', 'HIGH'];
     if (!validPriorities.includes(priority)) {
-      throw new BadRequestException(`Invalid ticket priority requested: '${priority}'.`);
+      throw new BadRequestException(
+        `Invalid ticket priority requested: '${priority}'.`,
+      );
     }
 
     return this.prisma.supportTicket.update({
@@ -79,7 +93,9 @@ export class SupportService {
     });
 
     if (!ticket) {
-      throw new NotFoundException(`Support ticket with ID '${ticketId}' not found.`);
+      throw new NotFoundException(
+        `Support ticket with ID '${ticketId}' not found.`,
+      );
     }
 
     // Verify assigned user exists and is staff/admin
@@ -88,11 +104,18 @@ export class SupportService {
     });
 
     if (!assignedUser) {
-      throw new NotFoundException(`Assigned user representative with ID '${assignedTo}' not found.`);
+      throw new NotFoundException(
+        `Assigned user representative with ID '${assignedTo}' not found.`,
+      );
     }
 
-    if (assignedUser.userType !== UserType.STAFF && assignedUser.userType !== UserType.SUPER_ADMIN) {
-      throw new BadRequestException('Tickets can only be assigned to STAFF or SUPER_ADMIN users.');
+    if (
+      assignedUser.userType !== UserType.STAFF &&
+      assignedUser.userType !== UserType.SUPER_ADMIN
+    ) {
+      throw new BadRequestException(
+        'Tickets can only be assigned to STAFF or SUPER_ADMIN users.',
+      );
     }
 
     return this.prisma.supportTicket.update({
@@ -168,12 +191,19 @@ export class SupportService {
     });
 
     if (!ticket) {
-      throw new NotFoundException(`Support ticket with ID '${ticketId}' not found.`);
+      throw new NotFoundException(
+        `Support ticket with ID '${ticketId}' not found.`,
+      );
     }
 
     // Customer Access Isolation Guard
-    if (user.userType === UserType.CUSTOMER && ticket.customerId !== user.customerId) {
-      throw new ForbiddenException('You do not have permission to access this support ticket.');
+    if (
+      user.userType === UserType.CUSTOMER &&
+      ticket.customerId !== user.customerId
+    ) {
+      throw new ForbiddenException(
+        'You do not have permission to access this support ticket.',
+      );
     }
 
     return ticket;
