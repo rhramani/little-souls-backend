@@ -111,4 +111,14 @@ export class OrderController {
   ) {
     return this.orderService.createShipment(id, dto, userId);
   }
+
+  @Patch(':id/deliver')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async markDelivered(
+    @Param('id') id: string,
+    @GetUser('id') userId: string,
+  ) {
+    return this.orderService.markDelivered(id, userId);
+  }
 }

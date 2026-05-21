@@ -19,7 +19,10 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RolesGuard } from './roles.guard';
+import { Roles } from './decorators/roles.decorator';
 import { GetUser } from './decorators/get-user.decorator';
+import { UserType } from '@prisma/client';
 
 @Controller('auth')
 export class AuthController {
@@ -32,6 +35,8 @@ export class AuthController {
   }
 
   @Post('register-staff')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.CREATED)
   async registerStaff(
     @Body() dto: import('./dto/register-staff.dto').RegisterStaffDto,

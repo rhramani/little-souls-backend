@@ -106,4 +106,27 @@ export class ProductController {
   ) {
     return this.productService.addCatalog(id, dto, userId);
   }
+
+  @Delete(':id/image/:imageId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async deleteImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+  ) {
+    return this.productService.deleteImage(id, imageId);
+  }
+
+  @Patch(':id/image/:imageId/primary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async setPrimaryImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+  ) {
+    return this.productService.setPrimaryImage(id, imageId);
+  }
 }
+

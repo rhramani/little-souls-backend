@@ -2,14 +2,19 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
 import { StaffService } from './staff.service';
 import { AssignCustomerDto } from './dto/assign-customer.dto';
+import { UpdateStaffDto } from './dto/update-staff.dto';
+import { MarkAttendanceDto } from './dto/mark-attendance.dto';
+import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -21,12 +26,63 @@ import { UserType } from '@prisma/client';
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
+  // =============== STAFF PROFILES ===============
+
+  @Get()
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async findAll(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.staffService.findAllStaff(Number(page) || 1, Number(limit) || 20);
+  }
+
+  @Get('profile/:staffId')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async findOneStaff(@Param('staffId') staffId: string) {
+    return this.staffService.findOneStaff(staffId);
+  }
+
+  @Patch('profile/:staffId')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async updateStaff(@Param('staffId') staffId: string, @Body() dto: UpdateStaffDto) {
+    return this.staffService.updateStaff(staffId, dto);
+  }
+
+  @Patch('profile/:staffId/deactivate')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async deactivateStaff(@Param('staffId') staffId: string) {
+    return this.staffService.deactivateStaff(staffId);
+  }
+
+  @Patch('profile/:staffId/activate')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async activateStaff(@Param('staffId') staffId: string) {
+    return this.staffService.activateStaff(staffId);
+  }
+
+  // =============== CUSTOMER ASSIGNMENT ===============
+
   @Post('assign-customer')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
   async assignCustomer(@Body() dto: AssignCustomerDto) {
     return this.staffService.assignCustomer(dto);
   }
+
+  @Get('my-customers')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async getMyCustomers(@GetUser('id') userId: string) {
+    return this.staffService.findAssignedCustomers(userId);
+  }
+
+  // =============== PERFORMANCE ===============
 
   @Get('performance')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
@@ -45,15 +101,42 @@ export class StaffController {
   @Get('leaderboard')
   @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
-  async getStaffLeaderboard() {
+  async getLeaderboard() {
     return this.staffService.getStaffLeaderboard();
   }
 
-  @Get('my-customers')
+  // =============== ATTENDANCE ===============
+
+  @Get('attendance')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async getMyCustomers(@GetUser('id') userId: string) {
-    return this.staffService.findAssignedCustomers(userId);
+  async getAttendance(
+    @GetUser() user: any,
+    @Query('staffId') staffId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    // Staff can only see their own; super_admin can filter by any staffId
+    const resolvedStaffId = user.userType === UserType.STAFF ? user.staffId : staffId;
+    return this.staffService.getAttendanceHistory(
+      resolvedStaffId,
+      startDate,
+      endDate,
+      Number(page) || 1,
+      Number(limit) || 30,
+    );
+  }
+
+  @Post('attendance/mark')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async markAttendance(
+    @Body() dto: MarkAttendanceDto,
+    @GetUser('id') userId: string,
+  ) {
+    return this.staffService.markAttendanceAdmin(dto, userId);
   }
 
   @Post('attendance/check-in')
@@ -68,6 +151,62 @@ export class StaffController {
   @HttpCode(HttpStatus.OK)
   async checkOut(@GetUser('id') userId: string) {
     return this.staffService.checkOutAttendance(userId);
+  }
+
+  // =============== LEAVE ===============
+
+  @Post('leave/request')
+  @Roles(UserType.STAFF, UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async createLeave(@Body() dto: CreateLeaveRequestDto, @GetUser('id') userId: string) {
+    return this.staffService.createLeaveRequest(dto, userId);
+  }
+
+  @Get('leave')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async getLeaveRequests(
+    @GetUser() user: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.staffService.getLeaveRequests(user.id, user.userType, Number(page) || 1, Number(limit) || 20);
+  }
+
+  @Patch('leave/:id/approve')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async approveLeave(@Param('id') id: string, @GetUser('id') userId: string) {
+    return this.staffService.approveLeave(id, userId);
+  }
+
+  @Patch('leave/:id/reject')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async rejectLeave(@Param('id') id: string, @GetUser('id') userId: string) {
+    return this.staffService.rejectLeave(id, userId);
+  }
+
+  // =============== PAYROLL ===============
+
+  @Get('payroll')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getPayrolls(
+    @Query('staffId') staffId?: string,
+    @Query('month') month?: number,
+    @Query('year') year?: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.staffService.getPayrolls(staffId, Number(month) || undefined, Number(year) || undefined, Number(page) || 1, Number(limit) || 20);
+  }
+
+  @Patch('payroll/:id/mark-paid')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async markPayrollPaid(@Param('id') id: string, @GetUser('id') userId: string) {
+    return this.staffService.markPayrollPaid(id, userId);
   }
 
   @Post('payroll/calculate/:staffId')

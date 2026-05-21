@@ -152,4 +152,24 @@ export class BillingController {
     }
     return this.billingService.getCustomerBalance(customerId);
   }
+
+  @Get('ledger/export')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async exportLedger(
+    @Query('customerId') customerId: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.billingService.exportLedger(customerId);
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `Ledger_Export_${dateStr}.xlsx`;
+
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+
+    res.end(buffer);
+  }
 }

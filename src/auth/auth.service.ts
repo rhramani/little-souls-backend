@@ -56,7 +56,7 @@ export class AuthService {
           email: dto.email,
           mobile: dto.mobile,
           passwordHash,
-          userType: UserType.SUPER_ADMIN,
+          userType: UserType.STAFF,
           isActive: true,
           isVerified: true,
           staffId: staffProfile.id,
@@ -343,9 +343,8 @@ export class AuthService {
     console.log(`[AUTH] Password reset code for ${dto.identifier}: ${token}`);
 
     return {
-      message: 'Password reset code generated.',
-      // For development, we return token. In production, we'd omit this.
-      resetCode: token,
+      message:
+        'If a matching account exists, a password reset link/code has been sent.',
     };
   }
 

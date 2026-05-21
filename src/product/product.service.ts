@@ -527,4 +527,32 @@ export class ProductService {
       },
     });
   }
+
+  async deleteImage(productId: string, imageId: string) {
+    const image = await this.prisma.productImage.findFirst({
+      where: { id: imageId, productId },
+    });
+    if (!image) throw new NotFoundException(`Image '${imageId}' not found for product '${productId}'.`);
+
+    await this.prisma.productImage.delete({ where: { id: imageId } });
+
+    // If deleted was primary, auto-promote the first remaining image
+    if (image.isPrimary) {
+      const next = await this.prisma.productImage.findFirst({ where: { productId }, orderBy: { sortOrder: 'asc' } });
+      if (next) await this.prisma.productImage.update({ where: { id: next.id }, data: { isPrimary: true } });
+    }
+
+    return { message: 'Image deleted successfully.' };
+  }
+
+  async setPrimaryImage(productId: string, imageId: string) {
+    const image = await this.prisma.productImage.findFirst({ where: { id: imageId, productId } });
+    if (!image) throw new NotFoundException(`Image '${imageId}' not found for product '${productId}'.`);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.productImage.updateMany({ where: { productId }, data: { isPrimary: false } });
+      return tx.productImage.update({ where: { id: imageId }, data: { isPrimary: true } });
+    });
+  }
 }
+

@@ -598,4 +598,48 @@ export class BillingService {
       return note;
     });
   }
+
+  async exportLedger(customerId?: string): Promise<Buffer> {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Ledger');
+
+    sheet.columns = [
+      { header: 'Date', key: 'entryDate', width: 15 },
+      { header: 'Customer', key: 'customer', width: 30 },
+      { header: 'Type', key: 'entryType', width: 18 },
+      { header: 'Description', key: 'description', width: 40 },
+      { header: 'Debit (₹)', key: 'debit', width: 15 },
+      { header: 'Credit (₹)', key: 'credit', width: 15 },
+      { header: 'Balance (₹)', key: 'balanceAfterEntry', width: 15 },
+    ];
+
+    // Style headers
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E4F7' } };
+
+    const where: any = {};
+    if (customerId) where.customerId = customerId;
+
+    const entries = await this.prisma.ledgerEntry.findMany({
+      where,
+      orderBy: { entryDate: 'asc' },
+      include: { customer: { select: { businessName: true, customerCode: true } } },
+    });
+
+    entries.forEach((e) => {
+      sheet.addRow({
+        entryDate: e.entryDate.toLocaleDateString('en-IN'),
+        customer: `${e.customer?.businessName || ''} (${e.customer?.customerCode || ''})`,
+        entryType: e.entryType,
+        description: e.description || '',
+        debit: Number(e.debit),
+        credit: Number(e.credit),
+        balanceAfterEntry: Number(e.balanceAfterEntry),
+      });
+    });
+
+    return workbook.xlsx.writeBuffer() as Promise<Buffer>;
+  }
 }
+

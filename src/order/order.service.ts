@@ -685,4 +685,25 @@ export class OrderService {
       return shipment;
     });
   }
+
+  async markDelivered(id: string, userId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id } });
+    if (!order) throw new NotFoundException(`Order '${id}' not found.`);
+    if (order.orderStatus !== 'SHIPPED') {
+      throw new BadRequestException(`Order must be in SHIPPED status to mark delivered. Current: ${order.orderStatus}`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.order.update({
+        where: { id },
+        data: { orderStatus: 'DELIVERED' },
+      });
+
+      await tx.orderStatusHistory.create({
+        data: { orderId: id, oldStatus: 'SHIPPED', newStatus: 'DELIVERED', changedBy: userId },
+      });
+
+      return updated;
+    });
+  }
 }

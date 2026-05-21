@@ -364,9 +364,32 @@ model Product {
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 
+  productImage                 String?   @map("product_image")
+  productPrice                 Decimal?  @map("product_price") @db.Decimal(12, 2)
+  discountedPrice              Decimal?  @map("discounted_price") @db.Decimal(12, 2)
+  parentProductSku             String?   @map("parent_product_sku")
+  taxType                      String?   @map("tax_type")
+  productPictureUrl            String?   @map("product_picture_url")
+  privateNotes                 String?   @map("private_notes")
+  parentProductId              String?   @map("parent_product_id")
+  setName                      String?   @map("set_name")
+  setQuantity                  Int?      @map("set_quantity")
+  setType                      String?   @map("set_type")
+  sizes                        String?
+  sizesSetQuantity             Int?      @map("sizes_set_quantity")
+  colors                       String?
+  colorsSetQuantity            Int?      @map("colors_set_quantity")
+  nt11_48                      String?   @map("nt11_48")
+  nt11_48SetQuantity           Int?      @map("nt11_48_set_quantity")
+  sixToTwelveMonths            String?   @map("six_to_twelve_months")
+  sixToTwelveMonthsSetQuantity Int?      @map("six_to_twelve_months_set_quantity")
+
   category      Category @relation(fields: [categoryId], references: [id])
   createdByUser User?    @relation("ProductCreatedBy", fields: [createdBy], references: [id])
   updatedByUser User?    @relation("ProductUpdatedBy", fields: [updatedBy], references: [id])
+
+  catalogueId   String?    @map("catalogue_id") @db.Uuid
+  catalogue     Catalogue? @relation(fields: [catalogueId], references: [id], onDelete: Cascade)
 
   images  ProductImage[]
   pricing ProductPricing[]
@@ -1072,4 +1095,14 @@ model EventLog {
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("event_logs")
+}
+
+model Catalogue {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  products  Product[]
+
+  @@map("catalogues")
 }
