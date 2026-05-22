@@ -205,7 +205,8 @@ export class AuthService {
         ...result.customer,
         status: result.customer.approvalStatus,
       },
-      token,
+      accessToken: token,
+      refreshToken: result.session.refreshToken,
     };
   }
 
@@ -284,7 +285,8 @@ export class AuthService {
         customerContactId: user.customerContactId,
         customerApprovalStatus: user.customer?.approvalStatus,
       },
-      token,
+      accessToken: token,
+      refreshToken: sessionToken,
     };
   }
 
@@ -506,7 +508,58 @@ export class AuthService {
         customerContactId: user.customerContactId,
         customerApprovalStatus: user.customer?.approvalStatus,
       },
-      token,
+      accessToken: token,
+      refreshToken: sessionToken,
+    };
+  }
+
+  async refreshToken(refreshToken: string, ipAddress?: string, userAgent?: string) {
+    const session = await this.prisma.userSession.findFirst({
+      where: {
+        refreshToken,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      include: { user: true },
+    });
+
+    if (!session || !session.user.isActive) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    // Revoke old session
+    await this.prisma.userSession.update({
+      where: { id: session.id },
+      data: { revokedAt: new Date() },
+    });
+
+    // Create new session
+    const newRefreshToken = crypto.randomBytes(40).toString('hex');
+    const newSession = await this.prisma.userSession.create({
+      data: {
+        userId: session.userId,
+        refreshToken: newRefreshToken,
+        ipAddress,
+        userAgent,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      },
+    });
+
+    const payload = {
+      sub: session.user.id,
+      email: session.user.email,
+      mobile: session.user.mobile,
+      type: session.user.userType,
+      customerId: session.user.customerId,
+      contactId: session.user.customerContactId,
+      sessionId: newSession.id,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+
+    return {
+      accessToken,
+      refreshToken: newRefreshToken,
     };
   }
 }

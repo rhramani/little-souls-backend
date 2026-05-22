@@ -5,4 +5,8 @@ export class AppService {
   getHello(): string {
     return 'Hello World!';
   }
+
+  getHealth(): any {
+    return { status: 'ok', timestamp: new Date().toISOString() };
+  }
 }

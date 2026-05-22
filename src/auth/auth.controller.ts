@@ -18,6 +18,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
 import { Roles } from './decorators/roles.decorator';
@@ -53,6 +54,17 @@ export class AuthController {
   ) {
     const userAgent = req.headers['user-agent'];
     return this.authService.login(dto, userAgent, ipAddress);
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refreshToken(
+    @Body() dto: RefreshTokenDto,
+    @Req() req: Request,
+    @Ip() ipAddress: string,
+  ) {
+    const userAgent = req.headers['user-agent'];
+    return this.authService.refreshToken(dto.refreshToken, ipAddress, userAgent);
   }
 
   @Post('logout')
