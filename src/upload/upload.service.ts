@@ -163,4 +163,48 @@ export class UploadService {
       throw new BadRequestException(`Failed to upload file: ${error.message}`);
     }
   }
+
+  async uploadBuffer(buffer: Buffer, mimetype: string, originalname: string) {
+    const accountId = this.configService.get<string>('R2_ACCOUNT_ID');
+    const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID');
+    const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
+
+    if (!accountId || !accessKeyId || !secretAccessKey || !this.bucketName || !this.publicUrl) {
+      throw new BadRequestException(
+        'Cloudflare R2 storage integration is not properly configured on the server.',
+      );
+    }
+
+    if (!buffer) {
+      throw new BadRequestException('No buffer provided.');
+    }
+
+    // 1. Generate a unique key/path for the file in the bucket
+    const sanitizedName = originalname
+      .replace(/[^a-zA-Z0-9.]/g, '_')
+      .replace(/__+/g, '_');
+    const key = `uploads/${randomUUID()}_${sanitizedName}`;
+
+    // 2. Upload the buffer directly to R2
+    const command = new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+      Body: buffer,
+      ContentType: mimetype,
+    });
+
+    try {
+      await this.s3Client.send(command);
+
+      const basePublicUrl = this.publicUrl.replace(/\/+$/, '');
+      const fileUrl = `${basePublicUrl}/${key}`;
+
+      return {
+        fileUrl,
+        key,
+      };
+    } catch (error: any) {
+      throw new BadRequestException(`Failed to upload buffer: ${error.message}`);
+    }
+  }
 }

@@ -342,6 +342,7 @@ model Product {
   categoryId          String      @map("category_id") @db.Uuid
   moq                 Int         @default(1)
   barcode             String?
+  barcodeUrl          String?
   brand               String?
   size                String?
   color               String?

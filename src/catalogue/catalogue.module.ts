@@ -3,9 +3,10 @@ import { CatalogueService } from './catalogue.service';
 import { CatalogueController } from './catalogue.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
+import { UploadModule } from '../upload/upload.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, UploadModule],
   providers: [CatalogueService],
   controllers: [CatalogueController],
   exports: [CatalogueService],
