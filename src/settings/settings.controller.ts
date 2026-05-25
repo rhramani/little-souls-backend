@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards, HttpCode, HttpStatus, Query } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -34,5 +34,17 @@ export class SettingsController {
   @HttpCode(HttpStatus.OK)
   async updateSettings(@Body() dto: UpdateSettingsDto) {
     return this.settingsService.updateSettings(dto);
+  }
+
+  @Get('audit')
+  // TODO: Re-enable Auth Guards when frontend login is fully connected
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async getAuditLogs(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.settingsService.getAuditLogs(Number(page) || 1, Number(limit) || 50);
   }
 }

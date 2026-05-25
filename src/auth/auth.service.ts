@@ -16,11 +16,14 @@ import { UserType, ApprovalStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
+import { EventsGateway } from '../events/events.gateway';
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   async registerStaff(dto: RegisterStaffDto) {
@@ -173,7 +176,8 @@ export class AuthService {
       return { user, customer, contact, session: null };
     });
 
-    return {
+
+    const response = {
       message: 'Customer registered successfully. Approval is pending.',
       user: {
         id: result.user.id,
@@ -190,6 +194,11 @@ export class AuthService {
       accessToken: null,
       refreshToken: null,
     };
+
+    // Emit event to all connected clients
+    this.eventsGateway.emitCustomerRegistered(response.customer);
+
+    return response;
   }
 
   async login(dto: LoginDto, userAgent?: string, ipAddress?: string) {

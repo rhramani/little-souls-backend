@@ -18,12 +18,14 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { EmailService } from '../common/email.service';
+import { EventsGateway } from '../events/events.gateway';
 
 @Injectable()
 export class CustomerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   async findAll(query: QueryCustomerDto) {
@@ -135,6 +137,7 @@ export class CustomerService {
       );
     }
 
+    this.eventsGateway.emitCustomerStatusChanged(id, ApprovalStatus.APPROVED);
     return updatedCustomer;
   }
 
@@ -144,7 +147,7 @@ export class CustomerService {
       throw new BadRequestException('Customer is already rejected.');
     }
 
-    return this.prisma.customer.update({
+    const updated = await this.prisma.customer.update({
       where: { id },
       data: {
         approvalStatus: ApprovalStatus.REJECTED,
@@ -154,6 +157,9 @@ export class CustomerService {
         rejectionReason: dto.reason,
       },
     });
+
+    this.eventsGateway.emitCustomerStatusChanged(id, ApprovalStatus.REJECTED);
+    return updated;
   }
 
   async deactivate(id: string) {

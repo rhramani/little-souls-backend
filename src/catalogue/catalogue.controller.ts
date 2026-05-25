@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -12,6 +13,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
@@ -41,15 +43,24 @@ export class CatalogueController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async findAll() {
-    return this.catalogueService.findAll();
+  async findAll(@Query('search') search?: string) {
+    return this.catalogueService.findAll(search);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async findOne(@Param('id') id: string) {
-    return this.catalogueService.findOne(id);
+  async findOne(@Param('id') id: string, @Query('search') search?: string) {
+    return this.catalogueService.findOne(id, search);
+  }
+
+  @Patch(':id')
+  @HttpCode(HttpStatus.OK)
+  async update(@Param('id') id: string, @Body() body: { name: string }) {
+    if (!body.name) {
+      throw new BadRequestException('Catalogue name is required');
+    }
+    return this.catalogueService.update(id, body.name);
   }
 
   @Delete(':id')
