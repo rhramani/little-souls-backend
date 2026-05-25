@@ -138,30 +138,59 @@ export class CatalogueService {
     return result;
   }
 
-  async findAll() {
+  async findAll(search?: string) {
+    const where = search ? { name: { contains: search, mode: 'insensitive' as const } } : {};
     const catalogues = await this.prisma.catalogue.findMany({
+      where,
       include: {
         _count: {
           select: { products: true },
         },
+        products: {
+          take: 4,
+          select: {
+            productImage: true,
+            images: {
+              take: 1,
+              orderBy: { sortOrder: 'asc' },
+              select: { originalUrl: true }
+            }
+          }
+        }
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return catalogues.map((c) => ({
-      id: c.id,
-      name: c.name,
-      createdAt: c.createdAt,
-      updatedAt: c.updatedAt,
-      productsCount: c._count.products,
-    }));
+    return catalogues.map((c) => {
+      const previewImages = c.products
+        .map(p => p.images?.[0]?.originalUrl || p.productImage)
+        .filter(url => !!url);
+
+      return {
+        id: c.id,
+        name: c.name,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+        productsCount: c._count.products,
+        previewImages,
+      };
+    });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, search?: string) {
+    const productWhere = search ? {
+      OR: [
+        { name: { contains: search, mode: 'insensitive' as const } },
+        { sku: { contains: search, mode: 'insensitive' as const } },
+        { barcode: { contains: search, mode: 'insensitive' as const } },
+      ]
+    } : {};
+
     const catalogue = await this.prisma.catalogue.findUnique({
       where: { id },
       include: {
         products: {
+          where: productWhere,
           include: {
             images: { orderBy: { sortOrder: 'asc' } },
             pricing: { include: { pricingGroup: true } },
@@ -176,6 +205,18 @@ export class CatalogueService {
     }
 
     return catalogue;
+  }
+
+  async update(id: string, name: string) {
+    const catalogue = await this.prisma.catalogue.findUnique({ where: { id } });
+    if (!catalogue) {
+      throw new NotFoundException(`Catalogue with ID '${id}' not found.`);
+    }
+
+    return this.prisma.catalogue.update({
+      where: { id },
+      data: { name },
+    });
   }
 
   async remove(id: string) {

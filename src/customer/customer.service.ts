@@ -16,10 +16,14 @@ import { ProvisionContactLoginDto } from './dto/provision-contact-login.dto';
 import { ApprovalStatus, UserType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { EventsGateway } from '../events/events.gateway';
 
 @Injectable()
 export class CustomerService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventsGateway: EventsGateway,
+  ) {}
 
   async findAll(query: QueryCustomerDto) {
     const { page = 1, limit = 10, search, status } = query;
@@ -89,7 +93,7 @@ export class CustomerService {
       throw new BadRequestException('Customer is already approved.');
     }
 
-    return this.prisma.customer.update({
+    const updated = await this.prisma.customer.update({
       where: { id },
       data: {
         approvalStatus: ApprovalStatus.APPROVED,
@@ -99,6 +103,9 @@ export class CustomerService {
         pricingGroupId: dto.pricingGroupId ?? customer.pricingGroupId,
       },
     });
+
+    this.eventsGateway.emitCustomerStatusChanged(id, ApprovalStatus.APPROVED);
+    return updated;
   }
 
   async reject(id: string, dto: RejectCustomerDto, adminId: string) {
@@ -107,7 +114,7 @@ export class CustomerService {
       throw new BadRequestException('Customer is already rejected.');
     }
 
-    return this.prisma.customer.update({
+    const updated = await this.prisma.customer.update({
       where: { id },
       data: {
         approvalStatus: ApprovalStatus.REJECTED,
@@ -117,6 +124,9 @@ export class CustomerService {
         rejectionReason: dto.reason,
       },
     });
+
+    this.eventsGateway.emitCustomerStatusChanged(id, ApprovalStatus.REJECTED);
+    return updated;
   }
 
   async deactivate(id: string) {
