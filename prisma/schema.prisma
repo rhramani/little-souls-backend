@@ -487,6 +487,7 @@ model ProductVideo {
 model Banner {
   id              String   @id @default(uuid()) @db.Uuid
   title           String
+  label           String?
   bannerType      String   @map("banner_type") // "HERO", "CATEGORY", "PROMO", "WEB_HEADER", "MOBILE"
   imageUrl        String   @map("image_url")
   linkType        String   @map("link_type") // "CATEGORY", "PRODUCT", "CUSTOM", "NONE"
@@ -1051,6 +1052,10 @@ model Setting {
   id                     String   @id @default(uuid()) @db.Uuid
   businessName           String?  @map("business_name")
   businessLogoUrl        String?  @map("business_logo_url")
+  faviconUrl             String?  @map("favicon_url")
+  contactEmail           String?  @map("contact_email")
+  contactPhone           String?  @map("contact_phone")
+  companyAddress         String?  @map("company_address")
   whatsappOrderNumber    String?  @map("whatsapp_order_number")
   imageCleaningProvider  String?  @map("image_cleaning_provider")
   imageCleaningApiKey    String?  @map("image_cleaning_api_key")

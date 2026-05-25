@@ -11,6 +11,22 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsString()
+  faviconUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  contactEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  contactPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  companyAddress?: string;
+
+  @IsOptional()
+  @IsString()
   whatsappOrderNumber?: string;
 
   @IsOptional()

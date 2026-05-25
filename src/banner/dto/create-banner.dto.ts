@@ -4,6 +4,10 @@ export class CreateBannerDto {
   @IsString()
   title: string;
 
+  @IsOptional()
+  @IsString()
+  label?: string;
+
   @IsIn(['HERO', 'CATEGORY', 'PROMO', 'WEB_HEADER', 'MOBILE'])
   bannerType: string;
 

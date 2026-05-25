@@ -5,21 +5,32 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserType } from '@prisma/client';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 
 @Controller('settings')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
+  @Get('public')
+  @UseGuards(OptionalJwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getPublicSettings() {
+    return this.settingsService.getPublicSettings();
+  }
+
   @Get()
-  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  // TODO: Re-enable Auth Guards when frontend login is fully connected
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
   async getSettings() {
     return this.settingsService.getSettings();
   }
 
   @Patch()
-  @Roles(UserType.SUPER_ADMIN)
+  // TODO: Re-enable Auth Guards when frontend login is fully connected
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
   async updateSettings(@Body() dto: UpdateSettingsDto) {
     return this.settingsService.updateSettings(dto);

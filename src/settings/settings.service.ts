@@ -28,6 +28,19 @@ export class SettingsService {
     return settings;
   }
 
+  async getPublicSettings() {
+    const settings = await this.getSettings();
+    return {
+      businessName: settings.businessName,
+      businessLogoUrl: settings.businessLogoUrl,
+      faviconUrl: settings.faviconUrl,
+      contactEmail: settings.contactEmail,
+      contactPhone: settings.contactPhone,
+      companyAddress: settings.companyAddress,
+      whatsappOrderNumber: settings.whatsappOrderNumber,
+    };
+  }
+
   async updateSettings(dto: UpdateSettingsDto) {
     let settings = await this.prisma.setting.findFirst();
     if (!settings) {
