@@ -16,10 +16,15 @@ import { ProvisionContactLoginDto } from './dto/provision-contact-login.dto';
 import { ApprovalStatus, UserType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
+import { EmailService } from '../common/email.service';
 
 @Injectable()
 export class CustomerService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   async findAll(query: QueryCustomerDto) {
     const { page = 1, limit = 10, search, status } = query;
@@ -89,16 +94,48 @@ export class CustomerService {
       throw new BadRequestException('Customer is already approved.');
     }
 
-    return this.prisma.customer.update({
-      where: { id },
-      data: {
-        approvalStatus: ApprovalStatus.APPROVED,
-        approvedBy: adminId,
-        approvedAt: new Date(),
-        isActive: true,
-        pricingGroupId: dto.pricingGroupId ?? customer.pricingGroupId,
-      },
+    const plainPassword = crypto.randomBytes(6).toString('hex');
+    const passwordHash = await bcrypt.hash(plainPassword, 10);
+
+    const updatedCustomer = await this.prisma.$transaction(async (tx) => {
+      // 1. Approve customer
+      const updated = await tx.customer.update({
+        where: { id },
+        data: {
+          approvalStatus: ApprovalStatus.APPROVED,
+          approvedBy: adminId,
+          approvedAt: new Date(),
+          isActive: true,
+          pricingGroupId: dto.pricingGroupId ?? customer.pricingGroupId,
+        },
+      });
+
+      // 2. Update user credentials
+      const user = await tx.user.findFirst({ where: { customerId: id } });
+      if (user) {
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            isActive: true,
+            passwordHash: passwordHash,
+          },
+        });
+      }
+
+      return updated;
     });
+
+    // 3. Send email to primary contact
+    const primaryContact = customer.contacts.find((c) => c.isPrimary) || customer.contacts[0];
+    if (primaryContact && primaryContact.email) {
+      await this.emailService.sendCustomerCredentials(
+        primaryContact.email,
+        primaryContact.name || 'Customer',
+        plainPassword,
+      );
+    }
+
+    return updatedCustomer;
   }
 
   async reject(id: string, dto: RejectCustomerDto, adminId: string) {

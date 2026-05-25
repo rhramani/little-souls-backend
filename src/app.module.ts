@@ -18,6 +18,7 @@ import { UploadModule } from './upload/upload.module';
 import { CustomerModule } from './customer/customer.module';
 import { NotificationModule } from './notification/notification.module';
 import { CatalogueModule } from './catalogue/catalogue.module';
+import { CommonModule } from './common/common.module';
 
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
@@ -51,6 +52,7 @@ import { BannerModule } from './banner/banner.module';
     SettingsModule,
     BannerModule,
     CatalogueModule,
+    CommonModule,
   ],
   controllers: [AppController],
   providers: [

@@ -24,12 +24,12 @@ import { GetUser } from '../auth/decorators/get-user.decorator';
 import { UserType } from '@prisma/client';
 
 @Controller('catalogues')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserType.SUPER_ADMIN, UserType.STAFF)
 export class CatalogueController {
   constructor(private readonly catalogueService: CatalogueService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Body() dto: CreateCatalogueDto,
@@ -39,18 +39,22 @@ export class CatalogueController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async findAll() {
     return this.catalogueService.findAll();
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async findOne(@Param('id') id: string) {
     return this.catalogueService.findOne(id);
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
   async remove(@Param('id') id: string) {
     return this.catalogueService.remove(id);
@@ -74,6 +78,8 @@ export class CatalogueController {
   }
 
   @Post(':id/upload')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @UseInterceptors(FileInterceptor('file'))
   @HttpCode(HttpStatus.OK)
   async uploadCatalogue(

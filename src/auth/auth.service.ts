@@ -167,29 +167,11 @@ export class AuthService {
         },
       });
 
-      // Generate first user session
-      const session = await tx.userSession.create({
-        data: {
-          userId: user.id,
-          refreshToken: crypto.randomBytes(40).toString('hex'),
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-        },
-      });
-
-      return { user, customer, contact, session };
+      // Generate first user session (only for staff, for customer we wait until approval)
+      // We no longer generate a session for customers on registration since they can't login yet
+      // return { user, customer, contact };
+      return { user, customer, contact, session: null };
     });
-
-    // 4. Generate JWT
-    const payload = {
-      sub: result.user.id,
-      email: result.user.email,
-      mobile: result.user.mobile,
-      type: result.user.userType,
-      customerId: result.customer.id,
-      contactId: result.contact.id,
-    };
-
-    const token = this.jwtService.sign(payload);
 
     return {
       message: 'Customer registered successfully. Approval is pending.',
@@ -205,8 +187,8 @@ export class AuthService {
         ...result.customer,
         status: result.customer.approvalStatus,
       },
-      accessToken: token,
-      refreshToken: result.session.refreshToken,
+      accessToken: null,
+      refreshToken: null,
     };
   }
 
@@ -230,6 +212,10 @@ export class AuthService {
       throw new UnauthorizedException(
         'Your account has been deactivated. Please contact support.',
       );
+    }
+
+    if (user.userType === UserType.CUSTOMER && user.customer?.approvalStatus !== ApprovalStatus.APPROVED) {
+      throw new UnauthorizedException('Your account is pending admin approval.');
     }
 
     // 2. Compare passwords
@@ -464,6 +450,14 @@ export class AuthService {
 
     if (!user) {
       throw new NotFoundException('No account found with this mobile number.');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('Your account has been deactivated.');
+    }
+
+    if (user.userType === UserType.CUSTOMER && user.customer?.approvalStatus !== ApprovalStatus.APPROVED) {
+      throw new UnauthorizedException('Your account is pending admin approval.');
     }
 
     // Create session & JWT just like login
