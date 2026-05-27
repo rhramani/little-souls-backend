@@ -146,6 +146,80 @@ export class UpdateProductDto {
   @IsOptional()
   tags?: string;
 
+  @IsString()
+  @IsOptional()
+  productImage?: string;
+
+  @IsString()
+  @IsOptional()
+  productPictureUrl?: string;
+
+  @IsOptional()
+  productPrice?: number;
+
+  @IsOptional()
+  discountedPrice?: number;
+
+  @IsString()
+  @IsOptional()
+  taxType?: string;
+
+  @IsString()
+  @IsOptional()
+  parentProductSku?: string;
+
+  @IsString()
+  @IsOptional()
+  parentProductId?: string;
+
+  @IsString()
+  @IsOptional()
+  privateNotes?: string;
+
+  @IsString()
+  @IsOptional()
+  setName?: string;
+
+  @IsInt()
+  @IsOptional()
+  setQuantity?: number;
+
+  @IsString()
+  @IsOptional()
+  setType?: string;
+
+  @IsString()
+  @IsOptional()
+  sizes?: string;
+
+  @IsInt()
+  @IsOptional()
+  sizesSetQuantity?: number;
+
+  @IsString()
+  @IsOptional()
+  colors?: string;
+
+  @IsInt()
+  @IsOptional()
+  colorsSetQuantity?: number;
+
+  @IsString()
+  @IsOptional()
+  nt11_48?: string;
+
+  @IsInt()
+  @IsOptional()
+  nt11_48SetQuantity?: number;
+
+  @IsString()
+  @IsOptional()
+  sixToTwelveMonths?: string;
+
+  @IsInt()
+  @IsOptional()
+  sixToTwelveMonthsSetQuantity?: number;
+
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;

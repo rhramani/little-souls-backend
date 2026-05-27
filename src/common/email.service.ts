@@ -51,8 +51,9 @@ export class EmailService {
     `;
 
     try {
+      const fromEmail = this.configService.get<string>('SMTP_USER') || 'admin@littlesouls.com';
       const info = await this.transporter.sendMail({
-        from: '"Little Souls Admin" <admin@littlesouls.com>',
+        from: `"Little Souls Admin" <${fromEmail}>`,
         to: email,
         subject,
         html,
@@ -65,6 +66,42 @@ export class EmailService {
       }
     } catch (error: any) {
       this.logger.error(`Failed to send email to ${email}: ${error.message}`);
+      throw error;
+    }
+  }
+  async sendPasswordResetOTP(email: string, otp: string) {
+    const subject = 'Password Reset Code - Little Souls';
+    const html = `
+      <div style="font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+        <h2 style="color: #333;">Password Reset Request</h2>
+        <p>We received a request to reset your password. Use the verification code below to proceed:</p>
+        
+        <div style="background-color: #f3f4f6; padding: 20px; text-align: center; border-radius: 8px; margin: 24px 0;">
+          <h1 style="margin: 0; font-size: 36px; letter-spacing: 4px; color: #2563eb;">${otp}</h1>
+        </div>
+
+        <p style="color: #666; font-size: 14px;">This code will expire in 15 minutes. If you did not request a password reset, you can safely ignore this email.</p>
+        <br/>
+        <p style="font-size: 14px;">Best regards,<br/>The Little Souls Team</p>
+      </div>
+    `;
+
+    try {
+      const fromEmail = this.configService.get<string>('SMTP_USER') || 'support@littlesouls.com';
+      const info = await this.transporter.sendMail({
+        from: `"Little Souls Support" <${fromEmail}>`,
+        to: email,
+        subject,
+        html,
+      });
+
+      if (!this.configService.get<string>('SMTP_USER')) {
+        this.logger.log(`\n\n--- MOCK OTP EMAIL SENT TO ${email} ---\nSubject: ${subject}\nOTP: ${otp}\n-----------------------------------\n`);
+      } else {
+        this.logger.log(`OTP Email successfully sent to ${email}. Message ID: ${info.messageId}`);
+      }
+    } catch (error: any) {
+      this.logger.error(`Failed to send OTP email to ${email}: ${error.message}`);
       throw error;
     }
   }

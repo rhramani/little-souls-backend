@@ -12,11 +12,13 @@ import { RegisterStaffDto } from './dto/register-staff.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
 import { UserType, ApprovalStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
 import { EventsGateway } from '../events/events.gateway';
+import { EmailService } from '../common/email.service';
 
 @Injectable()
 export class AuthService {
@@ -24,6 +26,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly eventsGateway: EventsGateway,
+    private readonly emailService: EmailService,
   ) {}
 
   async registerStaff(dto: RegisterStaffDto) {
@@ -308,6 +311,7 @@ export class AuthService {
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
+    console.log(`[AUTH] forgotPassword called with identifier: ${dto.identifier}`);
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [{ mobile: dto.identifier }, { email: dto.identifier }],
@@ -315,6 +319,7 @@ export class AuthService {
     });
 
     if (!user) {
+      console.log(`[AUTH] No user found for identifier: ${dto.identifier}`);
       // To prevent user enumeration, we return success even if user not found,
       // but under the hood, we don't send anything.
       return {
@@ -322,6 +327,8 @@ export class AuthService {
           'If a matching account exists, a password reset link has been generated.',
       };
     }
+
+    console.log(`[AUTH] User found: ID=${user.id}, email=${user.email}, mobile=${user.mobile}`);
 
     // Generate numeric 6-digit verification code or token
     const token = crypto.randomInt(100000, 999999).toString();
@@ -336,8 +343,19 @@ export class AuthService {
       },
     });
 
-    // Logging token for debugging / local testing so user can see it!
-    console.log(`[AUTH] Password reset code for ${dto.identifier}: ${token}`);
+    // Send OTP via Email if user has an email address
+    if (user.email) {
+      console.log(`[AUTH] Attempting to send OTP email to ${user.email}`);
+      try {
+        await this.emailService.sendPasswordResetOTP(user.email, token);
+        console.log(`[AUTH] OTP email sent successfully to ${user.email}`);
+      } catch (err: any) {
+        console.error(`[AUTH] Failed to send OTP email: ${err.message}`);
+      }
+    } else {
+      // Logging token for debugging / local testing if no email
+      console.log(`[AUTH] User has no email. Falling back to console log. Password reset code for ${dto.identifier}: ${token}`);
+    }
 
     return {
       message:
@@ -372,6 +390,34 @@ export class AuthService {
     ]);
 
     return { message: 'Password has been reset successfully' };
+  }
+
+  async updatePassword(userId: string, dto: UpdatePasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      dto.currentPassword,
+      user.passwordHash,
+    );
+    if (!isPasswordValid) {
+      throw new BadRequestException('Invalid current password');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    // Optionally revoke all other sessions here if desired
+    return { message: 'Password has been updated successfully' };
   }
 
   async getProfile(userId: string) {

@@ -1,99 +1,96 @@
-import { IsString, IsOptional, IsDecimal } from 'class-validator';
+import { IsString, IsNotEmpty, IsEmail, IsOptional, MinLength } from 'class-validator';
 
-export class UpdateCustomerDto {
-  @IsOptional()
+export class CreateCustomerDto {
   @IsString()
-  businessName?: string;
+  @IsNotEmpty()
+  name: string;
 
+  @IsEmail()
   @IsOptional()
-  @IsString()
-  businessType?: string;
-
-  @IsOptional()
-  @IsString()
-  gstin?: string;
-
-  @IsOptional()
-  @IsString()
-  billingAddressLine1?: string;
-
-  @IsOptional()
-  @IsString()
-  billingAddressLine2?: string;
-
-  @IsOptional()
-  @IsString()
-  billingCity?: string;
-
-  @IsOptional()
-  @IsString()
-  billingState?: string;
-
-  @IsOptional()
-  @IsString()
-  billingPincode?: string;
-
-  @IsOptional()
-  @IsString()
-  billingCountry?: string;
-
-  @IsOptional()
-  @IsString()
-  shippingAddressLine1?: string;
-
-  @IsOptional()
-  @IsString()
-  shippingAddressLine2?: string;
-
-  @IsOptional()
-  @IsString()
-  shippingCity?: string;
-
-  @IsOptional()
-  @IsString()
-  shippingState?: string;
-
-  @IsOptional()
-  @IsString()
-  shippingPincode?: string;
-
-  @IsOptional()
-  @IsString()
-  shippingCountry?: string;
-
-  @IsOptional()
-  @IsString()
-  storePhotoUrl?: string;
-
-  @IsOptional()
-  @IsString()
-  customerSource?: string;
-
-  @IsOptional()
-  @IsString()
-  mainContactNumber?: string;
-
-  @IsOptional()
-  @IsString()
-  pricingGroupId?: string;
-
-  @IsOptional()
-  @IsString()
-  name?: string;
-
-  @IsOptional()
-  @IsString()
   email?: string;
 
-  @IsOptional()
   @IsString()
-  mobile?: string;
+  @IsNotEmpty()
+  @MinLength(10, { message: 'Mobile number must be at least 10 digits' })
+  mobile: string;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  businessName: string;
+
+  @IsString()
+  @IsOptional()
+  businessType?: string;
+
+  @IsString()
+  @IsOptional()
+  gstin?: string;
+
+  @IsString()
+  @IsOptional()
+  billingAddressLine1?: string;
+
+  @IsString()
+  @IsOptional()
+  billingAddressLine2?: string;
+
+  @IsString()
+  @IsOptional()
+  billingCity?: string;
+
+  @IsString()
+  @IsOptional()
+  billingState?: string;
+
+  @IsString()
+  @IsOptional()
+  billingPincode?: string;
+
+  @IsString()
+  @IsOptional()
+  billingCountry?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingAddressLine1?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingAddressLine2?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingCity?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingState?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingPincode?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingCountry?: string;
+
+  @IsString()
+  @IsOptional()
+  storePhotoUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  customerSource?: string;
+
+  @IsString()
+  @IsOptional()
+  pricingGroupId?: string;
+
+  @IsString()
+  @IsOptional()
   designation?: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   whatsapp?: string;
 }

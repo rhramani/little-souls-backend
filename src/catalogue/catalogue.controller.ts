@@ -19,6 +19,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { CatalogueService } from './catalogue.service';
 import { CreateCatalogueDto } from './dto/create-catalogue.dto';
+import { UpdateCatalogueDto } from './dto/update-catalogue.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -41,26 +42,28 @@ export class CatalogueController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async findAll(@Query('search') search?: string) {
     return this.catalogueService.findAll(search);
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async findOne(@Param('id') id: string, @Query('search') search?: string) {
-    return this.catalogueService.findOne(id, search);
+  async findOne(
+    @Param('id') id: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.catalogueService.findOne(id, search, page ? parseInt(page, 10) : undefined, limit ? parseInt(limit, 10) : undefined);
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async update(@Param('id') id: string, @Body() body: { name: string }) {
-    if (!body.name) {
-      throw new BadRequestException('Catalogue name is required');
-    }
-    return this.catalogueService.update(id, body.name);
+  async update(@Param('id') id: string, @Body() body: UpdateCatalogueDto) {
+    return this.catalogueService.update(id, body);
   }
 
   @Delete(':id')

@@ -17,6 +17,10 @@ export class CreateCategoryDto {
   @IsOptional()
   slug?: string;
 
+  @IsString()
+  @IsOptional()
+  description?: string;
+
   @IsUUID('4', { message: 'Parent Category ID must be a valid UUID' })
   @IsOptional()
   parentCategoryId?: string;

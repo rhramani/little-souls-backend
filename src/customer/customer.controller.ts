@@ -16,6 +16,7 @@ import { QueryCustomerDto } from './dto/query-customer.dto';
 import { ApproveCustomerDto } from './dto/approve-customer.dto';
 import { RejectCustomerDto } from './dto/reject-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { CreateCustomerDto } from './dto/create-customer.dto';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 import { SetOpeningBalanceDto } from './dto/set-opening-balance.dto';
@@ -36,6 +37,16 @@ export class CustomerController {
   @HttpCode(HttpStatus.OK)
   async findAll(@Query() query: QueryCustomerDto) {
     return this.customerService.findAll(query);
+  }
+
+  @Post()
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.CREATED)
+  async create(
+    @Body() dto: CreateCustomerDto,
+    @GetUser('id') adminId: string,
+  ) {
+    return this.customerService.create(dto, adminId);
   }
 
   @Get(':id')

@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { EventsModule } from '../events/events.module';
+import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { EventsModule } from '../events/events.module';
       signOptions: { expiresIn: '15m' },
     }),
     EventsModule,
+    CommonModule,
   ],
   providers: [AuthService, JwtStrategy],
   controllers: [AuthController],

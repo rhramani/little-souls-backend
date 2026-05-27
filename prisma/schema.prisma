@@ -44,6 +44,7 @@ model User {
   email        String?  @unique
   mobile       String   @unique
   passwordHash String   @map("password_hash")
+  plainPassword String? @map("plain_password")
   userType     UserType @map("user_type")
 
   customerId        String? @map("customer_id") @db.Uuid
@@ -313,6 +314,7 @@ model Category {
   id               String   @id @default(uuid()) @db.Uuid
   name             String
   slug             String   @unique
+  description      String?
   parentCategoryId String?  @map("parent_category_id") @db.Uuid
   imageUrl         String?  @map("image_url")
   bannerUrl        String?  @map("banner_url")
@@ -1104,11 +1106,13 @@ model EventLog {
 }
 
 model Catalogue {
-  id        String    @id @default(uuid()) @db.Uuid
-  name      String
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  products  Product[]
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  description String?   @db.Text
+  imageUrl    String?   @map("image_url")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  products    Product[]
 
   @@map("catalogues")
 }

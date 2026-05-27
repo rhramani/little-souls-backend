@@ -128,7 +128,7 @@ describe('CatalogueService', () => {
       expect(buffer).toBeDefined();
 
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(buffer);
+      await workbook.xlsx.load(buffer as any);
       const sheet = workbook.worksheets[0];
       expect(sheet).toBeDefined();
 
@@ -265,7 +265,7 @@ describe('CatalogueService', () => {
       mockPrismaService.productImage.findFirst.mockResolvedValue(null);
 
       // Run import
-      const result = await service.importCatalogue('cat-uuid-1', buffer as Buffer, 'user-uuid-1');
+      const result = await service.importCatalogue('cat-uuid-1', buffer as any, 'user-uuid-1');
       expect(result.message).toBe('Catalogue products successfully updated and replaced.');
 
       // Check product update arguments
@@ -332,7 +332,7 @@ describe('CatalogueService', () => {
 
       const buffer = await workbook.xlsx.writeBuffer();
 
-      await expect(service.importCatalogue('cat-uuid-1', buffer as Buffer, 'user-uuid-1'))
+      await expect(service.importCatalogue('cat-uuid-1', buffer as any, 'user-uuid-1'))
         .rejects.toThrow(BadRequestException);
     });
   });

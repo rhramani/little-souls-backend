@@ -86,6 +86,25 @@ export class ProductService {
             ? new Date(dto.expectedRestockDate)
             : null,
           tags: dto.tags,
+          productImage: dto.productImage,
+          productPictureUrl: dto.productPictureUrl,
+          productPrice: dto.productPrice !== undefined ? new Prisma.Decimal(dto.productPrice) : null,
+          discountedPrice: dto.discountedPrice !== undefined ? new Prisma.Decimal(dto.discountedPrice) : null,
+          taxType: dto.taxType,
+          parentProductSku: dto.parentProductSku,
+          parentProductId: dto.parentProductId,
+          privateNotes: dto.privateNotes,
+          setName: dto.setName,
+          setQuantity: dto.setQuantity,
+          setType: dto.setType,
+          sizes: dto.sizes,
+          sizesSetQuantity: dto.sizesSetQuantity,
+          colors: dto.colors,
+          colorsSetQuantity: dto.colorsSetQuantity,
+          nt11_48: dto.nt11_48,
+          nt11_48SetQuantity: dto.nt11_48SetQuantity,
+          sixToTwelveMonths: dto.sixToTwelveMonths,
+          sixToTwelveMonthsSetQuantity: dto.sixToTwelveMonthsSetQuantity,
           isActive: dto.isActive !== undefined ? dto.isActive : true,
           isFeatured: dto.isFeatured !== undefined ? dto.isFeatured : false,
           sortOrder: dto.sortOrder || 0,
@@ -154,6 +173,8 @@ export class ProductService {
       isFeatured,
       sortBy,
       sortOrder,
+      moqTiers,
+      stockStatuses,
     } = query;
     const skip = (page - 1) * limit;
 
@@ -181,17 +202,57 @@ export class ProductService {
       where.brand = { equals: brand, mode: 'insensitive' };
     }
 
+    const andConditions: any[] = [];
+
     if (stockStatus) {
       where.stockStatus = stockStatus;
     }
 
+    if (stockStatuses) {
+      const statuses = stockStatuses.split(',').filter(Boolean);
+      const mappedStatuses: string[] = [];
+      if (statuses.includes('in')) mappedStatuses.push('IN_STOCK');
+      if (statuses.includes('low')) mappedStatuses.push('LOW_STOCK');
+      if (statuses.includes('out')) mappedStatuses.push('OUT_OF_STOCK');
+      if (statuses.includes('backorder')) mappedStatuses.push('ON_BACKORDER');
+
+      if (mappedStatuses.length > 0) {
+        where.stockStatus = { in: mappedStatuses };
+      }
+    }
+
+    if (moqTiers) {
+      const tiers = moqTiers.split(',').filter(Boolean);
+      const moqConditions: any[] = [];
+      
+      if (tiers.includes('low')) {
+        moqConditions.push({ moq: { lte: 12 } });
+      }
+      if (tiers.includes('mid')) {
+        moqConditions.push({ moq: { gt: 12, lte: 24 } });
+      }
+      if (tiers.includes('high')) {
+        moqConditions.push({ moq: { gt: 24 } });
+      }
+      
+      if (moqConditions.length > 0) {
+        andConditions.push({ OR: moqConditions });
+      }
+    }
+
     if (search) {
-      where.OR = [
-        { sku: { contains: search, mode: 'insensitive' } },
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { brand: { contains: search, mode: 'insensitive' } },
-      ];
+      andConditions.push({
+        OR: [
+          { sku: { contains: search, mode: 'insensitive' } },
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { brand: { contains: search, mode: 'insensitive' } },
+        ]
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
     }
 
     // Determine Sort Order
@@ -402,6 +463,25 @@ export class ProductService {
             ? new Date(dto.expectedRestockDate)
             : undefined,
           tags: dto.tags,
+          productImage: dto.productImage !== undefined ? dto.productImage : undefined,
+          productPictureUrl: dto.productPictureUrl !== undefined ? dto.productPictureUrl : undefined,
+          productPrice: dto.productPrice !== undefined ? (dto.productPrice === null ? null : new Prisma.Decimal(dto.productPrice)) : undefined,
+          discountedPrice: dto.discountedPrice !== undefined ? (dto.discountedPrice === null ? null : new Prisma.Decimal(dto.discountedPrice)) : undefined,
+          taxType: dto.taxType !== undefined ? dto.taxType : undefined,
+          parentProductSku: dto.parentProductSku !== undefined ? dto.parentProductSku : undefined,
+          parentProductId: dto.parentProductId !== undefined ? dto.parentProductId : undefined,
+          privateNotes: dto.privateNotes !== undefined ? dto.privateNotes : undefined,
+          setName: dto.setName !== undefined ? dto.setName : undefined,
+          setQuantity: dto.setQuantity !== undefined ? dto.setQuantity : undefined,
+          setType: dto.setType !== undefined ? dto.setType : undefined,
+          sizes: dto.sizes !== undefined ? dto.sizes : undefined,
+          sizesSetQuantity: dto.sizesSetQuantity !== undefined ? dto.sizesSetQuantity : undefined,
+          colors: dto.colors !== undefined ? dto.colors : undefined,
+          colorsSetQuantity: dto.colorsSetQuantity !== undefined ? dto.colorsSetQuantity : undefined,
+          nt11_48: dto.nt11_48 !== undefined ? dto.nt11_48 : undefined,
+          nt11_48SetQuantity: dto.nt11_48SetQuantity !== undefined ? dto.nt11_48SetQuantity : undefined,
+          sixToTwelveMonths: dto.sixToTwelveMonths !== undefined ? dto.sixToTwelveMonths : undefined,
+          sixToTwelveMonthsSetQuantity: dto.sixToTwelveMonthsSetQuantity !== undefined ? dto.sixToTwelveMonthsSetQuantity : undefined,
           isActive: dto.isActive,
           isFeatured: dto.isFeatured,
           sortOrder: dto.sortOrder,

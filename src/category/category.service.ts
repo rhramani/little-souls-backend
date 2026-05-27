@@ -52,6 +52,7 @@ export class CategoryService {
       data: {
         name: dto.name,
         slug,
+        description: dto.description,
         parentCategoryId: dto.parentCategoryId || null,
         imageUrl: dto.imageUrl,
         bannerUrl: dto.bannerUrl,
@@ -66,6 +67,11 @@ export class CategoryService {
     const categories = await this.prisma.category.findMany({
       where: onlyActive ? { isActive: true } : {},
       orderBy: { sortOrder: 'asc' },
+      include: {
+        _count: {
+          select: { products: true }
+        }
+      }
     });
 
     return categories;
@@ -177,10 +183,11 @@ export class CategoryService {
       data: {
         name: dto.name,
         slug,
+        description: dto.description !== undefined ? dto.description : undefined,
         parentCategoryId:
           dto.parentCategoryId !== undefined ? dto.parentCategoryId : undefined,
-        imageUrl: dto.imageUrl,
-        bannerUrl: dto.bannerUrl,
+        imageUrl: dto.imageUrl !== undefined ? dto.imageUrl : undefined,
+        bannerUrl: dto.bannerUrl !== undefined ? dto.bannerUrl : undefined,
         isActive: dto.isActive,
         sortOrder: dto.sortOrder,
         updatedBy: userId,

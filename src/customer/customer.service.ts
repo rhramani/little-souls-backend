@@ -9,6 +9,7 @@ import { QueryCustomerDto } from './dto/query-customer.dto';
 import { ApproveCustomerDto } from './dto/approve-customer.dto';
 import { RejectCustomerDto } from './dto/reject-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { CreateCustomerDto } from './dto/create-customer.dto';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 import { SetOpeningBalanceDto } from './dto/set-opening-balance.dto';
@@ -27,6 +28,112 @@ export class CustomerService {
     private readonly emailService: EmailService,
     private readonly eventsGateway: EventsGateway,
   ) {}
+
+  async create(dto: CreateCustomerDto, adminId: string) {
+    // 1. Check if user already exists
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { mobile: dto.mobile },
+          dto.email ? { email: dto.email } : undefined,
+        ].filter(Boolean) as any,
+      },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('A user with this email or mobile number already exists');
+    }
+
+    if (dto.gstin) {
+      const existingCustomer = await this.prisma.customer.findUnique({
+        where: { gstin: dto.gstin },
+      });
+      if (existingCustomer) {
+        throw new ConflictException('GSTIN is already registered');
+      }
+    }
+
+    const plainPassword = crypto.randomBytes(6).toString('hex');
+    const passwordHash = await bcrypt.hash(plainPassword, 10);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Create Customer as APPROVED immediately
+      const customer = await tx.customer.create({
+        data: {
+          businessName: dto.businessName,
+          businessType: dto.businessType,
+          gstin: dto.gstin,
+          billingAddressLine1: dto.billingAddressLine1,
+          billingAddressLine2: dto.billingAddressLine2,
+          billingCity: dto.billingCity,
+          billingState: dto.billingState,
+          billingPincode: dto.billingPincode,
+          billingCountry: dto.billingCountry,
+          shippingAddressLine1: dto.shippingAddressLine1,
+          shippingAddressLine2: dto.shippingAddressLine2,
+          shippingCity: dto.shippingCity,
+          shippingState: dto.shippingState,
+          shippingPincode: dto.shippingPincode,
+          shippingCountry: dto.shippingCountry,
+          storePhotoUrl: dto.storePhotoUrl,
+          customerSource: dto.customerSource,
+          mainContactNumber: dto.mobile,
+          pricingGroupId: dto.pricingGroupId,
+          approvalStatus: ApprovalStatus.APPROVED,
+          approvedBy: adminId,
+          approvedAt: new Date(),
+          isActive: true,
+        },
+      });
+
+      // Create primary contact
+      const contact = await tx.customerContact.create({
+        data: {
+          customerId: customer.id,
+          name: dto.name,
+          mobile: dto.mobile,
+          email: dto.email,
+          designation: dto.designation || 'Owner',
+          whatsappNumber: dto.whatsapp,
+          loginAccess: true,
+          isPrimary: true,
+          isActive: true,
+          canPlaceOrder: true,
+          canViewLedger: true,
+          canDownloadInvoice: true,
+        },
+      });
+
+      // Create user
+      const user = await tx.user.create({
+        data: {
+          name: dto.name,
+          email: dto.email,
+          mobile: dto.mobile,
+          passwordHash,
+          plainPassword,
+          userType: UserType.CUSTOMER,
+          customerId: customer.id,
+          customerContactId: contact.id,
+          isActive: true,
+          isVerified: false,
+        },
+      });
+
+      return { customer, contact, user };
+    });
+
+    if (result.contact.email) {
+      await this.emailService.sendCustomerCredentials(
+        result.contact.email,
+        result.contact.name || 'Customer',
+        plainPassword,
+      );
+    }
+
+    this.eventsGateway.emitCustomerRegistered(result.customer);
+    return this.findOne(result.customer.id);
+  }
 
   async findAll(query: QueryCustomerDto) {
     const { page = 1, limit = 10, search, status } = query;
@@ -55,6 +162,7 @@ export class CustomerService {
           contacts: { where: { isPrimary: true }, take: 1 },
           pricingGroup: { select: { name: true, code: true } },
           assignedSalesStaff: { select: { id: true, name: true } },
+          users: { select: { id: true, name: true, email: true, mobile: true, plainPassword: true } },
         },
       }),
       this.prisma.customer.count({ where }),
@@ -72,8 +180,9 @@ export class CustomerService {
       include: {
         contacts: true,
         pricingGroup: true,
-        assignedSalesStaff: { select: { id: true, name: true, email: true } },
+        assignedSalesStaff: { select: { id: true, name: true, email: true, mobile: true } },
         approvedByUser: { select: { id: true, name: true } },
+        users: { select: { id: true, name: true, email: true, mobile: true, plainPassword: true } },
       },
     });
     if (!customer) {
@@ -83,11 +192,49 @@ export class CustomerService {
   }
 
   async update(id: string, dto: UpdateCustomerDto) {
-    await this.findOne(id);
-    return this.prisma.customer.update({
-      where: { id },
-      data: dto,
+    const customer = await this.findOne(id);
+    const { name, email, mobile, designation, whatsapp, ...customerData } = dto;
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedCustomer = await tx.customer.update({
+        where: { id },
+        data: customerData,
+      });
+
+      // Update primary contact if contact fields are provided
+      if (name !== undefined || email !== undefined || mobile !== undefined || designation !== undefined || whatsapp !== undefined) {
+        const primaryContact = customer.contacts.find(c => c.isPrimary) || customer.contacts[0];
+        if (primaryContact) {
+          await tx.customerContact.update({
+            where: { id: primaryContact.id },
+            data: {
+              name: name !== undefined ? name : undefined,
+              email: email !== undefined ? email : undefined,
+              mobile: mobile !== undefined ? mobile : undefined,
+              designation: designation !== undefined ? designation : undefined,
+              whatsappNumber: whatsapp !== undefined ? whatsapp : undefined,
+            },
+          });
+          
+          // Also update the User record to keep email/mobile in sync for login and password resets
+          if (name !== undefined || email !== undefined || mobile !== undefined) {
+            const user = await tx.user.findFirst({ where: { customerId: id } });
+            if (user) {
+              await tx.user.update({
+                where: { id: user.id },
+                data: {
+                  name: name !== undefined ? name : undefined,
+                  email: email !== undefined ? email : undefined,
+                  mobile: mobile !== undefined ? mobile : undefined,
+                },
+              });
+            }
+          }
+        }
+      }
+      return updatedCustomer;
     });
+    return this.findOne(id);
   }
 
   async approve(id: string, dto: ApproveCustomerDto, adminId: string) {
@@ -120,11 +267,10 @@ export class CustomerService {
           data: {
             isActive: true,
             passwordHash: passwordHash,
+            plainPassword: plainPassword,
           },
         });
       }
-
-      return updated;
     });
 
     // 3. Send email to primary contact
@@ -138,7 +284,7 @@ export class CustomerService {
     }
 
     this.eventsGateway.emitCustomerStatusChanged(id, ApprovalStatus.APPROVED);
-    return updatedCustomer;
+    return this.findOne(id);
   }
 
   async reject(id: string, dto: RejectCustomerDto, adminId: string) {

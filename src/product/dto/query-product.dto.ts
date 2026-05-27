@@ -6,13 +6,16 @@ import {
   IsBoolean,
   IsEnum,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { StockStatus } from '@prisma/client';
 
 export class QueryProductDto {
+  @Type(() => Number)
   @IsInt()
   @IsOptional()
   page?: number = 1;
 
+  @Type(() => Number)
   @IsInt()
   @IsOptional()
   limit?: number = 10;
@@ -32,6 +35,14 @@ export class QueryProductDto {
   @IsEnum(StockStatus)
   @IsOptional()
   stockStatus?: StockStatus;
+
+  @IsString()
+  @IsOptional()
+  stockStatuses?: string; // Comma-separated array string
+
+  @IsString()
+  @IsOptional()
+  moqTiers?: string; // Comma-separated array string
 
   @IsBoolean()
   @IsOptional()

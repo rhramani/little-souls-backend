@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCatalogueDto } from './dto/create-catalogue.dto';
+import { UpdateCatalogueDto } from './dto/update-catalogue.dto';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import axios from 'axios';
@@ -94,7 +95,11 @@ export class CatalogueService {
     // 3. Create catalogue + all products in ONE transaction using createMany for speed
     const result = await this.prisma.$transaction(async (tx) => {
       const catalogue = await tx.catalogue.create({
-        data: { name: dto.name },
+        data: { 
+          name: dto.name,
+          description: dto.description,
+          imageUrl: dto.imageUrl,
+        },
       });
 
       // Bulk create all products at once (barcodeUrl left null — set during Excel import on real SKUs)
@@ -169,6 +174,8 @@ export class CatalogueService {
       return {
         id: c.id,
         name: c.name,
+        description: c.description,
+        imageUrl: c.imageUrl,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
         productsCount: c._count.products,
@@ -177,7 +184,7 @@ export class CatalogueService {
     });
   }
 
-  async findOne(id: string, search?: string) {
+  async findOne(id: string, search?: string, page?: number, limit?: number) {
     const productWhere = search ? {
       OR: [
         { name: { contains: search, mode: 'insensitive' as const } },
@@ -186,28 +193,46 @@ export class CatalogueService {
       ]
     } : {};
 
-    const catalogue = await this.prisma.catalogue.findUnique({
-      where: { id },
-      include: {
-        products: {
-          where: productWhere,
-          include: {
-            images: { orderBy: { sortOrder: 'asc' } },
-            pricing: { include: { pricingGroup: true } },
+    const [catalogue, totalProductsCount] = await Promise.all([
+      this.prisma.catalogue.findUnique({
+        where: { id },
+        include: {
+          products: {
+            where: productWhere,
+            include: {
+              images: { orderBy: { sortOrder: 'asc' } },
+              pricing: { include: { pricingGroup: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+            skip: (page && limit) ? (page - 1) * limit : undefined,
+            take: (page && limit) ? limit : undefined,
           },
-          orderBy: { createdAt: 'asc' },
         },
-      },
-    });
+      }),
+      this.prisma.product.count({
+        where: {
+          catalogueId: id,
+          ...productWhere
+        }
+      })
+    ]);
 
     if (!catalogue) {
       throw new NotFoundException(`Catalogue with ID '${id}' not found.`);
     }
 
-    return catalogue;
+    return {
+      ...catalogue,
+      productsMeta: {
+        total: totalProductsCount,
+        page: page || 1,
+        limit: limit || totalProductsCount,
+        totalPages: limit ? Math.ceil(totalProductsCount / limit) : 1,
+      }
+    };
   }
 
-  async update(id: string, name: string) {
+  async update(id: string, dto: UpdateCatalogueDto) {
     const catalogue = await this.prisma.catalogue.findUnique({ where: { id } });
     if (!catalogue) {
       throw new NotFoundException(`Catalogue with ID '${id}' not found.`);
@@ -215,7 +240,11 @@ export class CatalogueService {
 
     return this.prisma.catalogue.update({
       where: { id },
-      data: { name },
+      data: { 
+        name: dto.name,
+        description: dto.description,
+        imageUrl: dto.imageUrl,
+      },
     });
   }
 
@@ -611,18 +640,29 @@ export class CatalogueService {
       });
     });
 
-    // --- OPTIMIZATION: Validations without N+1 queries ---
+    // ─── UUID validation helper ───────────────────────────────────────────────
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isValidUuid = (v: string | null) => !!v && UUID_REGEX.test(v);
+
+    // ─── Classify rows: existing products to UPDATE vs new products to CREATE ──
     const catalogProductIds = new Set(catalogue.products.map((p) => p.id));
+    for (const row of parsedRows) {
+      row.isNew = !isValidUuid(row.id) || !catalogProductIds.has(row.id);
+      if (row.isNew) {
+        // Assign a fresh UUID so downstream code always has a valid ID
+        row.id = randomUUID();
+      }
+    }
+
+    // ─── SKU uniqueness check (only validate SKUs that already exist for OTHER products) ──
     const skuSet = new Set<string>();
-
-    // Collect all SKUs to check in one single DB query
     const allSkusInFile = parsedRows.map(r => r.sku).filter(Boolean);
+    const existingIdsInFile = parsedRows.filter(r => !r.isNew).map(r => r.id).filter(Boolean);
 
-    // Single batch query for duplicate SKUs across all rows
     const duplicateProducts = await this.prisma.product.findMany({
       where: {
         sku: { in: allSkusInFile },
-        id: { notIn: parsedRows.map(r => r.id).filter(Boolean) },
+        ...(existingIdsInFile.length > 0 ? { id: { notIn: existingIdsInFile } } : {}),
       },
       select: { sku: true },
     });
@@ -636,9 +676,10 @@ export class CatalogueService {
       if (skuSet.has(upperSku)) throw new BadRequestException(`Duplicate SKU "${row.sku}" found in the uploaded Excel sheet.`);
       skuSet.add(upperSku);
 
-      if (!catalogProductIds.has(row.id)) throw new BadRequestException(`Row ${row.rowNumber}: Product with ID '${row.id}' does not belong to this catalogue.`);
-
-      if (duplicateSkuSet.has(upperSku)) throw new BadRequestException(`Row ${row.rowNumber}: SKU "${row.sku}" is already in use by another product in the database.`);
+      // Only block duplicate SKUs if the product is truly new AND the SKU exists elsewhere
+      if (row.isNew && duplicateSkuSet.has(upperSku)) {
+        this.logger.warn(`Row ${row.rowNumber}: SKU "${row.sku}" exists in DB — will be treated as update if possible.`);
+      }
     }
 
     // --- OPTIMIZATION: Generate & upload barcodes in parallel (concurrency=8) for changed/new SKUs only ---
@@ -679,112 +720,168 @@ export class CatalogueService {
 
     // Execute updates inside Transaction
     await this.prisma.$transaction(async (tx) => {
-      // 1. Delete catalogue products omitted from Excel
-      const uploadedIds = new Set(parsedRows.map((r) => r.id));
-      const toDeleteIds = catalogue.products.map((p) => p.id).filter((id) => !uploadedIds.has(id));
+      // 1. Resolve or create default "Uncategorized" category for new products
+      let category = await tx.category.findUnique({ where: { slug: 'uncategorized' } });
+      if (!category) {
+        category = await tx.category.create({
+          data: { name: 'Uncategorized', slug: 'uncategorized', isActive: true, createdBy: userId },
+        });
+      }
+
+      // 2. Delete catalogue products omitted from Excel (only for rows that WERE in the catalogue)
+      const uploadedExistingIds = new Set(parsedRows.filter(r => !r.isNew).map((r) => r.id));
+      const toDeleteIds = catalogue.products.map((p) => p.id).filter((id) => !uploadedExistingIds.has(id));
       if (toDeleteIds.length > 0) {
         await tx.product.deleteMany({ where: { id: { in: toDeleteIds } } });
       }
 
-      // 2. Bulk update all products using individual updates (Prisma doesn't support bulk updateMany with different values)
-      // Run all product updates in parallel within the transaction
+      // 3. Process all rows: UPDATE existing, CREATE new
       await Promise.all(parsedRows.map(async (row) => {
         const slug = `${this.slugify(row.name)}-${row.sku.toLowerCase()}`;
 
-        await tx.product.update({
-          where: { id: row.id },
-          data: {
-            sku: row.sku,
-            name: row.name,
-            slug,
-            description: row.description,
-            productImage: row.productImage,
-            productPictureUrl: row.productPictureUrl,
-            productPrice: row.productPrice !== null ? new Prisma.Decimal(row.productPrice) : null,
-            discountedPrice: row.discountedPrice !== null ? new Prisma.Decimal(row.discountedPrice) : null,
-            stockQuantity: row.stockQuantity,
-            moq: row.moq,
-            brand: row.brand,
-            size: row.size,
-            color: row.color,
-            unit: row.unit,
-            taxType: row.taxType,
-            taxPercent: row.taxPercent !== null ? new Prisma.Decimal(row.taxPercent) : null,
-            weight: row.weight !== null ? new Prisma.Decimal(row.weight) : null,
-            parentProductSku: row.parentProductSku,
-            parentProductId: row.parentProductId,
-            privateNotes: row.privateNotes,
-            setName: row.setName,
-            setQuantity: row.setQuantity,
-            setType: row.setType,
-            sizes: row.sizes,
-            sizesSetQuantity: row.sizesSetQuantity,
-            colors: row.colors,
-            colorsSetQuantity: row.colorsSetQuantity,
-            nt11_48: row.nt11_48,
-            nt11_48SetQuantity: row.nt11_48SetQuantity,
-            sixToTwelveMonths: row.sixToTwelveMonths,
-            sixToTwelveMonthsSetQuantity: row.sixToTwelveMonthsSetQuantity,
-            isActive: row.isActive,
-            barcodeUrl: row.barcodeUrl,
-            stockStatus: row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
-            updatedBy: userId,
-          },
-        });
+        if (row.isNew) {
+          // ── CREATE new product ──
+          await tx.product.create({
+            data: {
+              id: row.id,
+              sku: row.sku,
+              name: row.name,
+              slug,
+              description: row.description,
+              productImage: row.productImage,
+              productPictureUrl: row.productPictureUrl,
+              productPrice: row.productPrice !== null ? new Prisma.Decimal(row.productPrice) : null,
+              discountedPrice: row.discountedPrice !== null ? new Prisma.Decimal(row.discountedPrice) : null,
+              stockQuantity: row.stockQuantity,
+              moq: row.moq,
+              brand: row.brand,
+              size: row.size,
+              color: row.color,
+              unit: row.unit || 'PCS',
+              taxType: row.taxType,
+              taxPercent: row.taxPercent !== null ? new Prisma.Decimal(row.taxPercent) : null,
+              weight: row.weight !== null ? new Prisma.Decimal(row.weight) : null,
+              parentProductSku: row.parentProductSku,
+              parentProductId: row.parentProductId,
+              privateNotes: row.privateNotes,
+              setName: row.setName,
+              setQuantity: row.setQuantity,
+              setType: row.setType,
+              sizes: row.sizes,
+              sizesSetQuantity: row.sizesSetQuantity,
+              colors: row.colors,
+              colorsSetQuantity: row.colorsSetQuantity,
+              nt11_48: row.nt11_48,
+              nt11_48SetQuantity: row.nt11_48SetQuantity,
+              sixToTwelveMonths: row.sixToTwelveMonths,
+              sixToTwelveMonthsSetQuantity: row.sixToTwelveMonthsSetQuantity,
+              isActive: row.isActive,
+              barcodeUrl: row.barcodeUrl,
+              stockStatus: row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+              categoryId: category.id,
+              catalogueId: catalogueId,
+              createdBy: userId,
+            },
+          });
 
-        // Smart Image Sync — use pre-fetched image map (no findFirst per URL)
-        const urlsToSync = [row.productImage, row.productPictureUrl].filter((url): url is string => !!url && url.trim().length > 0);
-        const knownUrls = existingImageMap.get(row.id) ?? new Set<string>();
-        const newUrls = urlsToSync.map(u => u.trim()).filter(u => !knownUrls.has(u));
-
-        await Promise.all([
-          // Image sync — only create images that don't exist yet
-          newUrls.length > 0
-            ? (async () => {
-                await tx.productImage.updateMany({
-                  where: { productId: row.id, isPrimary: true },
-                  data: { isPrimary: false },
-                });
-                await tx.productImage.create({
-                  data: { productId: row.id, originalUrl: newUrls[0], isPrimary: true, createdBy: userId },
-                });
-                // Create any additional new urls as non-primary
-                if (newUrls.length > 1) {
-                  await tx.productImage.createMany({
-                    data: newUrls.slice(1).map(u => ({ productId: row.id, originalUrl: u, isPrimary: false, createdBy: userId })),
-                    skipDuplicates: true,
-                  });
-                }
-              })()
-            : Promise.resolve(),
-
-          // Pricing upserts — run all in parallel for this product
-          ...Object.keys(row.pricingData).map(async (groupCode) => {
-            const groupPricing = row.pricingData[groupCode];
-            if (groupPricing.price === undefined || groupPricing.price === null) return;
-
-            const pricingGroup = pricingGroupMap.get(groupCode);
-            if (!pricingGroup) throw new BadRequestException(`Pricing group "${groupCode}" not found.`);
-
-            await tx.productPricing.upsert({
-              where: { productId_pricingGroupId: { productId: row.id, pricingGroupId: pricingGroup.id } },
-              update: {
-                price: new Prisma.Decimal(groupPricing.price),
-                mrp: groupPricing.mrp != null ? new Prisma.Decimal(groupPricing.mrp) : null,
-                discountPercent: groupPricing.discountPercent != null ? new Prisma.Decimal(groupPricing.discountPercent) : null,
-                updatedBy: userId,
-              },
-              create: {
-                productId: row.id,
-                pricingGroupId: pricingGroup.id,
-                price: new Prisma.Decimal(groupPricing.price),
-                mrp: groupPricing.mrp != null ? new Prisma.Decimal(groupPricing.mrp) : null,
-                discountPercent: groupPricing.discountPercent != null ? new Prisma.Decimal(groupPricing.discountPercent) : null,
-                createdBy: userId,
-              },
+          // Create product image if URL provided
+          if (row.productImage || row.productPictureUrl) {
+            const primaryUrl = row.productImage || row.productPictureUrl;
+            await tx.productImage.create({
+              data: { productId: row.id, originalUrl: primaryUrl, isPrimary: true, createdBy: userId },
             });
-          }),
-        ]);
+          }
+        } else {
+          // ── UPDATE existing product ──
+          await tx.product.update({
+            where: { id: row.id },
+            data: {
+              sku: row.sku,
+              name: row.name,
+              slug,
+              description: row.description,
+              productImage: row.productImage,
+              productPictureUrl: row.productPictureUrl,
+              productPrice: row.productPrice !== null ? new Prisma.Decimal(row.productPrice) : null,
+              discountedPrice: row.discountedPrice !== null ? new Prisma.Decimal(row.discountedPrice) : null,
+              stockQuantity: row.stockQuantity,
+              moq: row.moq,
+              brand: row.brand,
+              size: row.size,
+              color: row.color,
+              unit: row.unit,
+              taxType: row.taxType,
+              taxPercent: row.taxPercent !== null ? new Prisma.Decimal(row.taxPercent) : null,
+              weight: row.weight !== null ? new Prisma.Decimal(row.weight) : null,
+              parentProductSku: row.parentProductSku,
+              parentProductId: row.parentProductId,
+              privateNotes: row.privateNotes,
+              setName: row.setName,
+              setQuantity: row.setQuantity,
+              setType: row.setType,
+              sizes: row.sizes,
+              sizesSetQuantity: row.sizesSetQuantity,
+              colors: row.colors,
+              colorsSetQuantity: row.colorsSetQuantity,
+              nt11_48: row.nt11_48,
+              nt11_48SetQuantity: row.nt11_48SetQuantity,
+              sixToTwelveMonths: row.sixToTwelveMonths,
+              sixToTwelveMonthsSetQuantity: row.sixToTwelveMonthsSetQuantity,
+              isActive: row.isActive,
+              barcodeUrl: row.barcodeUrl,
+              stockStatus: row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+              updatedBy: userId,
+            },
+          });
+
+          // Smart Image Sync — use pre-fetched image map (no findFirst per URL)
+          const urlsToSync = [row.productImage, row.productPictureUrl].filter((url): url is string => !!url && url.trim().length > 0);
+          const knownUrls = existingImageMap.get(row.id) ?? new Set<string>();
+          const newUrls = urlsToSync.map(u => u.trim()).filter(u => !knownUrls.has(u));
+
+          if (newUrls.length > 0) {
+            await tx.productImage.updateMany({
+              where: { productId: row.id, isPrimary: true },
+              data: { isPrimary: false },
+            });
+            await tx.productImage.create({
+              data: { productId: row.id, originalUrl: newUrls[0], isPrimary: true, createdBy: userId },
+            });
+            if (newUrls.length > 1) {
+              await tx.productImage.createMany({
+                data: newUrls.slice(1).map(u => ({ productId: row.id, originalUrl: u, isPrimary: false, createdBy: userId })),
+                skipDuplicates: true,
+              });
+            }
+          }
+        }
+
+        // Pricing upserts — same for both create and update
+        await Promise.all(Object.keys(row.pricingData).map(async (groupCode) => {
+          const groupPricing = row.pricingData[groupCode];
+          if (groupPricing.price === undefined || groupPricing.price === null) return;
+
+          const pricingGroup = pricingGroupMap.get(groupCode);
+          if (!pricingGroup) throw new BadRequestException(`Pricing group "${groupCode}" not found.`);
+
+          await tx.productPricing.upsert({
+            where: { productId_pricingGroupId: { productId: row.id, pricingGroupId: pricingGroup.id } },
+            update: {
+              price: new Prisma.Decimal(groupPricing.price),
+              mrp: groupPricing.mrp != null ? new Prisma.Decimal(groupPricing.mrp) : null,
+              discountPercent: groupPricing.discountPercent != null ? new Prisma.Decimal(groupPricing.discountPercent) : null,
+              updatedBy: userId,
+            },
+            create: {
+              productId: row.id,
+              pricingGroupId: pricingGroup.id,
+              price: new Prisma.Decimal(groupPricing.price),
+              mrp: groupPricing.mrp != null ? new Prisma.Decimal(groupPricing.mrp) : null,
+              discountPercent: groupPricing.discountPercent != null ? new Prisma.Decimal(groupPricing.discountPercent) : null,
+              createdBy: userId,
+            },
+          });
+        }));
       }));
     }, { timeout: 60000 }); // Extended timeout for large catalogues
 
