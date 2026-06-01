@@ -256,7 +256,7 @@ export class OrderService {
   }
 
   async findAll(query: QueryOrderDto, customerId?: string) {
-    const { page = 1, limit = 10, status } = query;
+    const { page = 1, limit = 10, status, startDate, endDate, sku } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -265,6 +265,27 @@ export class OrderService {
     }
     if (status) {
       where.orderStatus = status;
+    }
+    
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        where.createdAt.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.createdAt.lte = new Date(endDate);
+      }
+    }
+
+    if (sku) {
+      where.items = {
+        some: {
+          sku: {
+            contains: sku,
+            mode: 'insensitive',
+          },
+        },
+      };
     }
 
     const [orders, total] = await this.prisma.$transaction([

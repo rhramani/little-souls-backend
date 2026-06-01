@@ -20,6 +20,7 @@ import { NotificationModule } from './notification/notification.module';
 import { CatalogueModule } from './catalogue/catalogue.module';
 import { EventsModule } from './events/events.module';
 import { CommonModule } from './common/common.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
@@ -55,6 +56,7 @@ import { BannerModule } from './banner/banner.module';
     CatalogueModule,
     EventsModule,
     CommonModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

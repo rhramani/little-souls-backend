@@ -13,6 +13,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserType, ApprovalStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -418,6 +419,59 @@ export class AuthService {
 
     // Optionally revoke all other sessions here if desired
     return { message: 'Password has been updated successfully' };
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check for duplicate email if email is being changed
+    if (dto.email && dto.email !== user.email) {
+      const existingEmail = await this.prisma.user.findFirst({
+        where: { email: dto.email, id: { not: userId } },
+      });
+      if (existingEmail) {
+        throw new ConflictException('This email is already in use by another account');
+      }
+    }
+
+    // Check for duplicate mobile if mobile is being changed
+    if (dto.mobile && dto.mobile !== user.mobile) {
+      const existingMobile = await this.prisma.user.findFirst({
+        where: { mobile: dto.mobile, id: { not: userId } },
+      });
+      if (existingMobile) {
+        throw new ConflictException('This mobile number is already in use by another account');
+      }
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.email !== undefined && { email: dto.email }),
+        ...(dto.mobile !== undefined && { mobile: dto.mobile }),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        mobile: true,
+        userType: true,
+        isActive: true,
+        isVerified: true,
+      },
+    });
+
+    return {
+      message: 'Profile updated successfully',
+      user: updatedUser,
+    };
   }
 
   async getProfile(userId: string) {
