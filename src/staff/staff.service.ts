@@ -9,16 +9,162 @@ import { UpdateStaffDto } from './dto/update-staff.dto';
 import { MarkAttendanceDto } from './dto/mark-attendance.dto';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { Prisma, UserType } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { CreateStaffDto } from './dto/create-staff.dto';
 
 @Injectable()
 export class StaffService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // =============== ROLES & PERMISSIONS ===============
+
+  async getRoles() {
+    return this.prisma.role.findMany({
+      include: {
+        rolePermissions: {
+          include: {
+            permission: true,
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async createRole(data: { name: string; description?: string }) {
+    const existing = await this.prisma.role.findUnique({ where: { name: data.name } });
+    if (existing) throw new BadRequestException('Role name already exists.');
+
+    return this.prisma.role.create({
+      data: { name: data.name, description: data.description },
+    });
+  }
+
+  async updateRole(id: string, data: { name?: string; description?: string }) {
+    const role = await this.prisma.role.findUnique({ where: { id } });
+    if (!role) throw new NotFoundException('Role not found.');
+
+    if (data.name && data.name !== role.name) {
+      const existing = await this.prisma.role.findUnique({ where: { name: data.name } });
+      if (existing) throw new BadRequestException('Role name already exists.');
+    }
+
+    return this.prisma.role.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteRole(id: string) {
+    const role = await this.prisma.role.findUnique({ where: { id } });
+    if (!role) throw new NotFoundException('Role not found.');
+    if (role.isSystemRole) throw new BadRequestException('Cannot delete system role.');
+
+    const userRoles = await this.prisma.userRole.count({ where: { roleId: id } });
+    if (userRoles > 0) throw new BadRequestException('Cannot delete role assigned to users. Reassign users first.');
+
+    return this.prisma.role.delete({ where: { id } });
+  }
+
+  async updateRolePermissions(roleId: string, permissions: { module: string; action: string; enabled: boolean }[]) {
+    const role = await this.prisma.role.findUnique({ where: { id: roleId } });
+    if (!role) throw new NotFoundException(`Role '${roleId}' not found.`);
+
+    return this.prisma.$transaction(async (tx) => {
+      for (const perm of permissions) {
+        // Find the permission record
+        let permissionRecord = await tx.permission.findUnique({
+          where: { module_action: { module: perm.module, action: perm.action } },
+        });
+
+        if (!permissionRecord) {
+          // Create the permission if it doesn't exist
+          permissionRecord = await tx.permission.create({
+            data: { module: perm.module, action: perm.action },
+          });
+        }
+
+        if (perm.enabled) {
+          // Add role permission if not exists
+          const existing = await tx.rolePermission.findUnique({
+            where: { roleId_permissionId: { roleId, permissionId: permissionRecord.id } },
+          });
+          if (!existing) {
+            await tx.rolePermission.create({
+              data: { roleId, permissionId: permissionRecord.id },
+            });
+          }
+        } else {
+          // Remove role permission if exists
+          await tx.rolePermission.deleteMany({
+            where: { roleId, permissionId: permissionRecord.id },
+          });
+        }
+      }
+      return { success: true };
+    });
+  }
+
   // =============== STAFF PROFILE MANAGEMENT ===============
+
+  async createStaff(dto: CreateStaffDto) {
+    const existingEmail = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (existingEmail) throw new BadRequestException('Email is already registered.');
+
+    const existingMobile = await this.prisma.user.findUnique({ where: { mobile: dto.mobile } });
+    if (existingMobile) throw new BadRequestException('Mobile number is already registered.');
+
+    const existingCode = await this.prisma.staffProfile.findUnique({ where: { employeeCode: dto.employeeCode } });
+    if (existingCode) throw new BadRequestException('Employee code is already in use.');
+
+    const role = await this.prisma.role.findUnique({ where: { id: dto.roleId } });
+    if (!role) throw new NotFoundException('Role not found.');
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Create Staff Profile
+      const staffProfile = await tx.staffProfile.create({
+        data: {
+          employeeCode: dto.employeeCode,
+          name: dto.name,
+          mobile: dto.mobile,
+          email: dto.email,
+          designation: dto.designation || role.name,
+          department: dto.department,
+        },
+      });
+
+      // 2. Create User linked to Staff Profile
+      const user = await tx.user.create({
+        data: {
+          name: dto.name,
+          email: dto.email,
+          mobile: dto.mobile,
+          passwordHash,
+          plainPassword: dto.password, // Only storing for initial demo/testing purposes
+          userType: UserType.STAFF,
+          staffId: staffProfile.id,
+          isActive: true,
+          isVerified: true,
+        },
+      });
+
+      // 3. Assign Role to User
+      await tx.userRole.create({
+        data: {
+          userId: user.id,
+          roleId: role.id,
+        },
+      });
+
+      return staffProfile;
+    });
+  }
 
   async findAllStaff(page = 1, limit = 20) {
     const skip = (page - 1) * limit;
-    const [staff, total] = await this.prisma.$transaction([
+    const [staff, total, activeCount, disabledCount] = await this.prisma.$transaction([
       this.prisma.staffProfile.findMany({
         skip,
         take: limit,
@@ -30,8 +176,10 @@ export class StaffService {
         },
       }),
       this.prisma.staffProfile.count(),
+      this.prisma.staffProfile.count({ where: { isActive: true } }),
+      this.prisma.staffProfile.count({ where: { isActive: false } }),
     ]);
-    return { staff, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return { staff, meta: { total, activeCount, disabledCount, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   async findOneStaff(staffId: string) {
@@ -78,6 +226,36 @@ export class StaffService {
       data: { isActive: true },
     });
     return { message: `Staff '${staffId}' and linked user accounts activated.` };
+  }
+
+  async deleteStaff(staffId: string) {
+    await this.findOneStaff(staffId);
+    
+    // Check if staff has processed any orders (as handledBySalesStaffId)
+    // If so, we might want to prevent deletion to maintain history, 
+    // but the user specifically requested delete functionality.
+    // For safety, we will allow deletion but use a transaction.
+    
+    return this.prisma.$transaction(async (tx) => {
+      // First, delete the linked users to avoid foreign key constraint errors
+      // since User.staffId does not have onDelete: Cascade
+      const linkedUsers = await tx.user.findMany({ where: { staffId } });
+      
+      for (const user of linkedUsers) {
+        // Delete user roles first
+        await tx.userRole.deleteMany({ where: { userId: user.id } });
+        // Delete user sessions
+        await tx.userSession.deleteMany({ where: { userId: user.id } });
+        // Delete the user
+        await tx.user.delete({ where: { id: user.id } });
+      }
+
+      // The other relations (AttendanceRecord, LeaveRequest, Payroll) 
+      // have onDelete: Cascade so they will be automatically deleted.
+      return tx.staffProfile.delete({
+        where: { id: staffId }
+      });
+    });
   }
 
   // =============== ASSIGN CUSTOMER ===============

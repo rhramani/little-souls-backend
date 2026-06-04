@@ -7,6 +7,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
+import { UpdateOrderItemsDto } from './dto/update-order-items.dto';
+import { PosCheckoutDto } from './dto/pos-checkout.dto';
 import { Prisma } from '@prisma/client';
 import { WhatsappService } from '../notification/whatsapp.service';
 
@@ -112,31 +114,26 @@ export class OrderService {
           select: { pricingGroupId: true },
         });
 
-        if (!customer || !customer.pricingGroupId) {
-          throw new BadRequestException(
-            'B2B custom pricing group is missing on your customer profile.',
-          );
-        }
+        let price = product.productPrice || new Prisma.Decimal(0);
+        let mrp: Prisma.Decimal | null = null;
+        let discountPercent = new Prisma.Decimal(0);
 
-        const pricing = await tx.productPricing.findUnique({
-          where: {
-            productId_pricingGroupId: {
-              productId: product.id,
-              pricingGroupId: customer.pricingGroupId,
+        if (customer?.pricingGroupId) {
+          const pricing = await tx.productPricing.findUnique({
+            where: {
+              productId_pricingGroupId: {
+                productId: product.id,
+                pricingGroupId: customer.pricingGroupId,
+              },
             },
-          },
-        });
+          });
 
-        if (!pricing) {
-          throw new BadRequestException(
-            `Price not defined for B2B product: ${product.name}`,
-          );
+          if (pricing) {
+            price = pricing.price;
+            mrp = pricing.mrp || null;
+            discountPercent = pricing.discountPercent || new Prisma.Decimal(0);
+          }
         }
-
-        const price = pricing.price;
-        const mrp = pricing.mrp || null;
-        const discountPercent =
-          pricing.discountPercent || new Prisma.Decimal(0);
 
         // Calculations exclusive of tax
         const lineSubTotal = price.mul(quantity);
@@ -725,6 +722,416 @@ export class OrderService {
       });
 
       return updated;
+    });
+  }
+
+  async updateOrderItems(id: string, dto: UpdateOrderItemsDto, userId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID '${id}' not found.`);
+    }
+
+    if (!['SUBMITTED', 'APPROVED'].includes(order.orderStatus)) {
+      throw new BadRequestException(
+        `Cannot edit items for an order in ${order.orderStatus} status. Only SUBMITTED and APPROVED orders can be edited.`,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. If APPROVED, revert inventory for old items
+      if (order.orderStatus === 'APPROVED') {
+        for (const item of order.items) {
+          const product = await tx.product.findUnique({
+            where: { id: item.productId },
+            select: { stockQuantity: true },
+          });
+
+          if (product) {
+            const restoredStock = product.stockQuantity + item.quantity;
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stockQuantity: restoredStock,
+                stockStatus: restoredStock > 5 ? 'IN_STOCK' : restoredStock > 0 ? 'LOW_STOCK' : 'OUT_OF_STOCK',
+              },
+            });
+
+            await tx.stockMovement.create({
+              data: {
+                productId: item.productId,
+                movementType: 'RETURN_IN',
+                referenceType: 'ORDER',
+                referenceId: order.id,
+                quantity: item.quantity,
+                stockBefore: product.stockQuantity,
+                stockAfter: restoredStock,
+                note: `Stock returned from edited order '${order.orderNumber}' before re-calculation`,
+                createdBy: userId,
+              },
+            });
+          }
+        }
+      }
+
+      // 2. Delete existing items
+      await tx.orderItem.deleteMany({
+        where: { orderId: id },
+      });
+
+      // 3. Re-calculate totals and prepare new items
+      let totalQuantity = 0;
+      let subTotal = new Prisma.Decimal(0);
+      let taxTotal = new Prisma.Decimal(0);
+      let discountTotal = new Prisma.Decimal(0);
+      const shippingCharge = order.shippingCharge || new Prisma.Decimal(0);
+
+      const orderItemsData: any[] = [];
+
+      for (const itemInput of dto.items) {
+        const product = await tx.product.findUnique({
+          where: { id: itemInput.productId },
+        });
+
+        if (!product || !product.isActive) {
+          throw new BadRequestException(
+            `Product '${product?.name || itemInput.productId}' is no longer available.`,
+          );
+        }
+
+        const quantity = itemInput.quantity;
+        totalQuantity += quantity;
+
+        const taxPercent = product.taxPercent
+          ? new Prisma.Decimal(product.taxPercent)
+          : new Prisma.Decimal(0);
+
+        const price = new Prisma.Decimal(itemInput.price);
+
+        // For simplicity on manual edit, we assume no additional discount logic unless provided
+        // We could fetch old item's discountPercent if we wanted to preserve it
+        const oldItem = order.items.find(i => i.productId === itemInput.productId);
+        const discountPercent = oldItem?.discountPercent || new Prisma.Decimal(0);
+
+        const lineSubTotal = price.mul(quantity);
+        subTotal = subTotal.add(lineSubTotal);
+
+        const lineTaxTotal = lineSubTotal.mul(taxPercent.div(100));
+        taxTotal = taxTotal.add(lineTaxTotal);
+
+        const lineDiscountTotal = lineSubTotal.mul(discountPercent.div(100));
+        discountTotal = discountTotal.add(lineDiscountTotal);
+
+        const lineTotal = lineSubTotal.add(lineTaxTotal).sub(lineDiscountTotal);
+
+        orderItemsData.push({
+          orderId: order.id,
+          productId: product.id,
+          sku: product.sku,
+          productName: product.name,
+          quantity,
+          moq: product.moq,
+          availableStock: product.stockQuantity,
+          shortageQuantity: null,
+          backorderQuantity: null,
+          price,
+          mrp: oldItem?.mrp || null,
+          discountPercent,
+          taxPercent,
+          lineSubTotal,
+          lineTaxTotal,
+          lineTotal,
+          fulfillmentStatus: 'FULFILLED',
+        });
+      }
+
+      const grandTotal = subTotal
+        .add(taxTotal)
+        .sub(discountTotal)
+        .add(shippingCharge);
+
+      // 4. If APPROVED, deduct inventory for new items
+      if (order.orderStatus === 'APPROVED') {
+        for (const newItem of orderItemsData) {
+          const product = await tx.product.findUnique({
+            where: { id: newItem.productId },
+          });
+
+          if (!product) continue;
+
+          if (product.stockQuantity < newItem.quantity) {
+            throw new BadRequestException(
+              `Cannot edit order to requested quantities: Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, Ordered: ${newItem.quantity}.`,
+            );
+          }
+
+          const newStock = product.stockQuantity - newItem.quantity;
+
+          await tx.product.update({
+            where: { id: product.id },
+            data: {
+              stockQuantity: newStock,
+              stockStatus: newStock === 0 ? 'OUT_OF_STOCK' : newStock <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
+            },
+          });
+
+          await tx.stockMovement.create({
+            data: {
+              productId: product.id,
+              movementType: 'ORDER_OUT',
+              referenceType: 'ORDER',
+              referenceId: order.id,
+              quantity: newItem.quantity,
+              stockBefore: product.stockQuantity,
+              stockAfter: newStock,
+              note: `Stock re-allocated for edited Order '${order.orderNumber}'`,
+              createdBy: userId,
+            },
+          });
+        }
+      }
+
+      // 5. Create new items
+      await tx.orderItem.createMany({
+        data: orderItemsData,
+      });
+
+      // 6. Update order totals
+      const updatedOrder = await tx.order.update({
+        where: { id },
+        data: {
+          totalQuantity,
+          subTotal,
+          taxTotal,
+          discountTotal,
+          grandTotal,
+        },
+        include: {
+          items: {
+            include: {
+              product: {
+                select: {
+                  images: { orderBy: { sortOrder: 'asc' } }
+                }
+              }
+            }
+          },
+          statusHistory: {
+            orderBy: { createdAt: 'desc' }
+          },
+          customer: true,
+          customerContact: true,
+        }
+      });
+
+      // 7. Log history
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: id,
+          oldStatus: order.orderStatus,
+          newStatus: order.orderStatus,
+          changedBy: userId,
+          note: `Order items edited by User ${userId}`,
+        },
+      });
+
+      return updatedOrder;
+    });
+  }
+
+  async posCheckout(dto: PosCheckoutDto, userId: string) {
+    if (!dto.items || dto.items.length === 0) {
+      throw new BadRequestException('Cannot create POS order with no items.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Resolve Customer
+      let customerId = dto.customerId;
+      if (!customerId) {
+        // Find or create walk-in customer
+        const walkInMobile = dto.walkInMobile || '0000000000';
+        let walkInCustomer = await tx.customer.findFirst({
+          where: { mainContactNumber: walkInMobile }
+        });
+        
+        if (!walkInCustomer) {
+          walkInCustomer = await tx.customer.create({
+            data: {
+              businessName: dto.walkInName || 'Walk-in Store Customer',
+              mainContactNumber: walkInMobile,
+              isActive: true,
+              approvalStatus: 'APPROVED',
+              approvedBy: userId,
+              approvedAt: new Date(),
+            }
+          });
+        }
+        customerId = walkInCustomer.id;
+      }
+
+      // 2. Generate Order Number
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const countToday = await tx.order.count({
+        where: {
+          createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+        },
+      });
+      const orderNumber = `POS-${dateStr}-${(countToday + 1).toString().padStart(4, '0')}`;
+
+      // 3. Process Items and calculate totals
+      let totalQuantity = 0;
+      let subTotal = new Prisma.Decimal(0);
+      let taxTotal = new Prisma.Decimal(0);
+      let orderDiscountTotal = new Prisma.Decimal(dto.discountTotal || 0);
+      
+      const orderItemsData: any[] = [];
+      const stockMovementsData: any[] = [];
+
+      for (const itemInput of dto.items) {
+        const product = await tx.product.findUnique({
+          where: { id: itemInput.productId }
+        });
+
+        if (!product) {
+          throw new BadRequestException(`Product ID '${itemInput.productId}' not found.`);
+        }
+
+        if (product.stockQuantity < itemInput.quantity) {
+          throw new BadRequestException(
+            `Insufficient stock for '${product.name}'. Available: ${product.stockQuantity}, Requested: ${itemInput.quantity}`
+          );
+        }
+
+        const quantity = itemInput.quantity;
+        totalQuantity += quantity;
+        const price = new Prisma.Decimal(itemInput.price);
+
+        const taxPercent = product.taxPercent ? new Prisma.Decimal(product.taxPercent) : new Prisma.Decimal(0);
+        
+        const lineSubTotal = price.mul(quantity);
+        subTotal = subTotal.add(lineSubTotal);
+        
+        const lineTaxTotal = lineSubTotal.mul(taxPercent.div(100));
+        taxTotal = taxTotal.add(lineTaxTotal);
+        
+        const lineTotal = lineSubTotal.add(lineTaxTotal);
+
+        orderItemsData.push({
+          productId: product.id,
+          sku: product.sku,
+          productName: product.name,
+          quantity,
+          moq: product.moq,
+          availableStock: product.stockQuantity, // Pre-deduction snapshot
+          price,
+          mrp: product.productPrice || null,
+          discountPercent: new Prisma.Decimal(0), // Handled at order level for POS
+          taxPercent,
+          lineSubTotal,
+          lineTaxTotal,
+          lineTotal,
+          fulfillmentStatus: 'FULFILLED'
+        });
+
+        // Deduct inventory immediately
+        const newStock = product.stockQuantity - quantity;
+        await tx.product.update({
+          where: { id: product.id },
+          data: {
+            stockQuantity: newStock,
+            stockStatus: newStock === 0 ? 'OUT_OF_STOCK' : newStock <= 5 ? 'LOW_STOCK' : 'IN_STOCK'
+          }
+        });
+
+        stockMovementsData.push({
+          productId: product.id,
+          movementType: 'ORDER_OUT',
+          referenceType: 'ORDER',
+          quantity,
+          stockBefore: product.stockQuantity,
+          stockAfter: newStock,
+          note: `Stock deducted for POS Order '${orderNumber}'`,
+          createdBy: userId,
+        });
+      }
+
+      const grandTotal = subTotal.add(taxTotal).sub(orderDiscountTotal);
+
+      // 4. Create Order
+      const order = await tx.order.create({
+        data: {
+          orderNumber,
+          customerId,
+          orderStatus: 'DELIVERED',
+          orderSource: 'STAFF_PANEL',
+          totalQuantity,
+          subTotal,
+          discountTotal: orderDiscountTotal,
+          taxTotal,
+          shippingCharge: new Prisma.Decimal(0),
+          grandTotal,
+          paymentStatus: dto.paymentMethod === 'UNPAID' ? 'UNPAID' : 'PAID',
+          notes: `POS Walk-in. Payment: ${dto.paymentMethod || 'CASH'}.`,
+          handledBySalesStaffId: userId,
+          submittedAt: new Date(),
+          approvedBy: userId,
+          approvedAt: new Date(),
+        }
+      });
+
+      // 5. Create stock movements with actual order ID
+      if (stockMovementsData.length > 0) {
+        await tx.stockMovement.createMany({
+          data: stockMovementsData.map(sm => ({
+            ...sm,
+            referenceId: order.id
+          }))
+        });
+      }
+
+      // 6. Create Order Items
+      await tx.orderItem.createMany({
+        data: orderItemsData.map(item => ({
+          ...item,
+          orderId: order.id
+        }))
+      });
+
+      // 7. Order Status History
+      await tx.orderStatusHistory.createMany({
+        data: [
+          {
+            orderId: order.id,
+            oldStatus: 'DRAFT',
+            newStatus: 'SUBMITTED',
+            changedBy: userId,
+          },
+          {
+            orderId: order.id,
+            oldStatus: 'SUBMITTED',
+            newStatus: 'APPROVED',
+            changedBy: userId,
+          },
+          {
+            orderId: order.id,
+            oldStatus: 'APPROVED',
+            newStatus: 'DELIVERED',
+            changedBy: userId,
+            note: 'POS direct checkout'
+          }
+        ]
+      });
+
+      return tx.order.findUnique({
+        where: { id: order.id },
+        include: {
+          items: true,
+          customer: true
+        }
+      });
     });
   }
 }

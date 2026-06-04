@@ -9,8 +9,10 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Delete,
 } from '@nestjs/common';
 import { StaffService } from './staff.service';
+import { CreateStaffDto } from './dto/create-staff.dto';
 import { AssignCustomerDto } from './dto/assign-customer.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { MarkAttendanceDto } from './dto/mark-attendance.dto';
@@ -26,7 +28,54 @@ import { UserType } from '@prisma/client';
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
+  // =============== ROLES & PERMISSIONS ===============
+
+  @Get('roles')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async getRoles() {
+    return this.staffService.getRoles();
+  }
+
+  @Patch('roles/:id/permissions')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async updateRolePermissions(
+    @Param('id') roleId: string,
+    @Body('permissions') permissions: { module: string; action: string; enabled: boolean }[],
+  ) {
+    return this.staffService.updateRolePermissions(roleId, permissions);
+  }
+
+  @Post('roles')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async createRole(@Body() data: { name: string; description?: string }) {
+    return this.staffService.createRole(data);
+  }
+
+  @Patch('roles/:id')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async updateRole(@Param('id') roleId: string, @Body() data: { name?: string; description?: string }) {
+    return this.staffService.updateRole(roleId, data);
+  }
+
+  @Delete('roles/:id')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async deleteRole(@Param('id') roleId: string) {
+    return this.staffService.deleteRole(roleId);
+  }
+
   // =============== STAFF PROFILES ===============
+
+  @Post()
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async createStaff(@Body() dto: CreateStaffDto) {
+    return this.staffService.createStaff(dto);
+  }
 
   @Get()
   @Roles(UserType.SUPER_ADMIN)
@@ -64,6 +113,13 @@ export class StaffController {
   @HttpCode(HttpStatus.OK)
   async activateStaff(@Param('staffId') staffId: string) {
     return this.staffService.activateStaff(staffId);
+  }
+
+  @Delete('profile/:staffId')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async deleteStaff(@Param('staffId') staffId: string) {
+    return this.staffService.deleteStaff(staffId);
   }
 
   // =============== CUSTOMER ASSIGNMENT ===============

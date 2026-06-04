@@ -9,7 +9,13 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { PricingService } from './pricing.service';
 import { CreatePricingGroupDto } from './dto/create-pricing-group.dto';
 import { UpdatePricingGroupDto } from './dto/update-pricing-group.dto';
@@ -81,5 +87,32 @@ export class PricingController {
     @Param('pricingGroupId') pricingGroupId: string,
   ) {
     return this.pricingService.removeProductPrice(productId, pricingGroupId);
+  }
+
+  @Post('bulk-upload')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @UseInterceptors(FileInterceptor('file'))
+  @HttpCode(HttpStatus.OK)
+  async bulkUpload(
+    @UploadedFile() file: Express.Multer.File,
+    @GetUser('id') userId: string,
+  ) {
+    if (!file) {
+      return { error: 'No file uploaded' };
+    }
+    return this.pricingService.bulkUploadPricing(file.buffer, userId);
+  }
+
+  @Get('template')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  async downloadTemplate(@Res({ passthrough: true }) res: Response) {
+    const buffer = await this.pricingService.generateTemplate();
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition':
+        'attachment; filename="pricing_template.xlsx"',
+    });
+    return new StreamableFile(Buffer.from(buffer as ArrayBuffer));
   }
 }

@@ -9,11 +9,14 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { UpdateOrderItemsDto } from './dto/update-order-items.dto';
+import { PosCheckoutDto } from './dto/pos-checkout.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { CreatePackingSlipDto } from './dto/create-packing-slip.dto';
@@ -37,6 +40,18 @@ export class OrderController {
     @Body() dto: CheckoutDto,
   ) {
     return this.orderService.checkout(customerId, contactId, dto);
+  }
+
+  @Post('pos-checkout')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.CREATED)
+  async posCheckout(
+    @Body() dto: PosCheckoutDto,
+    @GetUser('id') userId: string,
+    @Req() req: any,
+  ) {
+    console.log('[OrderController] posCheckout hit, user:', req.user, 'userId:', userId, 'headers:', req.headers);
+    return this.orderService.posCheckout(dto, userId);
   }
 
   @Get()
@@ -65,6 +80,17 @@ export class OrderController {
     @GetUser('id') userId: string,
   ) {
     return this.orderService.updateStatus(id, dto.status, userId);
+  }
+
+  @Patch(':id/items')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async updateItems(
+    @Param('id') id: string,
+    @Body() dto: UpdateOrderItemsDto,
+    @GetUser('id') userId: string,
+  ) {
+    return this.orderService.updateOrderItems(id, dto, userId);
   }
 
   @Post(':id/cancel')

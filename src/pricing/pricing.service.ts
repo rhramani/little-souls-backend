@@ -9,6 +9,7 @@ import { CreatePricingGroupDto } from './dto/create-pricing-group.dto';
 import { UpdatePricingGroupDto } from './dto/update-pricing-group.dto';
 import { SetProductPricingDto } from './dto/set-product-pricing.dto';
 import { Prisma } from '@prisma/client';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class PricingService {
@@ -40,6 +41,14 @@ export class PricingService {
   async findAllGroups() {
     return this.prisma.pricingGroup.findMany({
       orderBy: { code: 'asc' },
+      include: {
+        _count: {
+          select: {
+            customers: true,
+            productPricing: true,
+          },
+        },
+      },
     });
   }
 
@@ -203,5 +212,247 @@ export class PricingService {
     } catch (e) {
       throw new NotFoundException('Pricing record not found.');
     }
+  }
+
+  async bulkUploadPricing(buffer: Buffer, userId: string) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as any);
+
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      throw new BadRequestException('Excel file has no worksheets.');
+    }
+
+    // 1. Read header row
+    const headerRow = worksheet.getRow(1);
+    const headers: string[] = [];
+    headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      headers[colNumber] = String(cell.value || '').trim();
+    });
+
+    // 2. Find SKU column (must be first non-empty or labeled "SKU")
+    const skuColIndex = headers.findIndex(
+      (h) => h?.toLowerCase() === 'sku',
+    );
+    if (skuColIndex === -1) {
+      throw new BadRequestException(
+        'Excel must have a column header named "SKU".',
+      );
+    }
+
+    // 3. Map tier column names to pricing group IDs (case-insensitive)
+    const allGroups = await this.prisma.pricingGroup.findMany();
+    const tierColumns: { colIndex: number; groupId: string; name: string }[] =
+      [];
+
+    headers.forEach((header, colIndex) => {
+      if (colIndex === skuColIndex) return;
+      if (!header) return;
+      const match = allGroups.find(
+        (g) => g.name.toLowerCase() === header.toLowerCase(),
+      );
+      if (match) {
+        tierColumns.push({
+          colIndex,
+          groupId: match.id,
+          name: match.name,
+        });
+      }
+    });
+
+    if (tierColumns.length === 0) {
+      throw new BadRequestException(
+        `No matching pricing tier columns found in Excel. Available tiers: ${allGroups.map((g) => g.name).join(', ')}`,
+      );
+    }
+
+    // 4. Process data rows
+    const errors: { row: number; sku: string; reason: string }[] = [];
+    let successCount = 0;
+    let skippedCount = 0;
+
+    const dataRows: {
+      row: number;
+      sku: string;
+      prices: { groupId: string; price: number }[];
+    }[] = [];
+
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return; // skip header
+
+      const sku = String(row.getCell(skuColIndex).value || '').trim();
+      if (!sku) {
+        skippedCount++;
+        return;
+      }
+
+      const prices: { groupId: string; price: number }[] = [];
+      for (const tc of tierColumns) {
+        const cellValue = row.getCell(tc.colIndex).value;
+        if (cellValue !== null && cellValue !== undefined && cellValue !== '') {
+          const numValue = Number(cellValue);
+          if (!isNaN(numValue) && numValue >= 0) {
+            prices.push({ groupId: tc.groupId, price: numValue });
+          }
+        }
+      }
+
+      if (prices.length > 0) {
+        dataRows.push({ row: rowNumber, sku, prices });
+      }
+    });
+
+    // 5. Look up all SKUs in one query with existing pricing
+    const allSkus = [...new Set(dataRows.map((r) => r.sku))];
+    const products = await this.prisma.product.findMany({
+      where: { sku: { in: allSkus } },
+      select: {
+        id: true,
+        sku: true,
+        pricing: {
+          select: {
+            pricingGroupId: true,
+            price: true,
+          },
+        },
+      },
+    });
+    const skuToProduct = new Map(products.map((p) => [p.sku, p]));
+
+    // 6. Process each row
+    for (const dataRow of dataRows) {
+      const product = skuToProduct.get(dataRow.sku);
+      if (!product) {
+        errors.push({
+          row: dataRow.row,
+          sku: dataRow.sku,
+          reason: 'SKU not found in database',
+        });
+        skippedCount++;
+        continue;
+      }
+
+      for (const priceEntry of dataRow.prices) {
+        // Check if price already exists and is the same
+        const existingPricing = product.pricing.find(
+          (p) => p.pricingGroupId === priceEntry.groupId,
+        );
+        if (
+          existingPricing &&
+          Number(existingPricing.price) === priceEntry.price
+        ) {
+          skippedCount++; // count as skipped because price hasn't changed
+          continue;
+        }
+
+        try {
+          await this.prisma.productPricing.upsert({
+            where: {
+              productId_pricingGroupId: {
+                productId: product.id,
+                pricingGroupId: priceEntry.groupId,
+              },
+            },
+            update: {
+              price: new Prisma.Decimal(priceEntry.price),
+              updatedBy: userId,
+            },
+            create: {
+              productId: product.id,
+              pricingGroupId: priceEntry.groupId,
+              price: new Prisma.Decimal(priceEntry.price),
+              createdBy: userId,
+            },
+          });
+          successCount++;
+        } catch (err) {
+          errors.push({
+            row: dataRow.row,
+            sku: dataRow.sku,
+            reason: `Failed to set price for tier: ${err.message}`,
+          });
+        }
+      }
+    }
+
+    return {
+      total: dataRows.length,
+      success: successCount,
+      skipped: skippedCount,
+      errorCount: errors.length,
+      errors: errors.slice(0, 50), // limit error details
+      tiersMatched: tierColumns.map((tc) => tc.name),
+    };
+  }
+
+  async generateTemplate() {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Pricing Template');
+
+    // 1. Get all tiers
+    const groups = await this.prisma.pricingGroup.findMany({
+      orderBy: { code: 'asc' },
+    });
+
+    // 2. Get all products with existing pricing
+    const products = await this.prisma.product.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        sku: true,
+        name: true,
+        pricing: {
+          select: {
+            pricingGroupId: true,
+            price: true,
+          },
+        },
+      },
+      orderBy: { sku: 'asc' },
+    });
+
+    // 3. Build headers: SKU, Product Name, then each tier
+    const headers = ['SKU', 'Product Name', ...groups.map((g) => g.name)];
+    const headerRow = worksheet.addRow(headers);
+
+    // Style header row
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE2E8F0' },
+      };
+      cell.border = {
+        bottom: { style: 'thin' },
+      };
+    });
+
+    // 4. Add product rows with existing prices pre-filled
+    for (const product of products) {
+      const row: (string | number)[] = [product.sku, product.name];
+      for (const group of groups) {
+        const pricing = product.pricing.find(
+          (p) => p.pricingGroupId === group.id,
+        );
+        row.push(pricing ? Number(pricing.price) : '');
+      }
+      worksheet.addRow(row);
+    }
+
+    // Auto-width columns
+    worksheet.columns.forEach((column) => {
+      let maxLength = 10;
+      if (column.eachCell) {
+        column.eachCell({ includeEmpty: true }, (cell) => {
+          const cellLength = cell.value ? String(cell.value).length : 0;
+          if (cellLength > maxLength) maxLength = cellLength;
+        });
+      }
+      column.width = Math.min(maxLength + 2, 30);
+    });
+
+    // 5. Return buffer
+    return workbook.xlsx.writeBuffer();
   }
 }

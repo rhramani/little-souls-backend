@@ -63,6 +63,8 @@ export class CartService {
     productId: string,
     customerId: string,
   ): Promise<Prisma.Decimal> {
+    const product = await this.prisma.product.findUnique({ where: { id: productId }});
+    
     // 1. Get customer and their pricing group
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
@@ -74,9 +76,8 @@ export class CartService {
     }
 
     if (!customer.pricingGroupId) {
-      throw new BadRequestException(
-        'Pricing group is not configured for this B2B customer profile.',
-      );
+      if (product && product.productPrice) return product.productPrice;
+      return new Prisma.Decimal(0);
     }
 
     // 2. Fetch price defined for the group
@@ -90,9 +91,8 @@ export class CartService {
     });
 
     if (!pricing) {
-      throw new BadRequestException(
-        'Pricing is not defined for this product under your B2B pricing group.',
-      );
+      if (product && product.productPrice) return product.productPrice;
+      return new Prisma.Decimal(0);
     }
 
     return pricing.price;
