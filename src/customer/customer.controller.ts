@@ -93,6 +93,13 @@ export class CustomerController {
     return this.customerService.activate(id);
   }
 
+  @Delete(':id')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async remove(@Param('id') id: string) {
+    return this.customerService.remove(id);
+  }
+
   @Post(':id/opening-balance')
   @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)

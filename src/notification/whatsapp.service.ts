@@ -98,4 +98,44 @@ export class WhatsappService {
       this.logger.error(`Failed to send WhatsApp invoice to ${toNumber}: ${error.message}`);
     }
   }
+
+  async sendImage(toNumber: string, imageUrl: string, caption?: string) {
+    if (!this.phoneNumberId || !this.accessToken) {
+      this.logger.warn('WhatsApp API credentials not configured. Skipping image message.');
+      return;
+    }
+
+    try {
+      const url = `${this.apiUrl}/${this.phoneNumberId}/messages`;
+      
+      const payload: any = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: toNumber,
+        type: "image",
+        image: {
+          link: imageUrl,
+        }
+      };
+
+      if (caption) {
+        payload.image.caption = caption;
+      }
+
+      const response = await firstValueFrom(
+        this.httpService.post(url, payload, {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+      );
+      
+      this.logger.log(`WhatsApp image sent successfully to ${toNumber}`);
+      return response.data;
+    } catch (error: any) {
+      this.logger.error(`Failed to send WhatsApp image to ${toNumber}: ${error.response?.data?.error?.message || error.message}`);
+      throw error;
+    }
+  }
 }

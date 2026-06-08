@@ -327,6 +327,24 @@ export class CustomerService {
     });
   }
 
+  async remove(id: string) {
+    const customer = await this.findOne(id);
+    
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.user.deleteMany({ where: { customerId: id } });
+        await tx.ledgerEntry.deleteMany({ where: { customerId: id } });
+        return tx.customer.delete({ where: { id } });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+         throw new BadRequestException('Cannot delete customer because they have related records in the system.');
+      }
+      throw error;
+    }
+  }
+
   async setOpeningBalance(id: string, dto: SetOpeningBalanceDto, userId: string) {
     const customer = await this.findOne(id);
 

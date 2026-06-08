@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Patch,
+  Delete,
   Param,
   UseGuards,
   Query,
@@ -146,5 +147,22 @@ export class OrderController {
     @GetUser('id') userId: string,
   ) {
     return this.orderService.markDelivered(id, userId);
+  }
+
+  @Post('bulk-delete')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async removeMany(@Body() data: { ids: string[] }) {
+    if (!data.ids || !Array.isArray(data.ids) || data.ids.length === 0) {
+      return { deletedCount: 0 };
+    }
+    return this.orderService.removeMany(data.ids);
+  }
+
+  @Delete(':id')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async remove(@Param('id') id: string) {
+    return this.orderService.remove(id);
   }
 }

@@ -1134,4 +1134,61 @@ export class OrderService {
       });
     });
   }
+
+  async remove(id: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { invoices: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID '${id}' not found.`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (order.invoices && order.invoices.length > 0) {
+        const invoiceIds = order.invoices.map(i => i.id);
+        await tx.ledgerEntry.deleteMany({
+          where: {
+            OR: [
+              { referenceId: { in: invoiceIds } },
+              { referenceId: id }
+            ]
+          }
+        });
+      }
+
+      return tx.order.delete({
+        where: { id },
+      });
+    });
+  }
+
+  async removeMany(ids: string[]) {
+    return this.prisma.$transaction(async (tx) => {
+      const orders = await tx.order.findMany({
+        where: { id: { in: ids } },
+        include: { invoices: true },
+      });
+
+      const invoiceIds = orders.flatMap(o => o.invoices.map(i => i.id));
+      
+      if (invoiceIds.length > 0) {
+        await tx.ledgerEntry.deleteMany({
+          where: {
+            OR: [
+              { referenceId: { in: invoiceIds } },
+              { referenceId: { in: ids } }
+            ]
+          }
+        });
+      }
+
+      const deleteResult = await tx.order.deleteMany({
+        where: { id: { in: ids } },
+      });
+
+      return { deletedCount: deleteResult.count };
+    });
+  }
 }

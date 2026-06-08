@@ -18,6 +18,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { CatalogueService } from './catalogue.service';
+import { WhatsappService } from '../notification/whatsapp.service';
 import { CreateCatalogueDto } from './dto/create-catalogue.dto';
 import { UpdateCatalogueDto } from './dto/update-catalogue.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -28,7 +29,10 @@ import { UserType } from '@prisma/client';
 
 @Controller('catalogues')
 export class CatalogueController {
-  constructor(private readonly catalogueService: CatalogueService) {}
+  constructor(
+    private readonly catalogueService: CatalogueService,
+    private readonly whatsappService: WhatsappService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -111,5 +115,33 @@ export class CatalogueController {
     }
 
     return this.catalogueService.importCatalogue(id, file.buffer, userId);
+  }
+
+  @Post(':id/share-images-meta')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async shareImagesMeta(
+    @Param('id') id: string,
+    @Body() body: { phone: string; images: string[] },
+  ) {
+    if (!body.phone) {
+      throw new BadRequestException('Phone number is required.');
+    }
+    if (!body.images || body.images.length === 0) {
+      throw new BadRequestException('Images array is required.');
+    }
+
+    // Send each image to the specified phone number via Meta API
+    for (const [index, imageUrl] of body.images.entries()) {
+      try {
+        await this.whatsappService.sendImage(body.phone, imageUrl);
+      } catch (error) {
+        // We log the error in the service, but if one fails we might want to continue or throw
+        // For now, let's continue attempting to send the rest.
+      }
+    }
+
+    return { success: true, message: `Images sent to ${body.phone}` };
   }
 }
