@@ -29,7 +29,7 @@ export class BannerService {
 
   async update(id: string, dto: Partial<CreateBannerDto>) {
     await this.findOne(id);
-    return this.prisma.banner.update({ where: { id }, data: dto });
+    return this.prisma.banner.update({ where: { id }, data: { ...dto } });
   }
 
   async remove(id: string) {

@@ -269,8 +269,8 @@ model Customer {
   users        User[]
 
   // Back-relations
-  assignedSalesStaff User?             @relation("CustomerSalesStaff", fields: [assignedSalesStaffId], references: [id])
-  approvedByUser     User?             @relation("CustomerApprovedBy", fields: [approvedBy], references: [id])
+  assignedSalesStaff User?             @relation("CustomerSalesStaff", fields: [assignedSalesStaffId], references: [id], onDelete: SetNull)
+  approvedByUser     User?             @relation("CustomerApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
   carts              Cart[]
   orders             Order[]
   invoices           Invoice[]
@@ -327,8 +327,8 @@ model Category {
 
   parentCategory  Category?  @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id])
   childCategories Category[] @relation("CategoryHierarchy")
-  createdByUser   User?      @relation("CategoryCreatedBy", fields: [createdBy], references: [id])
-  updatedByUser   User?      @relation("CategoryUpdatedBy", fields: [updatedBy], references: [id])
+  createdByUser   User?      @relation("CategoryCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedByUser   User?      @relation("CategoryUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
   products        Product[]
 
   @@map("categories")
@@ -388,8 +388,8 @@ model Product {
   sixToTwelveMonthsSetQuantity Int?      @map("six_to_twelve_months_set_quantity")
 
   category      Category @relation(fields: [categoryId], references: [id])
-  createdByUser User?    @relation("ProductCreatedBy", fields: [createdBy], references: [id])
-  updatedByUser User?    @relation("ProductUpdatedBy", fields: [updatedBy], references: [id])
+  createdByUser User?    @relation("ProductCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedByUser User?    @relation("ProductUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   catalogueId   String?    @map("catalogue_id") @db.Uuid
   catalogue     Catalogue? @relation(fields: [catalogueId], references: [id], onDelete: Cascade)
@@ -426,7 +426,7 @@ model ProductImage {
   updatedAt      DateTime            @updatedAt @map("updated_at")
 
   product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
-  createdByUser      User?               @relation("ProductImageCreatedBy", fields: [createdBy], references: [id])
+  createdByUser      User?               @relation("ProductImageCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   imageCleaningTasks ImageCleaningTask[]
 
   @@map("product_images")
@@ -448,7 +448,7 @@ model ImageCleaningTask {
 
   productImage  ProductImage @relation(fields: [productImageId], references: [id], onDelete: Cascade)
   product       Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  createdByUser User?        @relation("ImageCleaningTaskCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User?        @relation("ImageCleaningTaskCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@map("image_cleaning_tasks")
 }
@@ -464,7 +464,7 @@ model ProductCatalogFile {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   product       Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  createdByUser User?   @relation("ProductCatalogFileCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User?   @relation("ProductCatalogFileCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@map("product_catalog_files")
 }
@@ -481,7 +481,7 @@ model ProductVideo {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   product       Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  createdByUser User?   @relation("ProductVideoCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User?   @relation("ProductVideoCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@map("product_videos")
 }
@@ -500,7 +500,7 @@ model Banner {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  createdByUser User? @relation("BannerCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User? @relation("BannerCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@map("banners")
 }
@@ -523,8 +523,8 @@ model ProductPricing {
 
   product       Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
   pricingGroup  PricingGroup @relation(fields: [pricingGroupId], references: [id], onDelete: Cascade)
-  createdByUser User?        @relation("ProductPricingCreatedBy", fields: [createdBy], references: [id])
-  updatedByUser User?        @relation("ProductPricingUpdatedBy", fields: [updatedBy], references: [id])
+  createdByUser User?        @relation("ProductPricingCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedByUser User?        @relation("ProductPricingUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@unique([productId, pricingGroupId])
   @@map("product_pricing")
@@ -624,9 +624,9 @@ model Order {
 
   customer        Customer         @relation(fields: [customerId], references: [id])
   customerContact CustomerContact? @relation(fields: [customerContactId], references: [id])
-  cancelledByUser User?            @relation("OrderCancelledBy", fields: [cancelledBy], references: [id])
-  approvedByUser  User?            @relation("OrderApprovedBy", fields: [approvedBy], references: [id])
-  salesStaffUser  User?            @relation("OrderSalesStaff", fields: [handledBySalesStaffId], references: [id])
+  cancelledByUser User?            @relation("OrderCancelledBy", fields: [cancelledBy], references: [id], onDelete: SetNull)
+  approvedByUser  User?            @relation("OrderApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  salesStaffUser  User?            @relation("OrderSalesStaff", fields: [handledBySalesStaffId], references: [id], onDelete: SetNull)
 
   items              OrderItem[]
   statusHistory      OrderStatusHistory[]
@@ -681,7 +681,7 @@ model OrderStatusHistory {
   createdAt DateTime @default(now()) @map("created_at")
 
   order         Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  changedByUser User? @relation("OrderStatusHistoryChangedBy", fields: [changedBy], references: [id])
+  changedByUser User? @relation("OrderStatusHistoryChangedBy", fields: [changedBy], references: [id], onDelete: SetNull)
 
   @@map("order_status_history")
 }
@@ -707,8 +707,8 @@ model BackorderApproval {
   order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderItem       OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
   product         Product   @relation(fields: [productId], references: [id])
-  requestedByUser User?     @relation("BackorderApprovalRequestedBy", fields: [requestedBy], references: [id])
-  approvedByUser  User?     @relation("BackorderApprovalApprovedBy", fields: [approvedBy], references: [id])
+  requestedByUser User?     @relation("BackorderApprovalRequestedBy", fields: [requestedBy], references: [id], onDelete: SetNull)
+  approvedByUser  User?     @relation("BackorderApprovalApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
 
   @@map("backorder_approvals")
 }
@@ -725,7 +725,7 @@ model PackingSlip {
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
   order        Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  packedByUser User? @relation("PackingSlipPackedBy", fields: [packedBy], references: [id])
+  packedByUser User? @relation("PackingSlipPackedBy", fields: [packedBy], references: [id], onDelete: SetNull)
 
   @@map("packing_slips")
 }
@@ -747,7 +747,7 @@ model Shipment {
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   order         Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  createdByUser User? @relation("ShipmentCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User? @relation("ShipmentCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@map("shipments")
 }
@@ -777,7 +777,7 @@ model Invoice {
 
   order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  createdByUser User?         @relation("InvoiceCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User?         @relation("InvoiceCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   items         InvoiceItem[]
 
   @@map("invoices")
@@ -822,8 +822,8 @@ model Payment {
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  verifiedByUser User?    @relation("PaymentVerifiedBy", fields: [verifiedBy], references: [id])
-  receivedByUser User?    @relation("PaymentReceivedBy", fields: [receivedBy], references: [id])
+  verifiedByUser User?    @relation("PaymentVerifiedBy", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  receivedByUser User?    @relation("PaymentReceivedBy", fields: [receivedBy], references: [id], onDelete: SetNull)
 
   @@map("payments")
 }
@@ -844,7 +844,7 @@ model LedgerEntry {
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  createdByUser User?    @relation("LedgerEntryCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User?    @relation("LedgerEntryCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@map("ledger_entries")
 }
@@ -863,7 +863,7 @@ model CreditDebitNote {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  createdByUser User?    @relation("CreditDebitNoteCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User?    @relation("CreditDebitNoteCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@map("credit_debit_notes")
 }
@@ -897,7 +897,7 @@ model PurchaseOrder {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   supplier      Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  createdByUser User?               @relation("PurchaseOrderCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User?               @relation("PurchaseOrderCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   items         PurchaseOrderItem[]
 
   @@map("purchase_orders")
@@ -933,7 +933,7 @@ model StockMovement {
   createdAt     DateTime @default(now()) @map("created_at")
 
   product       Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  createdByUser User?   @relation("StockMovementCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User?   @relation("StockMovementCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@map("stock_movements")
 }
@@ -953,7 +953,7 @@ model AttendanceRecord {
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   staff          StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  approvedByUser User?        @relation("AttendanceRecordApprovedBy", fields: [approvedBy], references: [id])
+  approvedByUser User?        @relation("AttendanceRecordApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
 
   @@unique([staffId, attendanceDate])
   @@map("attendance_records")
@@ -974,7 +974,7 @@ model LeaveRequest {
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
   staff          StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  approvedByUser User?        @relation("LeaveRequestApprovedBy", fields: [approvedBy], references: [id])
+  approvedByUser User?        @relation("LeaveRequestApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
 
   @@map("leave_requests")
 }
@@ -996,7 +996,7 @@ model Payroll {
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   staff      StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  paidByUser User?        @relation("PayrollPaidBy", fields: [paidBy], references: [id])
+  paidByUser User?        @relation("PayrollPaidBy", fields: [paidBy], references: [id], onDelete: SetNull)
 
   @@unique([staffId, salaryMonth, salaryYear])
   @@map("payrolls")
@@ -1045,7 +1045,7 @@ model SavedReport {
   createdBy  String?  @map("created_by") @db.Uuid
   createdAt  DateTime @default(now()) @map("created_at")
 
-  createdByUser User? @relation("SavedReportCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User? @relation("SavedReportCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@map("saved_reports")
 }

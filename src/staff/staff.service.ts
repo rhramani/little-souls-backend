@@ -11,10 +11,14 @@ import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { Prisma, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { CreateStaffDto } from './dto/create-staff.dto';
+import { EmailService } from '../common/email.service';
 
 @Injectable()
 export class StaffService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   // =============== ROLES & PERMISSIONS ===============
 
@@ -158,6 +162,17 @@ export class StaffService {
         },
       });
 
+      // 4. Send Email Credentials
+      await this.emailService.sendStaffCredentials(
+        dto.email,
+        dto.name,
+        dto.employeeCode,
+        dto.password,
+      ).catch((err) => {
+        // Silently catch email errors so it doesn't fail staff creation if SMTP is down
+        console.error('Failed to send staff email:', err);
+      });
+
       return staffProfile;
     });
   }
@@ -236,26 +251,73 @@ export class StaffService {
     // but the user specifically requested delete functionality.
     // For safety, we will allow deletion but use a transaction.
     
-    return this.prisma.$transaction(async (tx) => {
-      // First, delete the linked users to avoid foreign key constraint errors
-      // since User.staffId does not have onDelete: Cascade
-      const linkedUsers = await tx.user.findMany({ where: { staffId } });
-      
-      for (const user of linkedUsers) {
-        // Delete user roles first
-        await tx.userRole.deleteMany({ where: { userId: user.id } });
-        // Delete user sessions
-        await tx.userSession.deleteMany({ where: { userId: user.id } });
-        // Delete the user
-        await tx.user.delete({ where: { id: user.id } });
-      }
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // First, delete the linked users to avoid foreign key constraint errors
+        // since User.staffId does not have onDelete: Cascade
+        const linkedUsers = await tx.user.findMany({ where: { staffId } });
+        
+        for (const user of linkedUsers) {
+          // Delete related records
+          await tx.userRole.deleteMany({ where: { userId: user.id } });
+          await tx.userSession.deleteMany({ where: { userId: user.id } });
+          await tx.passwordResetToken.deleteMany({ where: { userId: user.id } });
+          await tx.notification.deleteMany({ where: { userId: user.id } });
 
-      // The other relations (AttendanceRecord, LeaveRequest, Payroll) 
-      // have onDelete: Cascade so they will be automatically deleted.
-      return tx.staffProfile.delete({
-        where: { id: staffId }
+          // Manually decouple all records to allow forceful deletion
+          await tx.category.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.category.updateMany({ where: { updatedBy: user.id }, data: { updatedBy: null } });
+          await tx.product.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.product.updateMany({ where: { updatedBy: user.id }, data: { updatedBy: null } });
+          await tx.productImage.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.imageCleaningTask.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.productCatalogFile.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.productVideo.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.banner.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.catalogImport.deleteMany({ where: { uploadedBy: user.id } });
+          await tx.productPricing.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.productPricing.updateMany({ where: { updatedBy: user.id }, data: { updatedBy: null } });
+          await tx.customer.updateMany({ where: { assignedSalesStaffId: user.id }, data: { assignedSalesStaffId: null } });
+          await tx.customer.updateMany({ where: { approvedBy: user.id }, data: { approvedBy: null } });
+          await tx.order.updateMany({ where: { handledBySalesStaffId: user.id }, data: { handledBySalesStaffId: null } });
+          await tx.order.updateMany({ where: { approvedBy: user.id }, data: { approvedBy: null } });
+          await tx.order.updateMany({ where: { cancelledBy: user.id }, data: { cancelledBy: null } });
+          await tx.orderStatusHistory.updateMany({ where: { changedBy: user.id }, data: { changedBy: null } });
+          await tx.backorderApproval.updateMany({ where: { requestedBy: user.id }, data: { requestedBy: null } });
+          await tx.backorderApproval.updateMany({ where: { approvedBy: user.id }, data: { approvedBy: null } });
+          await tx.packingSlip.updateMany({ where: { packedBy: user.id }, data: { packedBy: null } });
+          await tx.shipment.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.invoice.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.payment.updateMany({ where: { verifiedBy: user.id }, data: { verifiedBy: null } });
+          await tx.payment.updateMany({ where: { receivedBy: user.id }, data: { receivedBy: null } });
+          await tx.ledgerEntry.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.creditDebitNote.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.purchaseOrder.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.stockMovement.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.attendanceRecord.updateMany({ where: { approvedBy: user.id }, data: { approvedBy: null } });
+          await tx.leaveRequest.updateMany({ where: { approvedBy: user.id }, data: { approvedBy: null } });
+          await tx.payroll.updateMany({ where: { paidBy: user.id }, data: { paidBy: null } });
+          await tx.supportTicket.updateMany({ where: { userId: user.id }, data: { userId: null } });
+          await tx.supportTicket.updateMany({ where: { assignedTo: user.id }, data: { assignedTo: null } });
+          await tx.savedReport.updateMany({ where: { createdBy: user.id }, data: { createdBy: null } });
+          await tx.auditLog.updateMany({ where: { userId: user.id }, data: { userId: null } });
+
+          // Finally, delete the user
+          await tx.user.delete({ where: { id: user.id } });
+        }
+
+        // The other relations (AttendanceRecord, LeaveRequest, Payroll) 
+        // have onDelete: Cascade so they will be automatically deleted.
+        return await tx.staffProfile.delete({
+          where: { id: staffId }
+        });
       });
-    });
+    } catch (error: any) {
+      if (error.code === 'P2003') {
+        throw new BadRequestException('Cannot delete staff member because they have linked records (e.g., orders, customers, categories). Please reassign or delete those records first.');
+      }
+      throw new BadRequestException(`Failed to delete staff member: ${error.message}`);
+    }
   }
 
   // =============== ASSIGN CUSTOMER ===============

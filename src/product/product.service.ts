@@ -175,6 +175,7 @@ export class ProductService {
       sortOrder,
       moqTiers,
       stockStatuses,
+      hasCatalogue,
     } = query;
     const skip = (page - 1) * limit;
 
@@ -192,6 +193,14 @@ export class ProductService {
 
     if (isFeatured !== undefined) {
       where.isFeatured = isFeatured;
+    }
+
+    if (hasCatalogue !== undefined) {
+      if (hasCatalogue || String(hasCatalogue) === 'true') {
+        where.catalogueId = { not: null };
+      } else {
+        where.catalogueId = null;
+      }
     }
 
     if (categoryId) {

@@ -185,13 +185,21 @@ export class CatalogueService {
   }
 
   async findOne(id: string, search?: string, page?: number, limit?: number) {
-    const productWhere = search ? {
+    const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (!uuidRegex.test(id)) {
+      throw new BadRequestException(`Invalid catalogue ID format: ${id}`);
+    }
+
+    const productWhere = (typeof search === 'string' && search.trim()) ? {
       OR: [
         { name: { contains: search, mode: 'insensitive' as const } },
         { sku: { contains: search, mode: 'insensitive' as const } },
         { barcode: { contains: search, mode: 'insensitive' as const } },
       ]
     } : {};
+
+    const validPage = (typeof page === 'number' && page > 0) ? page : 1;
+    const validLimit = (typeof limit === 'number' && limit > 0) ? limit : undefined;
 
     const [catalogue, totalProductsCount] = await Promise.all([
       this.prisma.catalogue.findUnique({
@@ -204,8 +212,8 @@ export class CatalogueService {
               pricing: { include: { pricingGroup: true } },
             },
             orderBy: { createdAt: 'asc' },
-            skip: (page && limit) ? (page - 1) * limit : undefined,
-            take: (page && limit) ? limit : undefined,
+            skip: validLimit ? (validPage - 1) * validLimit : undefined,
+            take: validLimit,
           },
         },
       }),
@@ -225,9 +233,9 @@ export class CatalogueService {
       ...catalogue,
       productsMeta: {
         total: totalProductsCount,
-        page: page || 1,
-        limit: limit || totalProductsCount,
-        totalPages: limit ? Math.ceil(totalProductsCount / limit) : 1,
+        page: validPage,
+        limit: validLimit || totalProductsCount,
+        totalPages: validLimit ? Math.ceil(totalProductsCount / validLimit) : 1,
       }
     };
   }
@@ -252,12 +260,46 @@ export class CatalogueService {
     const catalogue = await this.prisma.catalogue.findUnique({
       where: { id },
     });
+
     if (!catalogue) {
       throw new NotFoundException(`Catalogue with ID '${id}' not found.`);
     }
 
-    await this.prisma.catalogue.delete({
-      where: { id },
+    await this.prisma.$transaction(async (tx) => {
+      // Find all products associated with this catalogue
+      const products = await tx.product.findMany({
+        where: { catalogueId: id },
+      });
+
+      for (const product of products) {
+        // Check for references in OrderItem, PurchaseOrderItem, and BackorderApproval
+        const orderItemCount = await tx.orderItem.count({ where: { productId: product.id } });
+        const purchaseOrderItemCount = await tx.purchaseOrderItem.count({ where: { productId: product.id } });
+        const backorderApprovalCount = await tx.backorderApproval.count({ where: { productId: product.id } });
+
+        const isReferenced = orderItemCount > 0 || purchaseOrderItemCount > 0 || backorderApprovalCount > 0;
+
+        if (isReferenced) {
+          // Dissociate product from catalogue and deactivate it so it's not visible
+          await tx.product.update({
+            where: { id: product.id },
+            data: {
+              catalogueId: null,
+              isActive: false,
+            },
+          });
+        } else {
+          // Safely delete product (Prisma cascade relations will handle product images, pricing, stock movements, etc.)
+          await tx.product.delete({
+            where: { id: product.id },
+          });
+        }
+      }
+
+      // Finally delete the catalogue itself
+      await tx.catalogue.delete({
+        where: { id },
+      });
     });
 
     return { message: 'Catalogue and its associated products deleted successfully.' };

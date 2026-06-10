@@ -52,6 +52,10 @@ export class QueryProductDto {
   @IsOptional()
   isFeatured?: boolean;
 
+  @IsBoolean()
+  @IsOptional()
+  hasCatalogue?: boolean;
+
   @IsString()
   @IsOptional()
   sortBy?: string = 'createdAt';

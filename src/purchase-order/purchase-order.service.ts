@@ -242,6 +242,9 @@ export class PurchaseOrderService {
           supplier: {
             select: { name: true },
           },
+          _count: {
+            select: { items: true },
+          },
         },
       }),
       this.prisma.purchaseOrder.count(),

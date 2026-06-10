@@ -69,6 +69,47 @@ export class EmailService {
       throw error;
     }
   }
+
+  async sendStaffCredentials(email: string, name: string, employeeCode: string, plainPassword: string) {
+    const subject = 'Welcome to Little Souls! Your Staff Login Credentials';
+    const html = `
+      <div style="font-family: sans-serif; max-w-md; margin: auto;">
+        <h2>Welcome to the Little Souls Team, ${name}!</h2>
+        <p>Your staff account has been created by the administrator.</p>
+        <p>You can now log in to the Admin Panel to access your assigned modules.</p>
+        
+        <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 24px 0;">
+          <p style="margin: 0 0 8px 0;"><strong>Admin Login URL:</strong> <a href="http://localhost:5173/admin">http://localhost:5173/admin</a></p>
+          <p style="margin: 0 0 8px 0;"><strong>Employee Code:</strong> ${employeeCode}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Email Address:</strong> ${email}</p>
+          <p style="margin: 0;"><strong>Temporary Password:</strong> <code style="background: #e5e7eb; padding: 4px 8px; border-radius: 4px;">${plainPassword}</code></p>
+        </div>
+
+        <p>We highly recommend changing your password after your first login.</p>
+        <br/>
+        <p>Best regards,<br/>The Little Souls System</p>
+      </div>
+    `;
+
+    try {
+      const fromEmail = this.configService.get<string>('SMTP_USER') || 'admin@littlesouls.com';
+      const info = await this.transporter.sendMail({
+        from: `"Little Souls System" <${fromEmail}>`,
+        to: email,
+        subject,
+        html,
+      });
+
+      if (!this.configService.get<string>('SMTP_USER')) {
+        this.logger.log(`\n\n--- MOCK STAFF EMAIL SENT TO ${email} ---\nSubject: ${subject}\nPassword generated: ${plainPassword}\n-----------------------------------\n`);
+      } else {
+        this.logger.log(`Staff Email successfully sent to ${email}. Message ID: ${info.messageId}`);
+      }
+    } catch (error: any) {
+      this.logger.error(`Failed to send staff email to ${email}: ${error.message}`);
+      throw error;
+    }
+  }
   async sendPasswordResetOTP(email: string, otp: string) {
     const subject = 'Password Reset Code - Little Souls';
     const html = `
