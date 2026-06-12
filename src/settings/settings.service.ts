@@ -42,14 +42,15 @@ export class SettingsService {
   }
 
   async updateSettings(dto: UpdateSettingsDto) {
-    let settings = await this.prisma.setting.findFirst();
+    const settings = await this.prisma.setting.findFirst();
     if (!settings) {
       return this.prisma.setting.create({
         data: {
           ...dto,
-          defaultTaxPercent: dto.defaultTaxPercent !== undefined
-            ? new Prisma.Decimal(dto.defaultTaxPercent)
-            : undefined,
+          defaultTaxPercent:
+            dto.defaultTaxPercent !== undefined
+              ? new Prisma.Decimal(dto.defaultTaxPercent)
+              : undefined,
         },
       });
     }
@@ -58,16 +59,17 @@ export class SettingsService {
       where: { id: settings.id },
       data: {
         ...dto,
-        defaultTaxPercent: dto.defaultTaxPercent !== undefined
-          ? new Prisma.Decimal(dto.defaultTaxPercent)
-          : undefined,
+        defaultTaxPercent:
+          dto.defaultTaxPercent !== undefined
+            ? new Prisma.Decimal(dto.defaultTaxPercent)
+            : undefined,
       },
     });
   }
 
   async getAuditLogs(page: number, limit: number) {
     const skip = (page - 1) * limit;
-    
+
     const [logs, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         skip,
@@ -79,13 +81,13 @@ export class SettingsService {
               name: true,
               userType: true,
               staff: {
-                select: { designation: true }
-              }
-            }
-          }
-        }
+                select: { designation: true },
+              },
+            },
+          },
+        },
       }),
-      this.prisma.auditLog.count()
+      this.prisma.auditLog.count(),
     ]);
 
     return {
@@ -95,7 +97,7 @@ export class SettingsService {
         page,
         limit,
         totalPages: Math.ceil(total / limit),
-      }
+      },
     };
   }
 }

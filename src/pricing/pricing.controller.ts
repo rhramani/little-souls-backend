@@ -13,6 +13,7 @@ import {
   UploadedFile,
   Res,
   StreamableFile,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
@@ -105,14 +106,17 @@ export class PricingController {
 
   @Get('template')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
-  async downloadTemplate(@Res({ passthrough: true }) res: Response) {
-    const buffer = await this.pricingService.generateTemplate();
+  async downloadTemplate(
+    @Query('catalogueId') catalogueId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename } =
+      await this.pricingService.generateTemplate(catalogueId);
     res.set({
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition':
-        'attachment; filename="pricing_template.xlsx"',
+      'Content-Disposition': `attachment; filename="${filename}"`,
     });
-    return new StreamableFile(Buffer.from(buffer as ArrayBuffer));
+    return new StreamableFile(Buffer.from(buffer));
   }
 }

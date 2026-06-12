@@ -162,26 +162,68 @@ describe('CatalogueService', () => {
 
       // Assert first row data
       const firstRow = sheet.getRow(2);
-      expect(firstRow.getCell(headers.indexOf('Product ID (System ID - Do Not Edit)')).value).toBe(mockProduct.id);
-      expect(firstRow.getCell(headers.indexOf('SKU')).value).toBe(mockProduct.sku);
-      expect(firstRow.getCell(headers.indexOf('Product Name')).value).toBe(mockProduct.name);
-      expect(firstRow.getCell(headers.indexOf('Product Image')).value).toBe(mockProduct.productImage);
-      expect(firstRow.getCell(headers.indexOf('Product Picture url')).value).toBe(mockProduct.productPictureUrl);
-      expect(firstRow.getCell(headers.indexOf('Product Price')).value).toBe(mockProduct.productPrice);
-      expect(firstRow.getCell(headers.indexOf('Discounted price')).value).toBe(mockProduct.discountedPrice);
-      expect(firstRow.getCell(headers.indexOf('Tax "type"')).value).toBe(mockProduct.taxType);
-      expect(firstRow.getCell(headers.indexOf('Tax percentage')).value).toBe(mockProduct.taxPercent);
-      expect(firstRow.getCell(headers.indexOf('Weight')).value).toBe(mockProduct.weight);
-      expect(firstRow.getCell(headers.indexOf('Set Name')).value).toBe(mockProduct.setName);
-      expect(firstRow.getCell(headers.indexOf('Set Quantity')).value).toBe(mockProduct.setQuantity);
-      expect(firstRow.getCell(headers.indexOf('sizes')).value).toBe(mockProduct.sizes);
-      expect(firstRow.getCell(headers.indexOf('Sizes Set Quantity')).value).toBe(mockProduct.sizesSetQuantity);
-      expect(firstRow.getCell(headers.indexOf('colors')).value).toBe(mockProduct.colors);
-      expect(firstRow.getCell(headers.indexOf('Colors Set Quantity')).value).toBe(mockProduct.colorsSetQuantity);
-      expect(firstRow.getCell(headers.indexOf('nt11-48')).value).toBe(mockProduct.nt11_48);
-      expect(firstRow.getCell(headers.indexOf('Nt11-48 Set Quantity')).value).toBe(mockProduct.nt11_48SetQuantity);
-      expect(firstRow.getCell(headers.indexOf('6-12 months')).value).toBe(mockProduct.sixToTwelveMonths);
-      expect(firstRow.getCell(headers.indexOf('6-12 months Set Quantity')).value).toBe(mockProduct.sixToTwelveMonthsSetQuantity);
+      expect(
+        firstRow.getCell(
+          headers.indexOf('Product ID (System ID - Do Not Edit)'),
+        ).value,
+      ).toBe(mockProduct.id);
+      expect(firstRow.getCell(headers.indexOf('SKU')).value).toBe(
+        mockProduct.sku,
+      );
+      expect(firstRow.getCell(headers.indexOf('Product Name')).value).toBe(
+        mockProduct.name,
+      );
+      expect(firstRow.getCell(headers.indexOf('Product Image')).value).toBe(
+        mockProduct.productImage,
+      );
+      expect(
+        firstRow.getCell(headers.indexOf('Product Picture url')).value,
+      ).toBe(mockProduct.productPictureUrl);
+      expect(firstRow.getCell(headers.indexOf('Product Price')).value).toBe(
+        mockProduct.productPrice,
+      );
+      expect(firstRow.getCell(headers.indexOf('Discounted price')).value).toBe(
+        mockProduct.discountedPrice,
+      );
+      expect(firstRow.getCell(headers.indexOf('Tax "type"')).value).toBe(
+        mockProduct.taxType,
+      );
+      expect(firstRow.getCell(headers.indexOf('Tax percentage')).value).toBe(
+        mockProduct.taxPercent,
+      );
+      expect(firstRow.getCell(headers.indexOf('Weight')).value).toBe(
+        mockProduct.weight,
+      );
+      expect(firstRow.getCell(headers.indexOf('Set Name')).value).toBe(
+        mockProduct.setName,
+      );
+      expect(firstRow.getCell(headers.indexOf('Set Quantity')).value).toBe(
+        mockProduct.setQuantity,
+      );
+      expect(firstRow.getCell(headers.indexOf('sizes')).value).toBe(
+        mockProduct.sizes,
+      );
+      expect(
+        firstRow.getCell(headers.indexOf('Sizes Set Quantity')).value,
+      ).toBe(mockProduct.sizesSetQuantity);
+      expect(firstRow.getCell(headers.indexOf('colors')).value).toBe(
+        mockProduct.colors,
+      );
+      expect(
+        firstRow.getCell(headers.indexOf('Colors Set Quantity')).value,
+      ).toBe(mockProduct.colorsSetQuantity);
+      expect(firstRow.getCell(headers.indexOf('nt11-48')).value).toBe(
+        mockProduct.nt11_48,
+      );
+      expect(
+        firstRow.getCell(headers.indexOf('Nt11-48 Set Quantity')).value,
+      ).toBe(mockProduct.nt11_48SetQuantity);
+      expect(firstRow.getCell(headers.indexOf('6-12 months')).value).toBe(
+        mockProduct.sixToTwelveMonths,
+      );
+      expect(
+        firstRow.getCell(headers.indexOf('6-12 months Set Quantity')).value,
+      ).toBe(mockProduct.sixToTwelveMonthsSetQuantity);
     });
   });
 
@@ -190,7 +232,7 @@ describe('CatalogueService', () => {
       // 1. Create a dummy Excel sheet in memory
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet('Catalogue Products');
-      
+
       const columns = [
         { header: 'Product ID (System ID - Do Not Edit)', key: 'id' },
         { header: 'SKU', key: 'sku' },
@@ -220,7 +262,10 @@ describe('CatalogueService', () => {
         { header: 'nt11-48', key: 'nt11_48' },
         { header: 'Nt11-48 Set Quantity', key: 'nt11_48SetQuantity' },
         { header: '6-12 months', key: 'sixToTwelveMonths' },
-        { header: '6-12 months Set Quantity', key: 'sixToTwelveMonthsSetQuantity' },
+        {
+          header: '6-12 months Set Quantity',
+          key: 'sixToTwelveMonthsSetQuantity',
+        },
         { header: 'Price - RETAIL', key: 'price_RETAIL' },
       ];
       sheet.columns = columns;
@@ -232,7 +277,7 @@ describe('CatalogueService', () => {
         description: 'Updated Description 1',
         productImage: 'https://new-cdn.com/product1_new.jpg',
         productPictureUrl: 'https://new-cdn.com/product1_pic_new.jpg',
-        productPrice: 120.50,
+        productPrice: 120.5,
         discountedPrice: 99.99,
         stockQuantity: 42,
         isActive: 'YES',
@@ -255,7 +300,7 @@ describe('CatalogueService', () => {
         nt11_48SetQuantity: 4,
         sixToTwelveMonths: 'new-6-12-val',
         sixToTwelveMonthsSetQuantity: 8,
-        price_RETAIL: 110.00,
+        price_RETAIL: 110.0,
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
@@ -265,30 +310,38 @@ describe('CatalogueService', () => {
       mockPrismaService.productImage.findFirst.mockResolvedValue(null);
 
       // Run import
-      const result = await service.importCatalogue('cat-uuid-1', buffer as any, 'user-uuid-1');
-      expect(result.message).toBe('Catalogue products successfully updated and replaced.');
+      const result = await service.importCatalogue(
+        'cat-uuid-1',
+        buffer as any,
+        'user-uuid-1',
+      );
+      expect(result.message).toBe(
+        'Catalogue products successfully updated and replaced.',
+      );
 
       // Check product update arguments
-      expect(mockPrismaService.product.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'prod-uuid-1' },
-        data: expect.objectContaining({
-          sku: 'NEW-SKU-1',
-          name: 'Updated Name 1',
-          description: 'Updated Description 1',
-          productImage: 'https://new-cdn.com/product1_new.jpg',
-          productPictureUrl: 'https://new-cdn.com/product1_pic_new.jpg',
-          setName: 'Set B',
-          setQuantity: 5,
-          sizes: 'S,M',
-          sizesSetQuantity: 10,
-          colors: 'Black',
-          colorsSetQuantity: 5,
-          nt11_48: 'new-nt-val',
-          nt11_48SetQuantity: 4,
-          sixToTwelveMonths: 'new-6-12-val',
-          sixToTwelveMonthsSetQuantity: 8,
+      expect(mockPrismaService.product.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'prod-uuid-1' },
+          data: expect.objectContaining({
+            sku: 'NEW-SKU-1',
+            name: 'Updated Name 1',
+            description: 'Updated Description 1',
+            productImage: 'https://new-cdn.com/product1_new.jpg',
+            productPictureUrl: 'https://new-cdn.com/product1_pic_new.jpg',
+            setName: 'Set B',
+            setQuantity: 5,
+            sizes: 'S,M',
+            sizesSetQuantity: 10,
+            colors: 'Black',
+            colorsSetQuantity: 5,
+            nt11_48: 'new-nt-val',
+            nt11_48SetQuantity: 4,
+            sixToTwelveMonths: 'new-6-12-val',
+            sixToTwelveMonthsSetQuantity: 8,
+          }),
         }),
-      }));
+      );
 
       // Check Decimal conversions
       const updateCall = mockPrismaService.product.update.mock.calls[0][0];
@@ -332,8 +385,9 @@ describe('CatalogueService', () => {
 
       const buffer = await workbook.xlsx.writeBuffer();
 
-      await expect(service.importCatalogue('cat-uuid-1', buffer as any, 'user-uuid-1'))
-        .rejects.toThrow(BadRequestException);
+      await expect(
+        service.importCatalogue('cat-uuid-1', buffer as any, 'user-uuid-1'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

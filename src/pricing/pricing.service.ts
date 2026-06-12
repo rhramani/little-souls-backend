@@ -231,9 +231,7 @@ export class PricingService {
     });
 
     // 2. Find SKU column (must be first non-empty or labeled "SKU")
-    const skuColIndex = headers.findIndex(
-      (h) => h?.toLowerCase() === 'sku',
-    );
+    const skuColIndex = headers.findIndex((h) => h?.toLowerCase() === 'sku');
     if (skuColIndex === -1) {
       throw new BadRequestException(
         'Excel must have a column header named "SKU".',
@@ -385,18 +383,36 @@ export class PricingService {
     };
   }
 
-  async generateTemplate() {
+  async generateTemplate(
+    catalogueId?: string,
+  ): Promise<{ buffer: ExcelJS.Buffer; filename: string }> {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Pricing Template');
+
+    let filename = 'pricing_template.xlsx';
+    if (catalogueId) {
+      const catalogue = await this.prisma.catalogue.findUnique({
+        where: { id: catalogueId },
+        select: { name: true },
+      });
+      if (catalogue) {
+        filename = `pricing_template_${catalogue.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`;
+      }
+    }
 
     // 1. Get all tiers
     const groups = await this.prisma.pricingGroup.findMany({
       orderBy: { code: 'asc' },
     });
 
-    // 2. Get all products with existing pricing
+    // 2. Get all products with existing pricing (filtered by catalog if provided)
+    const where: any = { isActive: true };
+    if (catalogueId) {
+      where.catalogueId = catalogueId;
+    }
+
     const products = await this.prisma.product.findMany({
-      where: { isActive: true },
+      where,
       select: {
         id: true,
         sku: true,
@@ -452,7 +468,8 @@ export class PricingService {
       column.width = Math.min(maxLength + 2, 30);
     });
 
-    // 5. Return buffer
-    return workbook.xlsx.writeBuffer();
+    // 5. Return buffer and filename
+    const buffer = await workbook.xlsx.writeBuffer();
+    return { buffer, filename };
   }
 }

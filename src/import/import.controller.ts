@@ -37,13 +37,14 @@ export class ImportController {
   @HttpCode(HttpStatus.OK)
   async exportCatalog(@Res() res: Response) {
     const buffer = await this.importService.exportCatalog();
-    
+
     res.set({
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="little-souls-catalog-${Date.now()}.xlsx"`,
       'Content-Length': buffer.length,
     });
-    
+
     res.end(buffer);
   }
 

@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, IsUUID } from 'class-validator';
+import { IsOptional, IsInt, IsUUID, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QueryBillingDto {
@@ -15,4 +15,12 @@ export class QueryBillingDto {
   @IsUUID('4')
   @IsOptional()
   customerId?: string;
+
+  @IsString()
+  @IsOptional()
+  search?: string;
+
+  @IsString()
+  @IsOptional()
+  type?: string;
 }

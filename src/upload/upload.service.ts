@@ -13,20 +13,29 @@ export class UploadService {
   constructor(private configService: ConfigService) {
     const accountId = this.configService.get<string>('R2_ACCOUNT_ID');
     const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID');
-    const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
+    const secretAccessKey = this.configService.get<string>(
+      'R2_SECRET_ACCESS_KEY',
+    );
     this.bucketName = this.configService.get<string>('R2_BUCKET_NAME') || '';
     this.publicUrl = this.configService.get<string>('R2_PUBLIC_URL') || '';
 
-    if (!accountId || !accessKeyId || !secretAccessKey || !this.bucketName || !this.publicUrl) {
+    if (
+      !accountId ||
+      !accessKeyId ||
+      !secretAccessKey ||
+      !this.bucketName ||
+      !this.publicUrl
+    ) {
       // Don't throw inside constructor to avoid Nest boot failure in dev, but log warning or throw inside runtime methods
       console.warn(
         '[UploadService] Warning: Cloudflare R2 credentials or configuration missing in environment.',
       );
     }
 
-    const endpoint = accountId && accountId.startsWith('http')
-      ? accountId
-      : `https://${accountId}.r2.cloudflarestorage.com`;
+    const endpoint =
+      accountId && accountId.startsWith('http')
+        ? accountId
+        : `https://${accountId}.r2.cloudflarestorage.com`;
 
     this.s3Client = new S3Client({
       region: 'auto',
@@ -42,9 +51,17 @@ export class UploadService {
   async getPresignedUploadUrl(fileName: string, contentType: string) {
     const accountId = this.configService.get<string>('R2_ACCOUNT_ID');
     const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID');
-    const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
+    const secretAccessKey = this.configService.get<string>(
+      'R2_SECRET_ACCESS_KEY',
+    );
 
-    if (!accountId || !accessKeyId || !secretAccessKey || !this.bucketName || !this.publicUrl) {
+    if (
+      !accountId ||
+      !accessKeyId ||
+      !secretAccessKey ||
+      !this.bucketName ||
+      !this.publicUrl
+    ) {
       throw new BadRequestException(
         'Cloudflare R2 storage integration is not properly configured on the server.',
       );
@@ -61,7 +78,13 @@ export class UploadService {
     }
 
     // 2. Validate MIME type
-    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'application/pdf',
+    ];
     if (!allowedMimeTypes.includes(contentType)) {
       throw new BadRequestException(
         `Invalid content type. Allowed content types are: ${allowedMimeTypes.join(', ')}`,
@@ -98,16 +121,26 @@ export class UploadService {
         key,
       };
     } catch (error: any) {
-      throw new BadRequestException(`Failed to generate upload signature: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to generate upload signature: ${error.message}`,
+      );
     }
   }
 
   async uploadDirectFile(file: Express.Multer.File) {
     const accountId = this.configService.get<string>('R2_ACCOUNT_ID');
     const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID');
-    const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
+    const secretAccessKey = this.configService.get<string>(
+      'R2_SECRET_ACCESS_KEY',
+    );
 
-    if (!accountId || !accessKeyId || !secretAccessKey || !this.bucketName || !this.publicUrl) {
+    if (
+      !accountId ||
+      !accessKeyId ||
+      !secretAccessKey ||
+      !this.bucketName ||
+      !this.publicUrl
+    ) {
       throw new BadRequestException(
         'Cloudflare R2 storage integration is not properly configured on the server.',
       );
@@ -128,7 +161,13 @@ export class UploadService {
     }
 
     // 2. Validate MIME type
-    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'application/pdf',
+    ];
     if (!allowedMimeTypes.includes(file.mimetype)) {
       throw new BadRequestException(
         `Invalid content type. Allowed content types are: ${allowedMimeTypes.join(', ')}`,
@@ -167,9 +206,17 @@ export class UploadService {
   async uploadBuffer(buffer: Buffer, mimetype: string, originalname: string) {
     const accountId = this.configService.get<string>('R2_ACCOUNT_ID');
     const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID');
-    const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
+    const secretAccessKey = this.configService.get<string>(
+      'R2_SECRET_ACCESS_KEY',
+    );
 
-    if (!accountId || !accessKeyId || !secretAccessKey || !this.bucketName || !this.publicUrl) {
+    if (
+      !accountId ||
+      !accessKeyId ||
+      !secretAccessKey ||
+      !this.bucketName ||
+      !this.publicUrl
+    ) {
       throw new BadRequestException(
         'Cloudflare R2 storage integration is not properly configured on the server.',
       );
@@ -204,7 +251,9 @@ export class UploadService {
         key,
       };
     } catch (error: any) {
-      throw new BadRequestException(`Failed to upload buffer: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to upload buffer: ${error.message}`,
+      );
     }
   }
 }

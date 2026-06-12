@@ -69,9 +69,9 @@ export class CategoryService {
       orderBy: { sortOrder: 'asc' },
       include: {
         _count: {
-          select: { products: true }
-        }
-      }
+          select: { products: true },
+        },
+      },
     });
 
     return categories;
@@ -183,7 +183,8 @@ export class CategoryService {
       data: {
         name: dto.name,
         slug,
-        description: dto.description !== undefined ? dto.description : undefined,
+        description:
+          dto.description !== undefined ? dto.description : undefined,
         parentCategoryId:
           dto.parentCategoryId !== undefined ? dto.parentCategoryId : undefined,
         imageUrl: dto.imageUrl !== undefined ? dto.imageUrl : undefined,

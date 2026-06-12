@@ -1,4 +1,11 @@
-import { Controller, Post, Body, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UploadService } from './upload.service';
@@ -11,7 +18,10 @@ export class UploadController {
 
   @Post('presign')
   async generatePresignedUrl(@Body() dto: PresignUploadDto) {
-    return this.uploadService.getPresignedUploadUrl(dto.fileName, dto.contentType);
+    return this.uploadService.getPresignedUploadUrl(
+      dto.fileName,
+      dto.contentType,
+    );
   }
 
   @Post()

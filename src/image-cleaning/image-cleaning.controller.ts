@@ -1,4 +1,11 @@
-import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ImageCleaningService } from './image-cleaning.service';
 import { SubmitTaskDto } from './dto/submit-task.dto';
 import { WebhookCallbackDto } from './dto/webhook-callback.dto';

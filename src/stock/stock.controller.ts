@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { StockService } from './stock.service';
 import { AdjustStockDto, OpeningStockDto } from './dto/adjust-stock.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -22,7 +31,10 @@ export class StockController {
   @Post('opening')
   @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
-  async setOpening(@Body() dto: OpeningStockDto, @GetUser('id') userId: string) {
+  async setOpening(
+    @Body() dto: OpeningStockDto,
+    @GetUser('id') userId: string,
+  ) {
     return this.stockService.setOpeningStock(dto, userId);
   }
 

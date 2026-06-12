@@ -1,4 +1,11 @@
-import { IsArray, IsNumber, IsString, ValidateNested, Min } from 'class-validator';
+import {
+  IsArray,
+  IsNumber,
+  IsString,
+  ValidateNested,
+  Min,
+  IsOptional,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpdateOrderItemDto {
@@ -19,4 +26,12 @@ export class UpdateOrderItemsDto {
   @ValidateNested({ each: true })
   @Type(() => UpdateOrderItemDto)
   items: UpdateOrderItemDto[];
+
+  @IsNumber()
+  @IsOptional()
+  discountTotal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  taxPercent?: number;
 }

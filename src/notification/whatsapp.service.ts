@@ -14,108 +14,128 @@ export class WhatsappService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.apiUrl = this.configService.get<string>('WHATSAPP_API_URL') || 'https://graph.facebook.com/v17.0';
-    this.phoneNumberId = this.configService.get<string>('WHATSAPP_PHONE_NUMBER_ID') || '';
-    this.accessToken = this.configService.get<string>('WHATSAPP_ACCESS_TOKEN') || '';
+    this.apiUrl =
+      this.configService.get<string>('WHATSAPP_API_URL') ||
+      'https://graph.facebook.com/v17.0';
+    this.phoneNumberId =
+      this.configService.get<string>('WHATSAPP_PHONE_NUMBER_ID') || '';
+    this.accessToken =
+      this.configService.get<string>('WHATSAPP_ACCESS_TOKEN') || '';
   }
 
-  async sendOrderConfirmation(toNumber: string, orderNumber: string, customerName: string) {
+  async sendOrderConfirmation(
+    toNumber: string,
+    orderNumber: string,
+    customerName: string,
+  ) {
     if (!this.phoneNumberId || !this.accessToken) {
-      this.logger.warn('WhatsApp API credentials not configured. Skipping message.');
+      this.logger.warn(
+        'WhatsApp API credentials not configured. Skipping message.',
+      );
       return;
     }
 
     try {
       const url = `${this.apiUrl}/${this.phoneNumberId}/messages`;
-      
+
       const payload = {
-        messaging_product: "whatsapp",
+        messaging_product: 'whatsapp',
         to: toNumber,
-        type: "template",
+        type: 'template',
         template: {
-          name: "order_confirmation", // Replace with your approved Meta template name
-          language: { code: "en" },
+          name: 'order_confirmation', // Replace with your approved Meta template name
+          language: { code: 'en' },
           components: [
             {
-              type: "body",
+              type: 'body',
               parameters: [
-                { type: "text", text: customerName },
-                { type: "text", text: orderNumber }
-              ]
-            }
-          ]
-        }
+                { type: 'text', text: customerName },
+                { type: 'text', text: orderNumber },
+              ],
+            },
+          ],
+        },
       };
 
       const response = await firstValueFrom(
         this.httpService.post(url, payload, {
           headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
+            Authorization: `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
           },
         }),
       );
-      
-      this.logger.log(`WhatsApp message sent successfully to ${toNumber} for order ${orderNumber}`);
+
+      this.logger.log(
+        `WhatsApp message sent successfully to ${toNumber} for order ${orderNumber}`,
+      );
       return response.data;
     } catch (error: any) {
-      this.logger.error(`Failed to send WhatsApp message to ${toNumber}: ${error.message}`);
+      this.logger.error(
+        `Failed to send WhatsApp message to ${toNumber}: ${error.message}`,
+      );
       // Don't throw to prevent breaking the main transaction flow
     }
   }
 
   async sendInvoice(toNumber: string, invoiceNumber: string, pdfUrl: string) {
     if (!this.phoneNumberId || !this.accessToken) {
-      this.logger.warn('WhatsApp API credentials not configured. Skipping message.');
+      this.logger.warn(
+        'WhatsApp API credentials not configured. Skipping message.',
+      );
       return;
     }
 
     try {
       const url = `${this.apiUrl}/${this.phoneNumberId}/messages`;
-      
+
       const payload = {
-        messaging_product: "whatsapp",
+        messaging_product: 'whatsapp',
         to: toNumber,
-        type: "document",
+        type: 'document',
         document: {
           link: pdfUrl,
-          filename: `Invoice_${invoiceNumber}.pdf`
-        }
+          filename: `Invoice_${invoiceNumber}.pdf`,
+        },
       };
 
       const response = await firstValueFrom(
         this.httpService.post(url, payload, {
           headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
+            Authorization: `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
           },
         }),
       );
-      
+
       this.logger.log(`WhatsApp invoice sent successfully to ${toNumber}`);
       return response.data;
     } catch (error: any) {
-      this.logger.error(`Failed to send WhatsApp invoice to ${toNumber}: ${error.message}`);
+      this.logger.error(
+        `Failed to send WhatsApp invoice to ${toNumber}: ${error.message}`,
+      );
     }
   }
 
   async sendImage(toNumber: string, imageUrl: string, caption?: string) {
     if (!this.phoneNumberId || !this.accessToken) {
-      this.logger.warn('WhatsApp API credentials not configured. Skipping image message.');
+      this.logger.warn(
+        'WhatsApp API credentials not configured. Skipping image message.',
+      );
       return;
     }
 
     try {
       const url = `${this.apiUrl}/${this.phoneNumberId}/messages`;
-      
+
       const payload: any = {
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
         to: toNumber,
-        type: "image",
+        type: 'image',
         image: {
           link: imageUrl,
-        }
+        },
       };
 
       if (caption) {
@@ -125,16 +145,18 @@ export class WhatsappService {
       const response = await firstValueFrom(
         this.httpService.post(url, payload, {
           headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
+            Authorization: `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
           },
         }),
       );
-      
+
       this.logger.log(`WhatsApp image sent successfully to ${toNumber}`);
       return response.data;
     } catch (error: any) {
-      this.logger.error(`Failed to send WhatsApp image to ${toNumber}: ${error.response?.data?.error?.message || error.message}`);
+      this.logger.error(
+        `Failed to send WhatsApp image to ${toNumber}: ${error.response?.data?.error?.message || error.message}`,
+      );
       throw error;
     }
   }

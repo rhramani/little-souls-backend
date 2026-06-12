@@ -31,7 +31,9 @@ export class CustomerMeController {
   @HttpCode(HttpStatus.OK)
   async getMyProfile(@GetUser('customerId') customerId: string) {
     if (!customerId) {
-      throw new ForbiddenException('User is not associated with a customer account');
+      throw new ForbiddenException(
+        'User is not associated with a customer account',
+      );
     }
     return this.customerService.findOne(customerId);
   }
@@ -43,7 +45,9 @@ export class CustomerMeController {
     @Body() dto: UpdateCustomerDto,
   ) {
     if (!customerId) {
-      throw new ForbiddenException('User is not associated with a customer account');
+      throw new ForbiddenException(
+        'User is not associated with a customer account',
+      );
     }
     return this.customerService.update(customerId, dto);
   }
@@ -55,7 +59,9 @@ export class CustomerMeController {
     @Body() dto: CreateContactDto,
   ) {
     if (!customerId) {
-      throw new ForbiddenException('User is not associated with a customer account');
+      throw new ForbiddenException(
+        'User is not associated with a customer account',
+      );
     }
     return this.customerService.addContact(customerId, dto);
   }
@@ -68,7 +74,9 @@ export class CustomerMeController {
     @Body() dto: UpdateContactDto,
   ) {
     if (!customerId) {
-      throw new ForbiddenException('User is not associated with a customer account');
+      throw new ForbiddenException(
+        'User is not associated with a customer account',
+      );
     }
     return this.customerService.updateContact(customerId, contactId, dto);
   }
@@ -80,7 +88,9 @@ export class CustomerMeController {
     @Param('contactId') contactId: string,
   ) {
     if (!customerId) {
-      throw new ForbiddenException('User is not associated with a customer account');
+      throw new ForbiddenException(
+        'User is not associated with a customer account',
+      );
     }
     return this.customerService.removeContact(customerId, contactId);
   }

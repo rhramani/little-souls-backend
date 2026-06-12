@@ -42,10 +42,7 @@ export class CustomerController {
   @Post()
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.CREATED)
-  async create(
-    @Body() dto: CreateCustomerDto,
-    @GetUser('id') adminId: string,
-  ) {
+  async create(@Body() dto: CreateCustomerDto, @GetUser('id') adminId: string) {
     return this.customerService.create(dto, adminId);
   }
 

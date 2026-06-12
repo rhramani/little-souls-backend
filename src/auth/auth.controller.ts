@@ -5,6 +5,7 @@ import {
   Patch,
   Body,
   Req,
+  Param,
   UseGuards,
   Ip,
   Headers,
@@ -67,7 +68,11 @@ export class AuthController {
     @Ip() ipAddress: string,
   ) {
     const userAgent = req.headers['user-agent'];
-    return this.authService.refreshToken(dto.refreshToken, ipAddress, userAgent);
+    return this.authService.refreshToken(
+      dto.refreshToken,
+      ipAddress,
+      userAgent,
+    );
   }
 
   @Post('logout')
@@ -133,6 +138,17 @@ export class AuthController {
     @Ip() ipAddress: string,
   ) {
     const userAgent = req.headers['user-agent'];
-    return this.authService.verifyOtp(dto.mobile, dto.otp, userAgent, ipAddress);
+    return this.authService.verifyOtp(
+      dto.mobile,
+      dto.otp,
+      userAgent,
+      ipAddress,
+    );
+  }
+
+  @Get('customer-status/:id')
+  @HttpCode(HttpStatus.OK)
+  async getCustomerStatus(@Param('id') id: string) {
+    return this.authService.getCustomerStatus(id);
   }
 }

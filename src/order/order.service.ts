@@ -11,12 +11,28 @@ import { UpdateOrderItemsDto } from './dto/update-order-items.dto';
 import { PosCheckoutDto } from './dto/pos-checkout.dto';
 import { Prisma } from '@prisma/client';
 import { WhatsappService } from '../notification/whatsapp.service';
+import { BillingService } from '../billing/billing.service';
+
+function getProductImageUrl(product: any): string | null {
+  if (!product) return null;
+  const primaryImage = product.images?.find((i: any) => i.isPrimary);
+  return (
+    primaryImage?.thumbnailUrl ||
+    primaryImage?.originalUrl ||
+    product.images?.[0]?.thumbnailUrl ||
+    product.images?.[0]?.originalUrl ||
+    product.productImage ||
+    product.productPictureUrl ||
+    null
+  );
+}
 
 @Injectable()
 export class OrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsappService: WhatsappService,
+    private readonly billingService: BillingService,
   ) {}
 
   async checkout(customerId: string, contactId: string, dto: CheckoutDto) {
@@ -29,7 +45,11 @@ export class OrderService {
       include: {
         items: {
           include: {
-            product: true,
+            product: {
+              include: {
+                images: { orderBy: { sortOrder: 'asc' } },
+              },
+            },
           },
         },
       },
@@ -158,6 +178,7 @@ export class OrderService {
           productId: product.id,
           sku: product.sku,
           productName: product.name,
+          productImageUrl: getProductImageUrl(product),
           quantity,
           moq: product.moq,
           availableStock: product.stockQuantity,
@@ -233,22 +254,25 @@ export class OrderService {
         },
       });
     });
-    
+
     // Fetch customer's primary contact number asynchronously for WhatsApp
     const primaryContact = await this.prisma.customerContact.findFirst({
       where: { customerId: result?.customerId },
       orderBy: { isPrimary: 'desc' },
     });
-    
-    const whatsappNumber = primaryContact?.whatsappNumber || primaryContact?.mobile;
+
+    const whatsappNumber =
+      primaryContact?.whatsappNumber || primaryContact?.mobile;
     if (whatsappNumber && result?.customer) {
-      this.whatsappService.sendOrderConfirmation(
-        whatsappNumber,
-        result.orderNumber,
-        result.customer.businessName
-      ).catch(console.error); // Fire and forget
+      this.whatsappService
+        .sendOrderConfirmation(
+          whatsappNumber,
+          result.orderNumber,
+          result.customer.businessName,
+        )
+        .catch(console.error); // Fire and forget
     }
-    
+
     return result;
   }
 
@@ -263,7 +287,7 @@ export class OrderService {
     if (status) {
       where.orderStatus = status;
     }
-    
+
     if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) {
@@ -292,7 +316,17 @@ export class OrderService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          items: true,
+          items: {
+            include: {
+              product: {
+                select: {
+                  images: { orderBy: { sortOrder: 'asc' } },
+                  productImage: true,
+                  productPictureUrl: true,
+                },
+              },
+            },
+          },
           customer: {
             select: {
               businessName: true,
@@ -367,7 +401,7 @@ export class OrderService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. If transitioning from SUBMITTED/PENDING to APPROVED, allocate inventory stock
       if (newStatus === 'APPROVED' && order.orderStatus === 'SUBMITTED') {
         for (const item of order.items) {
@@ -439,6 +473,18 @@ export class OrderService {
 
       return updatedOrder;
     });
+
+    if (newStatus === 'APPROVED') {
+      try {
+        await this.billingService.generateInvoice(id, userId);
+      } catch (err) {
+        console.error(
+          `Failed to generate invoice automatically for approved order ${id}: ${err.message}`,
+        );
+      }
+    }
+
+    return result;
   }
 
   async cancel(
@@ -552,17 +598,21 @@ export class OrderService {
     }
 
     if (order.orderStatus !== 'SUBMITTED') {
-      throw new BadRequestException('Only SUBMITTED orders can be backorder approved.');
+      throw new BadRequestException(
+        'Only SUBMITTED orders can be backorder approved.',
+      );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const updatedOrder = await tx.order.update({
         where: { id },
         data: {
           orderStatus: 'APPROVED',
           approvedBy: userId,
           approvedAt: new Date(),
-          notes: (order.notes ? order.notes + '\n' : '') + `[SYSTEM] Backorder approved by User ${userId}`,
+          notes:
+            (order.notes ? order.notes + '\n' : '') +
+            `[SYSTEM] Backorder approved by User ${userId}`,
         },
       });
 
@@ -587,10 +637,15 @@ export class OrderService {
             where: { id: product.id },
             data: {
               stockQuantity: newStock,
-              stockStatus: newStock <= 0 ? 'OUT_OF_STOCK' : newStock <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
+              stockStatus:
+                newStock <= 0
+                  ? 'OUT_OF_STOCK'
+                  : newStock <= 5
+                    ? 'LOW_STOCK'
+                    : 'IN_STOCK',
             },
           });
-          
+
           await tx.stockMovement.create({
             data: {
               productId: product.id,
@@ -609,9 +664,23 @@ export class OrderService {
 
       return updatedOrder;
     });
+
+    try {
+      await this.billingService.generateInvoice(id, userId);
+    } catch (err) {
+      console.error(
+        `Failed to generate invoice automatically for backorder approved order ${id}: ${err.message}`,
+      );
+    }
+
+    return result;
   }
 
-  async createPackingSlip(id: string, notes: string | undefined, userId: string) {
+  async createPackingSlip(
+    id: string,
+    notes: string | undefined,
+    userId: string,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id },
     });
@@ -621,7 +690,9 @@ export class OrderService {
     }
 
     if (order.orderStatus !== 'APPROVED' && order.orderStatus !== 'PACKED') {
-      throw new BadRequestException(`Cannot pack an order in ${order.orderStatus} status.`);
+      throw new BadRequestException(
+        `Cannot pack an order in ${order.orderStatus} status.`,
+      );
     }
 
     const packingSlipNumber = `PS-${Date.now().toString().slice(-8)}`;
@@ -667,7 +738,9 @@ export class OrderService {
     }
 
     if (order.orderStatus !== 'PACKED' && order.orderStatus !== 'SHIPPED') {
-      throw new BadRequestException(`Cannot ship an order in ${order.orderStatus} status. Must be PACKED first.`);
+      throw new BadRequestException(
+        `Cannot ship an order in ${order.orderStatus} status. Must be PACKED first.`,
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -678,7 +751,9 @@ export class OrderService {
           trackingNumber: dto.trackingNumber,
           trackingUrl: dto.trackingUrl,
           shippingProvider: dto.shippingProvider,
-          shippingCost: dto.shippingCost ? new Prisma.Decimal(dto.shippingCost) : null,
+          shippingCost: dto.shippingCost
+            ? new Prisma.Decimal(dto.shippingCost)
+            : null,
           shipmentStatus: 'SHIPPED',
           shippedAt: new Date(),
           createdBy: userId,
@@ -708,7 +783,9 @@ export class OrderService {
     const order = await this.prisma.order.findUnique({ where: { id } });
     if (!order) throw new NotFoundException(`Order '${id}' not found.`);
     if (order.orderStatus !== 'SHIPPED') {
-      throw new BadRequestException(`Order must be in SHIPPED status to mark delivered. Current: ${order.orderStatus}`);
+      throw new BadRequestException(
+        `Order must be in SHIPPED status to mark delivered. Current: ${order.orderStatus}`,
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -718,7 +795,12 @@ export class OrderService {
       });
 
       await tx.orderStatusHistory.create({
-        data: { orderId: id, oldStatus: 'SHIPPED', newStatus: 'DELIVERED', changedBy: userId },
+        data: {
+          orderId: id,
+          oldStatus: 'SHIPPED',
+          newStatus: 'DELIVERED',
+          changedBy: userId,
+        },
       });
 
       return updated;
@@ -756,7 +838,12 @@ export class OrderService {
               where: { id: item.productId },
               data: {
                 stockQuantity: restoredStock,
-                stockStatus: restoredStock > 5 ? 'IN_STOCK' : restoredStock > 0 ? 'LOW_STOCK' : 'OUT_OF_STOCK',
+                stockStatus:
+                  restoredStock > 5
+                    ? 'IN_STOCK'
+                    : restoredStock > 0
+                      ? 'LOW_STOCK'
+                      : 'OUT_OF_STOCK',
               },
             });
 
@@ -785,15 +872,22 @@ export class OrderService {
       // 3. Re-calculate totals and prepare new items
       let totalQuantity = 0;
       let subTotal = new Prisma.Decimal(0);
-      let taxTotal = new Prisma.Decimal(0);
-      let discountTotal = new Prisma.Decimal(0);
       const shippingCharge = order.shippingCharge || new Prisma.Decimal(0);
 
-      const orderItemsData: any[] = [];
+      // Pre-calculate subTotal by resolving all products
+      const resolvedItems: {
+        itemInput: any;
+        product: any;
+        price: Prisma.Decimal;
+        lineSubTotal: Prisma.Decimal;
+        taxPercent: Prisma.Decimal;
+        discountPercent: Prisma.Decimal;
+      }[] = [];
 
       for (const itemInput of dto.items) {
         const product = await tx.product.findUnique({
           where: { id: itemInput.productId },
+          include: { images: { orderBy: { sortOrder: 'asc' } } },
         });
 
         if (!product || !product.isActive) {
@@ -805,25 +899,73 @@ export class OrderService {
         const quantity = itemInput.quantity;
         totalQuantity += quantity;
 
-        const taxPercent = product.taxPercent
-          ? new Prisma.Decimal(product.taxPercent)
-          : new Prisma.Decimal(0);
+        const taxPercent =
+          dto.taxPercent !== undefined
+            ? new Prisma.Decimal(dto.taxPercent)
+            : product.taxPercent
+              ? new Prisma.Decimal(product.taxPercent)
+              : new Prisma.Decimal(0);
 
         const price = new Prisma.Decimal(itemInput.price);
 
-        // For simplicity on manual edit, we assume no additional discount logic unless provided
-        // We could fetch old item's discountPercent if we wanted to preserve it
-        const oldItem = order.items.find(i => i.productId === itemInput.productId);
-        const discountPercent = oldItem?.discountPercent || new Prisma.Decimal(0);
+        const oldItem = order.items.find(
+          (i) => i.productId === itemInput.productId,
+        );
+        const discountPercent =
+          oldItem?.discountPercent || new Prisma.Decimal(0);
 
         const lineSubTotal = price.mul(quantity);
         subTotal = subTotal.add(lineSubTotal);
 
-        const lineTaxTotal = lineSubTotal.mul(taxPercent.div(100));
-        taxTotal = taxTotal.add(lineTaxTotal);
+        resolvedItems.push({
+          itemInput,
+          product,
+          price,
+          lineSubTotal,
+          taxPercent,
+          discountPercent,
+        });
+      }
 
-        const lineDiscountTotal = lineSubTotal.mul(discountPercent.div(100));
-        discountTotal = discountTotal.add(lineDiscountTotal);
+      const orderDiscountTotal =
+        dto.discountTotal !== undefined
+          ? new Prisma.Decimal(dto.discountTotal)
+          : null;
+
+      let taxTotal = new Prisma.Decimal(0);
+      let calculatedDiscountTotal = new Prisma.Decimal(0);
+      const orderItemsData: any[] = [];
+
+      for (const resolved of resolvedItems) {
+        const {
+          itemInput,
+          product,
+          price,
+          lineSubTotal,
+          taxPercent,
+          discountPercent,
+        } = resolved;
+        const oldItem = order.items.find(
+          (i) => i.productId === itemInput.productId,
+        );
+
+        let lineDiscountTotal = new Prisma.Decimal(0);
+        if (orderDiscountTotal !== null) {
+          if (subTotal.gt(0)) {
+            lineDiscountTotal = orderDiscountTotal
+              .mul(lineSubTotal)
+              .div(subTotal);
+          }
+        } else {
+          lineDiscountTotal = lineSubTotal.mul(discountPercent.div(100));
+        }
+        calculatedDiscountTotal =
+          calculatedDiscountTotal.add(lineDiscountTotal);
+
+        const diff = lineSubTotal.sub(lineDiscountTotal);
+        const taxableLineValue = diff.gt(0) ? diff : new Prisma.Decimal(0);
+        const lineTaxTotal = taxableLineValue.mul(taxPercent.div(100));
+        taxTotal = taxTotal.add(lineTaxTotal);
 
         const lineTotal = lineSubTotal.add(lineTaxTotal).sub(lineDiscountTotal);
 
@@ -832,14 +974,20 @@ export class OrderService {
           productId: product.id,
           sku: product.sku,
           productName: product.name,
-          quantity,
+          productImageUrl: getProductImageUrl(product),
+          quantity: itemInput.quantity,
           moq: product.moq,
           availableStock: product.stockQuantity,
           shortageQuantity: null,
           backorderQuantity: null,
           price,
           mrp: oldItem?.mrp || null,
-          discountPercent,
+          discountPercent:
+            orderDiscountTotal !== null
+              ? lineSubTotal.gt(0)
+                ? lineDiscountTotal.mul(100).div(lineSubTotal)
+                : new Prisma.Decimal(0)
+              : discountPercent,
           taxPercent,
           lineSubTotal,
           lineTaxTotal,
@@ -848,9 +996,14 @@ export class OrderService {
         });
       }
 
+      const finalDiscountTotal =
+        orderDiscountTotal !== null
+          ? orderDiscountTotal
+          : calculatedDiscountTotal;
+
       const grandTotal = subTotal
         .add(taxTotal)
-        .sub(discountTotal)
+        .sub(finalDiscountTotal)
         .add(shippingCharge);
 
       // 4. If APPROVED, deduct inventory for new items
@@ -874,7 +1027,12 @@ export class OrderService {
             where: { id: product.id },
             data: {
               stockQuantity: newStock,
-              stockStatus: newStock === 0 ? 'OUT_OF_STOCK' : newStock <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
+              stockStatus:
+                newStock === 0
+                  ? 'OUT_OF_STOCK'
+                  : newStock <= 5
+                    ? 'LOW_STOCK'
+                    : 'IN_STOCK',
             },
           });
 
@@ -906,7 +1064,7 @@ export class OrderService {
           totalQuantity,
           subTotal,
           taxTotal,
-          discountTotal,
+          discountTotal: finalDiscountTotal,
           grandTotal,
         },
         include: {
@@ -914,17 +1072,17 @@ export class OrderService {
             include: {
               product: {
                 select: {
-                  images: { orderBy: { sortOrder: 'asc' } }
-                }
-              }
-            }
+                  images: { orderBy: { sortOrder: 'asc' } },
+                },
+              },
+            },
           },
           statusHistory: {
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: 'desc' },
           },
           customer: true,
           customerContact: true,
-        }
+        },
       });
 
       // 7. Log history
@@ -954,9 +1112,9 @@ export class OrderService {
         // Find or create walk-in customer
         const walkInMobile = dto.walkInMobile || '0000000000';
         let walkInCustomer = await tx.customer.findFirst({
-          where: { mainContactNumber: walkInMobile }
+          where: { mainContactNumber: walkInMobile },
         });
-        
+
         if (!walkInCustomer) {
           walkInCustomer = await tx.customer.create({
             data: {
@@ -966,7 +1124,7 @@ export class OrderService {
               approvalStatus: 'APPROVED',
               approvedBy: userId,
               approvedAt: new Date(),
-            }
+            },
           });
         }
         customerId = walkInCustomer.id;
@@ -984,24 +1142,31 @@ export class OrderService {
       // 3. Process Items and calculate totals
       let totalQuantity = 0;
       let subTotal = new Prisma.Decimal(0);
-      let taxTotal = new Prisma.Decimal(0);
-      let orderDiscountTotal = new Prisma.Decimal(dto.discountTotal || 0);
-      
-      const orderItemsData: any[] = [];
-      const stockMovementsData: any[] = [];
+      const orderDiscountTotal = new Prisma.Decimal(dto.discountTotal || 0);
+
+      const resolvedItems: {
+        itemInput: any;
+        product: any;
+        price: Prisma.Decimal;
+        lineSubTotal: Prisma.Decimal;
+        taxPercent: Prisma.Decimal;
+      }[] = [];
 
       for (const itemInput of dto.items) {
         const product = await tx.product.findUnique({
-          where: { id: itemInput.productId }
+          where: { id: itemInput.productId },
+          include: { images: { orderBy: { sortOrder: 'asc' } } },
         });
 
         if (!product) {
-          throw new BadRequestException(`Product ID '${itemInput.productId}' not found.`);
+          throw new BadRequestException(
+            `Product ID '${itemInput.productId}' not found.`,
+          );
         }
 
         if (product.stockQuantity < itemInput.quantity) {
           throw new BadRequestException(
-            `Insufficient stock for '${product.name}'. Available: ${product.stockQuantity}, Requested: ${itemInput.quantity}`
+            `Insufficient stock for '${product.name}'. Available: ${product.stockQuantity}, Requested: ${itemInput.quantity}`,
           );
         }
 
@@ -1009,31 +1174,67 @@ export class OrderService {
         totalQuantity += quantity;
         const price = new Prisma.Decimal(itemInput.price);
 
-        const taxPercent = product.taxPercent ? new Prisma.Decimal(product.taxPercent) : new Prisma.Decimal(0);
-        
+        const taxPercent =
+          dto.taxPercent !== undefined
+            ? new Prisma.Decimal(dto.taxPercent)
+            : product.taxPercent
+              ? new Prisma.Decimal(product.taxPercent)
+              : new Prisma.Decimal(0);
+
         const lineSubTotal = price.mul(quantity);
         subTotal = subTotal.add(lineSubTotal);
-        
-        const lineTaxTotal = lineSubTotal.mul(taxPercent.div(100));
+
+        resolvedItems.push({
+          itemInput,
+          product,
+          price,
+          lineSubTotal,
+          taxPercent,
+        });
+      }
+
+      let taxTotal = new Prisma.Decimal(0);
+      const orderItemsData: any[] = [];
+      const stockMovementsData: any[] = [];
+
+      for (const resolved of resolvedItems) {
+        const { itemInput, product, price, lineSubTotal, taxPercent } =
+          resolved;
+        const quantity = itemInput.quantity;
+
+        // Distribute discountTotal proportionally
+        let lineDiscountTotal = new Prisma.Decimal(0);
+        if (orderDiscountTotal.gt(0) && subTotal.gt(0)) {
+          lineDiscountTotal = orderDiscountTotal
+            .mul(lineSubTotal)
+            .div(subTotal);
+        }
+
+        const diff = lineSubTotal.sub(lineDiscountTotal);
+        const taxableLineValue = diff.gt(0) ? diff : new Prisma.Decimal(0);
+        const lineTaxTotal = taxableLineValue.mul(taxPercent.div(100));
         taxTotal = taxTotal.add(lineTaxTotal);
-        
-        const lineTotal = lineSubTotal.add(lineTaxTotal);
+
+        const lineTotal = lineSubTotal.add(lineTaxTotal).sub(lineDiscountTotal);
 
         orderItemsData.push({
           productId: product.id,
           sku: product.sku,
           productName: product.name,
+          productImageUrl: getProductImageUrl(product),
           quantity,
           moq: product.moq,
           availableStock: product.stockQuantity, // Pre-deduction snapshot
           price,
           mrp: product.productPrice || null,
-          discountPercent: new Prisma.Decimal(0), // Handled at order level for POS
+          discountPercent: lineSubTotal.gt(0)
+            ? lineDiscountTotal.mul(100).div(lineSubTotal)
+            : new Prisma.Decimal(0),
           taxPercent,
           lineSubTotal,
           lineTaxTotal,
           lineTotal,
-          fulfillmentStatus: 'FULFILLED'
+          fulfillmentStatus: 'FULFILLED',
         });
 
         // Deduct inventory immediately
@@ -1042,8 +1243,13 @@ export class OrderService {
           where: { id: product.id },
           data: {
             stockQuantity: newStock,
-            stockStatus: newStock === 0 ? 'OUT_OF_STOCK' : newStock <= 5 ? 'LOW_STOCK' : 'IN_STOCK'
-          }
+            stockStatus:
+              newStock === 0
+                ? 'OUT_OF_STOCK'
+                : newStock <= 5
+                  ? 'LOW_STOCK'
+                  : 'IN_STOCK',
+          },
         });
 
         stockMovementsData.push({
@@ -1079,25 +1285,25 @@ export class OrderService {
           submittedAt: new Date(),
           approvedBy: userId,
           approvedAt: new Date(),
-        }
+        },
       });
 
       // 5. Create stock movements with actual order ID
       if (stockMovementsData.length > 0) {
         await tx.stockMovement.createMany({
-          data: stockMovementsData.map(sm => ({
+          data: stockMovementsData.map((sm) => ({
             ...sm,
-            referenceId: order.id
-          }))
+            referenceId: order.id,
+          })),
         });
       }
 
       // 6. Create Order Items
       await tx.orderItem.createMany({
-        data: orderItemsData.map(item => ({
+        data: orderItemsData.map((item) => ({
           ...item,
-          orderId: order.id
-        }))
+          orderId: order.id,
+        })),
       });
 
       // 7. Order Status History
@@ -1120,17 +1326,17 @@ export class OrderService {
             oldStatus: 'APPROVED',
             newStatus: 'DELIVERED',
             changedBy: userId,
-            note: 'POS direct checkout'
-          }
-        ]
+            note: 'POS direct checkout',
+          },
+        ],
       });
 
       return tx.order.findUnique({
         where: { id: order.id },
         include: {
           items: true,
-          customer: true
-        }
+          customer: true,
+        },
       });
     });
   }
@@ -1147,14 +1353,11 @@ export class OrderService {
 
     return this.prisma.$transaction(async (tx) => {
       if (order.invoices && order.invoices.length > 0) {
-        const invoiceIds = order.invoices.map(i => i.id);
+        const invoiceIds = order.invoices.map((i) => i.id);
         await tx.ledgerEntry.deleteMany({
           where: {
-            OR: [
-              { referenceId: { in: invoiceIds } },
-              { referenceId: id }
-            ]
-          }
+            OR: [{ referenceId: { in: invoiceIds } }, { referenceId: id }],
+          },
         });
       }
 
@@ -1171,16 +1374,16 @@ export class OrderService {
         include: { invoices: true },
       });
 
-      const invoiceIds = orders.flatMap(o => o.invoices.map(i => i.id));
-      
+      const invoiceIds = orders.flatMap((o) => o.invoices.map((i) => i.id));
+
       if (invoiceIds.length > 0) {
         await tx.ledgerEntry.deleteMany({
           where: {
             OR: [
               { referenceId: { in: invoiceIds } },
-              { referenceId: { in: ids } }
-            ]
-          }
+              { referenceId: { in: ids } },
+            ],
+          },
         });
       }
 

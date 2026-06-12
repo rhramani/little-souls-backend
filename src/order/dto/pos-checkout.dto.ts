@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+  IsNumber,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PosOrderItemDto {
@@ -39,4 +46,8 @@ export class PosCheckoutDto {
   @IsNumber()
   @IsOptional()
   discountTotal?: number = 0;
+
+  @IsNumber()
+  @IsOptional()
+  taxPercent?: number;
 }

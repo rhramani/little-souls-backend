@@ -4,6 +4,6 @@ import { ImageCleaningController } from './image-cleaning.controller';
 
 @Module({
   providers: [ImageCleaningService],
-  controllers: [ImageCleaningController]
+  controllers: [ImageCleaningController],
 })
 export class ImageCleaningModule {}

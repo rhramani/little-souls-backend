@@ -1,4 +1,11 @@
-import { IsString, IsIn, IsOptional, IsInt, IsPositive, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsIn,
+  IsOptional,
+  IsInt,
+  IsPositive,
+  IsNumber,
+} from 'class-validator';
 
 export class AdjustStockDto {
   @IsString()

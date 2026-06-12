@@ -42,7 +42,8 @@ export class StaffController {
   @HttpCode(HttpStatus.OK)
   async updateRolePermissions(
     @Param('id') roleId: string,
-    @Body('permissions') permissions: { module: string; action: string; enabled: boolean }[],
+    @Body('permissions')
+    permissions: { module: string; action: string; enabled: boolean }[],
   ) {
     return this.staffService.updateRolePermissions(roleId, permissions);
   }
@@ -57,7 +58,10 @@ export class StaffController {
   @Patch('roles/:id')
   @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
-  async updateRole(@Param('id') roleId: string, @Body() data: { name?: string; description?: string }) {
+  async updateRole(
+    @Param('id') roleId: string,
+    @Body() data: { name?: string; description?: string },
+  ) {
     return this.staffService.updateRole(roleId, data);
   }
 
@@ -80,11 +84,11 @@ export class StaffController {
   @Get()
   @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
-  async findAll(
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-  ) {
-    return this.staffService.findAllStaff(Number(page) || 1, Number(limit) || 20);
+  async findAll(@Query('page') page?: number, @Query('limit') limit?: number) {
+    return this.staffService.findAllStaff(
+      Number(page) || 1,
+      Number(limit) || 20,
+    );
   }
 
   @Get('profile/:staffId')
@@ -97,7 +101,10 @@ export class StaffController {
   @Patch('profile/:staffId')
   @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
-  async updateStaff(@Param('staffId') staffId: string, @Body() dto: UpdateStaffDto) {
+  async updateStaff(
+    @Param('staffId') staffId: string,
+    @Body() dto: UpdateStaffDto,
+  ) {
     return this.staffService.updateStaff(staffId, dto);
   }
 
@@ -175,7 +182,8 @@ export class StaffController {
     @Query('limit') limit?: number,
   ) {
     // Staff can only see their own; super_admin can filter by any staffId
-    const resolvedStaffId = user.userType === UserType.STAFF ? user.staffId : staffId;
+    const resolvedStaffId =
+      user.userType === UserType.STAFF ? user.staffId : staffId;
     return this.staffService.getAttendanceHistory(
       resolvedStaffId,
       startDate,
@@ -214,7 +222,10 @@ export class StaffController {
   @Post('leave/request')
   @Roles(UserType.STAFF, UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.CREATED)
-  async createLeave(@Body() dto: CreateLeaveRequestDto, @GetUser('id') userId: string) {
+  async createLeave(
+    @Body() dto: CreateLeaveRequestDto,
+    @GetUser('id') userId: string,
+  ) {
     return this.staffService.createLeaveRequest(dto, userId);
   }
 
@@ -226,7 +237,12 @@ export class StaffController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.staffService.getLeaveRequests(user.id, user.userType, Number(page) || 1, Number(limit) || 20);
+    return this.staffService.getLeaveRequests(
+      user.id,
+      user.userType,
+      Number(page) || 1,
+      Number(limit) || 20,
+    );
   }
 
   @Patch('leave/:id/approve')
@@ -255,13 +271,22 @@ export class StaffController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.staffService.getPayrolls(staffId, Number(month) || undefined, Number(year) || undefined, Number(page) || 1, Number(limit) || 20);
+    return this.staffService.getPayrolls(
+      staffId,
+      Number(month) || undefined,
+      Number(year) || undefined,
+      Number(page) || 1,
+      Number(limit) || 20,
+    );
   }
 
   @Patch('payroll/:id/mark-paid')
   @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
-  async markPayrollPaid(@Param('id') id: string, @GetUser('id') userId: string) {
+  async markPayrollPaid(
+    @Param('id') id: string,
+    @GetUser('id') userId: string,
+  ) {
     return this.staffService.markPayrollPaid(id, userId);
   }
 

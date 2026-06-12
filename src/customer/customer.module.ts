@@ -8,6 +8,6 @@ import { EventsModule } from '../events/events.module';
 @Module({
   imports: [AuthModule, EventsModule],
   controllers: [CustomerMeController, CustomerController],
-  providers: [CustomerService]
+  providers: [CustomerService],
 })
 export class CustomerModule {}

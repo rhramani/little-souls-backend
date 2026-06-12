@@ -88,8 +88,14 @@ export class ProductService {
           tags: dto.tags,
           productImage: dto.productImage,
           productPictureUrl: dto.productPictureUrl,
-          productPrice: dto.productPrice !== undefined ? new Prisma.Decimal(dto.productPrice) : null,
-          discountedPrice: dto.discountedPrice !== undefined ? new Prisma.Decimal(dto.discountedPrice) : null,
+          productPrice:
+            dto.productPrice !== undefined
+              ? new Prisma.Decimal(dto.productPrice)
+              : null,
+          discountedPrice:
+            dto.discountedPrice !== undefined
+              ? new Prisma.Decimal(dto.discountedPrice)
+              : null,
           taxType: dto.taxType,
           parentProductSku: dto.parentProductSku,
           parentProductId: dto.parentProductId,
@@ -167,6 +173,7 @@ export class ProductService {
       limit = 10,
       search,
       categoryId,
+      catalogueId,
       brand,
       stockStatus,
       isActive,
@@ -207,6 +214,10 @@ export class ProductService {
       where.categoryId = categoryId;
     }
 
+    if (catalogueId) {
+      where.catalogueId = catalogueId;
+    }
+
     if (brand) {
       where.brand = { equals: brand, mode: 'insensitive' };
     }
@@ -233,7 +244,7 @@ export class ProductService {
     if (moqTiers) {
       const tiers = moqTiers.split(',').filter(Boolean);
       const moqConditions: any[] = [];
-      
+
       if (tiers.includes('low')) {
         moqConditions.push({ moq: { lte: 12 } });
       }
@@ -243,7 +254,7 @@ export class ProductService {
       if (tiers.includes('high')) {
         moqConditions.push({ moq: { gt: 24 } });
       }
-      
+
       if (moqConditions.length > 0) {
         andConditions.push({ OR: moqConditions });
       }
@@ -257,7 +268,7 @@ export class ProductService {
           { name: { contains: search, mode: 'insensitive' } },
           { description: { contains: search, mode: 'insensitive' } },
           { brand: { contains: search, mode: 'insensitive' } },
-        ]
+        ],
       });
     }
 
@@ -473,25 +484,60 @@ export class ProductService {
             ? new Date(dto.expectedRestockDate)
             : undefined,
           tags: dto.tags,
-          productImage: dto.productImage !== undefined ? dto.productImage : undefined,
-          productPictureUrl: dto.productPictureUrl !== undefined ? dto.productPictureUrl : undefined,
-          productPrice: dto.productPrice !== undefined ? (dto.productPrice === null ? null : new Prisma.Decimal(dto.productPrice)) : undefined,
-          discountedPrice: dto.discountedPrice !== undefined ? (dto.discountedPrice === null ? null : new Prisma.Decimal(dto.discountedPrice)) : undefined,
+          productImage:
+            dto.productImage !== undefined ? dto.productImage : undefined,
+          productPictureUrl:
+            dto.productPictureUrl !== undefined
+              ? dto.productPictureUrl
+              : undefined,
+          productPrice:
+            dto.productPrice !== undefined
+              ? dto.productPrice === null
+                ? null
+                : new Prisma.Decimal(dto.productPrice)
+              : undefined,
+          discountedPrice:
+            dto.discountedPrice !== undefined
+              ? dto.discountedPrice === null
+                ? null
+                : new Prisma.Decimal(dto.discountedPrice)
+              : undefined,
           taxType: dto.taxType !== undefined ? dto.taxType : undefined,
-          parentProductSku: dto.parentProductSku !== undefined ? dto.parentProductSku : undefined,
-          parentProductId: dto.parentProductId !== undefined ? dto.parentProductId : undefined,
-          privateNotes: dto.privateNotes !== undefined ? dto.privateNotes : undefined,
+          parentProductSku:
+            dto.parentProductSku !== undefined
+              ? dto.parentProductSku
+              : undefined,
+          parentProductId:
+            dto.parentProductId !== undefined ? dto.parentProductId : undefined,
+          privateNotes:
+            dto.privateNotes !== undefined ? dto.privateNotes : undefined,
           setName: dto.setName !== undefined ? dto.setName : undefined,
-          setQuantity: dto.setQuantity !== undefined ? dto.setQuantity : undefined,
+          setQuantity:
+            dto.setQuantity !== undefined ? dto.setQuantity : undefined,
           setType: dto.setType !== undefined ? dto.setType : undefined,
           sizes: dto.sizes !== undefined ? dto.sizes : undefined,
-          sizesSetQuantity: dto.sizesSetQuantity !== undefined ? dto.sizesSetQuantity : undefined,
+          sizesSetQuantity:
+            dto.sizesSetQuantity !== undefined
+              ? dto.sizesSetQuantity
+              : undefined,
           colors: dto.colors !== undefined ? dto.colors : undefined,
-          colorsSetQuantity: dto.colorsSetQuantity !== undefined ? dto.colorsSetQuantity : undefined,
+          colorsSetQuantity:
+            dto.colorsSetQuantity !== undefined
+              ? dto.colorsSetQuantity
+              : undefined,
           nt11_48: dto.nt11_48 !== undefined ? dto.nt11_48 : undefined,
-          nt11_48SetQuantity: dto.nt11_48SetQuantity !== undefined ? dto.nt11_48SetQuantity : undefined,
-          sixToTwelveMonths: dto.sixToTwelveMonths !== undefined ? dto.sixToTwelveMonths : undefined,
-          sixToTwelveMonthsSetQuantity: dto.sixToTwelveMonthsSetQuantity !== undefined ? dto.sixToTwelveMonthsSetQuantity : undefined,
+          nt11_48SetQuantity:
+            dto.nt11_48SetQuantity !== undefined
+              ? dto.nt11_48SetQuantity
+              : undefined,
+          sixToTwelveMonths:
+            dto.sixToTwelveMonths !== undefined
+              ? dto.sixToTwelveMonths
+              : undefined,
+          sixToTwelveMonthsSetQuantity:
+            dto.sixToTwelveMonthsSetQuantity !== undefined
+              ? dto.sixToTwelveMonthsSetQuantity
+              : undefined,
           isActive: dto.isActive,
           isFeatured: dto.isFeatured,
           sortOrder: dto.sortOrder,
@@ -622,27 +668,47 @@ export class ProductService {
     const image = await this.prisma.productImage.findFirst({
       where: { id: imageId, productId },
     });
-    if (!image) throw new NotFoundException(`Image '${imageId}' not found for product '${productId}'.`);
+    if (!image)
+      throw new NotFoundException(
+        `Image '${imageId}' not found for product '${productId}'.`,
+      );
 
     await this.prisma.productImage.delete({ where: { id: imageId } });
 
     // If deleted was primary, auto-promote the first remaining image
     if (image.isPrimary) {
-      const next = await this.prisma.productImage.findFirst({ where: { productId }, orderBy: { sortOrder: 'asc' } });
-      if (next) await this.prisma.productImage.update({ where: { id: next.id }, data: { isPrimary: true } });
+      const next = await this.prisma.productImage.findFirst({
+        where: { productId },
+        orderBy: { sortOrder: 'asc' },
+      });
+      if (next)
+        await this.prisma.productImage.update({
+          where: { id: next.id },
+          data: { isPrimary: true },
+        });
     }
 
     return { message: 'Image deleted successfully.' };
   }
 
   async setPrimaryImage(productId: string, imageId: string) {
-    const image = await this.prisma.productImage.findFirst({ where: { id: imageId, productId } });
-    if (!image) throw new NotFoundException(`Image '${imageId}' not found for product '${productId}'.`);
+    const image = await this.prisma.productImage.findFirst({
+      where: { id: imageId, productId },
+    });
+    if (!image)
+      throw new NotFoundException(
+        `Image '${imageId}' not found for product '${productId}'.`,
+      );
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.productImage.updateMany({ where: { productId }, data: { isPrimary: false } });
-      return tx.productImage.update({ where: { id: imageId }, data: { isPrimary: true } });
+      await tx.productImage.updateMany({
+        where: { productId },
+        data: { isPrimary: false },
+      });
+      return tx.productImage.update({
+        where: { id: imageId },
+        data: { isPrimary: true },
+      });
     });
   }
 }
-

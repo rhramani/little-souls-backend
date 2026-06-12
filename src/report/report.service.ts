@@ -19,7 +19,7 @@ export class ReportService {
     });
 
     let totalRevenue = 0;
-    let totalOrders = orders.length;
+    const totalOrders = orders.length;
 
     orders.forEach((order) => {
       if (order.orderStatus !== 'CANCELLED') {
@@ -70,8 +70,8 @@ export class ReportService {
     const records = await this.prisma.attendanceRecord.findMany({
       where,
       include: {
-        staff: { select: { name: true, employeeCode: true } }
-      }
+        staff: { select: { name: true, employeeCode: true } },
+      },
     });
 
     const summary = {
@@ -106,18 +106,28 @@ export class ReportService {
       include: { product: { select: { name: true, sku: true } } },
     });
 
-    const productMap = new Map<string, { name: string; sku: string; quantitySold: number; revenue: number }>();
-    orderItems.forEach(item => {
+    const productMap = new Map<
+      string,
+      { name: string; sku: string; quantitySold: number; revenue: number }
+    >();
+    orderItems.forEach((item) => {
       const pid = item.productId;
       if (!productMap.has(pid)) {
-        productMap.set(pid, { name: item.product?.name || 'Unknown', sku: item.product?.sku || 'N/A', quantitySold: 0, revenue: 0 });
+        productMap.set(pid, {
+          name: item.product?.name || 'Unknown',
+          sku: item.product?.sku || 'N/A',
+          quantitySold: 0,
+          revenue: 0,
+        });
       }
       const data = productMap.get(pid)!;
       data.quantitySold += item.quantity;
       data.revenue += Number(item.lineTotal);
     });
 
-    const products = Array.from(productMap.values()).sort((a, b) => b.quantitySold - a.quantitySold);
+    const products = Array.from(productMap.values()).sort(
+      (a, b) => b.quantitySold - a.quantitySold,
+    );
 
     return {
       topPerforming: products.slice(0, 10),
@@ -141,13 +151,15 @@ export class ReportService {
       },
     });
 
-    return customers.map(c => ({
-      id: c.id,
-      businessName: c.businessName,
-      customerCode: c.customerCode,
-      ordersCount: c._count.orders,
-      currentBalance: Number(c.currentBalance),
-    })).sort((a, b) => b.ordersCount - a.ordersCount);
+    return customers
+      .map((c) => ({
+        id: c.id,
+        businessName: c.businessName,
+        customerCode: c.customerCode,
+        ordersCount: c._count.orders,
+        currentBalance: Number(c.currentBalance),
+      }))
+      .sort((a, b) => b.ordersCount - a.ordersCount);
   }
 
   async getOrdersReport(startDate?: string, endDate?: string) {
@@ -158,11 +170,16 @@ export class ReportService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    const orders = await this.prisma.order.findMany({ where, select: { orderStatus: true, grandTotal: true } });
+    const orders = await this.prisma.order.findMany({
+      where,
+      select: { orderStatus: true, grandTotal: true },
+    });
 
-    const statusBreakdown: Record<string, { count: number; value: number }> = {};
-    orders.forEach(o => {
-      if (!statusBreakdown[o.orderStatus]) statusBreakdown[o.orderStatus] = { count: 0, value: 0 };
+    const statusBreakdown: Record<string, { count: number; value: number }> =
+      {};
+    orders.forEach((o) => {
+      if (!statusBreakdown[o.orderStatus])
+        statusBreakdown[o.orderStatus] = { count: 0, value: 0 };
       statusBreakdown[o.orderStatus].count++;
       statusBreakdown[o.orderStatus].value += Number(o.grandTotal);
     });
@@ -181,10 +198,13 @@ export class ReportService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    const packingSlips = await this.prisma.packingSlip.findMany({ where, select: { status: true } });
+    const packingSlips = await this.prisma.packingSlip.findMany({
+      where,
+      select: { status: true },
+    });
 
     const statusBreakdown: Record<string, number> = {};
-    packingSlips.forEach(p => {
+    packingSlips.forEach((p) => {
       statusBreakdown[p.status] = (statusBreakdown[p.status] || 0) + 1;
     });
 
@@ -205,7 +225,7 @@ export class ReportService {
     });
 
     let totalPayout = 0;
-    const records = payrolls.map(p => {
+    const records = payrolls.map((p) => {
       totalPayout += Number(p.payableSalary);
       return {
         staffName: p.staff?.name,

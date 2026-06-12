@@ -352,7 +352,7 @@ export class ImportService {
   async exportCatalog(): Promise<Buffer> {
     const ExcelJS = require('exceljs');
     const workbook = new ExcelJS.Workbook();
-    
+
     // Products Sheet
     const productsSheet = workbook.addWorksheet('Products');
     productsSheet.columns = [
@@ -372,7 +372,7 @@ export class ImportService {
     ];
 
     const products = await this.prisma.product.findMany({
-      include: { category: true }
+      include: { category: true },
     });
 
     products.forEach((p) => {
@@ -404,7 +404,7 @@ export class ImportService {
     ];
 
     const pricings = await this.prisma.productPricing.findMany({
-      include: { product: true, pricingGroup: true }
+      include: { product: true, pricingGroup: true },
     });
 
     pricings.forEach((p) => {

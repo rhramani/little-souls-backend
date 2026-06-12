@@ -28,6 +28,10 @@ export class QueryProductDto {
   @IsOptional()
   categoryId?: string;
 
+  @IsUUID('4')
+  @IsOptional()
+  catalogueId?: string;
+
   @IsString()
   @IsOptional()
   brand?: string;

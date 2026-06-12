@@ -7,7 +7,13 @@ export class BannerService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateBannerDto) {
-    return this.prisma.banner.create({ data: { ...dto, isActive: dto.isActive ?? true, sortOrder: dto.sortOrder ?? 0 } });
+    return this.prisma.banner.create({
+      data: {
+        ...dto,
+        isActive: dto.isActive ?? true,
+        sortOrder: dto.sortOrder ?? 0,
+      },
+    });
   }
 
   async findAll(bannerType?: string, activeOnly = false) {

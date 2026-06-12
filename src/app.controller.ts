@@ -37,8 +37,10 @@ export class AppController {
 
       const parsedWidth = w ? parseInt(w, 10) : NaN;
       const parsedHeight = h ? parseInt(h, 10) : NaN;
-      const width = !isNaN(parsedWidth) && parsedWidth > 0 ? parsedWidth : undefined;
-      const height = !isNaN(parsedHeight) && parsedHeight > 0 ? parsedHeight : undefined;
+      const width =
+        !isNaN(parsedWidth) && parsedWidth > 0 ? parsedWidth : undefined;
+      const height =
+        !isNaN(parsedHeight) && parsedHeight > 0 ? parsedHeight : undefined;
 
       if (
         contentType.startsWith('image/') &&

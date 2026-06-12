@@ -38,10 +38,7 @@ export class CatalogueController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.CREATED)
-  async create(
-    @Body() dto: CreateCatalogueDto,
-    @GetUser('id') userId: string,
-  ) {
+  async create(@Body() dto: CreateCatalogueDto, @GetUser('id') userId: string) {
     return this.catalogueService.create(dto, userId);
   }
 
@@ -59,7 +56,12 @@ export class CatalogueController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.catalogueService.findOne(id, search, page ? parseInt(page, 10) : undefined, limit ? parseInt(limit, 10) : undefined);
+    return this.catalogueService.findOne(
+      id,
+      search,
+      page ? parseInt(page, 10) : undefined,
+      limit ? parseInt(limit, 10) : undefined,
+    );
   }
 
   @Patch(':id')
@@ -80,18 +82,16 @@ export class CatalogueController {
 
   @Get(':id/export')
   @HttpCode(HttpStatus.OK)
-  async exportCatalogue(
-    @Param('id') id: string,
-    @Res() res: Response,
-  ) {
+  async exportCatalogue(@Param('id') id: string, @Res() res: Response) {
     const buffer = await this.catalogueService.exportCatalogue(id);
-    
+
     res.set({
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="catalogue-products-${id}-${Date.now()}.xlsx"`,
       'Content-Length': buffer.length,
     });
-    
+
     res.end(buffer);
   }
 
@@ -111,7 +111,9 @@ export class CatalogueController {
 
     const fileExtension = file.originalname.split('.').pop()?.toLowerCase();
     if (fileExtension !== 'xlsx') {
-      throw new BadRequestException('Invalid file format. Only .xlsx files are allowed.');
+      throw new BadRequestException(
+        'Invalid file format. Only .xlsx files are allowed.',
+      );
     }
 
     return this.catalogueService.importCatalogue(id, file.buffer, userId);

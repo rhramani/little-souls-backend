@@ -51,7 +51,14 @@ export class OrderController {
     @GetUser('id') userId: string,
     @Req() req: any,
   ) {
-    console.log('[OrderController] posCheckout hit, user:', req.user, 'userId:', userId, 'headers:', req.headers);
+    console.log(
+      '[OrderController] posCheckout hit, user:',
+      req.user,
+      'userId:',
+      userId,
+      'headers:',
+      req.headers,
+    );
     return this.orderService.posCheckout(dto, userId);
   }
 
@@ -142,10 +149,7 @@ export class OrderController {
   @Patch(':id/deliver')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async markDelivered(
-    @Param('id') id: string,
-    @GetUser('id') userId: string,
-  ) {
+  async markDelivered(@Param('id') id: string, @GetUser('id') userId: string) {
     return this.orderService.markDelivered(id, userId);
   }
 

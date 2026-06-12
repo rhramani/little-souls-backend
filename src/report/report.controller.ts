@@ -1,4 +1,11 @@
-import { Controller, Get, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ReportService } from './report.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -13,7 +20,10 @@ export class ReportController {
   @Get('sales')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async getSales(@Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+  async getSales(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
     return this.reportService.getSalesReport(startDate, endDate);
   }
 
@@ -27,42 +37,63 @@ export class ReportController {
   @Get('attendance')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async getAttendance(@Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+  async getAttendance(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
     return this.reportService.getAttendanceReport(startDate, endDate);
   }
 
   @Get('product-performance')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async getProductPerformance(@Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+  async getProductPerformance(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
     return this.reportService.getProductPerformance(startDate, endDate);
   }
 
   @Get('customers')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async getCustomersReport(@Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+  async getCustomersReport(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
     return this.reportService.getCustomersReport(startDate, endDate);
   }
 
   @Get('orders')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async getOrdersReport(@Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+  async getOrdersReport(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
     return this.reportService.getOrdersReport(startDate, endDate);
   }
 
   @Get('packing')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
-  async getPackingReport(@Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+  async getPackingReport(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
     return this.reportService.getPackingReport(startDate, endDate);
   }
 
   @Get('salary')
   @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
-  async getSalaryReport(@Query('month') month?: string, @Query('year') year?: string) {
-    return this.reportService.getSalaryReport(month ? Number(month) : undefined, year ? Number(year) : undefined);
+  async getSalaryReport(
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+  ) {
+    return this.reportService.getSalaryReport(
+      month ? Number(month) : undefined,
+      year ? Number(year) : undefined,
+    );
   }
 }

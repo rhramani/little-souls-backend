@@ -63,8 +63,10 @@ export class CartService {
     productId: string,
     customerId: string,
   ): Promise<Prisma.Decimal> {
-    const product = await this.prisma.product.findUnique({ where: { id: productId }});
-    
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+
     // 1. Get customer and their pricing group
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
@@ -108,13 +110,6 @@ export class CartService {
 
     if (!product || !product.isActive) {
       throw new NotFoundException('Product is inactive or does not exist.');
-    }
-
-    // 2. Verify Minimum Order Quantity (MOQ)
-    if (quantity < product.moq) {
-      throw new BadRequestException(
-        `The minimum order quantity (MOQ) for this product is ${product.moq} units.`,
-      );
     }
 
     // 2b. Verify Stock Availability
@@ -186,13 +181,7 @@ export class CartService {
       throw new NotFoundException('Cart item not found in your active cart.');
     }
 
-    // 2. Verify MOQ against product definition
     const product = cartItem.product;
-    if (quantity < product.moq) {
-      throw new BadRequestException(
-        `The minimum order quantity (MOQ) for ${product.name} is ${product.moq} units.`,
-      );
-    }
 
     // 2b. Verify Stock Availability
     if (quantity > product.stockQuantity) {

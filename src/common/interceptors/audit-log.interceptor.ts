@@ -33,7 +33,7 @@ export class AuditLogInterceptor implements NestInterceptor {
           // Fire and forget logging
           const action = `${method} ${url}`;
           const moduleMatch = url.split('/')[2]; // /api/module/...
-          
+
           await this.prisma.auditLog.create({
             data: {
               userId,

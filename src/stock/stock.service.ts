@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdjustStockDto, OpeningStockDto } from './dto/adjust-stock.dto';
 import { StockStatus } from '@prisma/client';
@@ -14,8 +18,11 @@ export class StockService {
   }
 
   async adjustStock(dto: AdjustStockDto, userId: string) {
-    const product = await this.prisma.product.findUnique({ where: { id: dto.productId } });
-    if (!product) throw new NotFoundException(`Product '${dto.productId}' not found.`);
+    const product = await this.prisma.product.findUnique({
+      where: { id: dto.productId },
+    });
+    if (!product)
+      throw new NotFoundException(`Product '${dto.productId}' not found.`);
 
     const stockBefore = product.stockQuantity;
     let stockAfter: number;
@@ -34,7 +41,10 @@ export class StockService {
     return this.prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id: dto.productId },
-        data: { stockQuantity: stockAfter, stockStatus: this.getStockStatus(stockAfter) },
+        data: {
+          stockQuantity: stockAfter,
+          stockStatus: this.getStockStatus(stockAfter),
+        },
       });
 
       return tx.stockMovement.create({
@@ -53,8 +63,11 @@ export class StockService {
   }
 
   async setOpeningStock(dto: OpeningStockDto, userId: string) {
-    const product = await this.prisma.product.findUnique({ where: { id: dto.productId } });
-    if (!product) throw new NotFoundException(`Product '${dto.productId}' not found.`);
+    const product = await this.prisma.product.findUnique({
+      where: { id: dto.productId },
+    });
+    if (!product)
+      throw new NotFoundException(`Product '${dto.productId}' not found.`);
 
     const stockBefore = product.stockQuantity;
     const stockAfter = dto.quantity;
@@ -62,7 +75,10 @@ export class StockService {
     return this.prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id: dto.productId },
-        data: { stockQuantity: stockAfter, stockStatus: this.getStockStatus(stockAfter) },
+        data: {
+          stockQuantity: stockAfter,
+          stockStatus: this.getStockStatus(stockAfter),
+        },
       });
 
       return tx.stockMovement.create({
@@ -111,6 +127,9 @@ export class StockService {
       this.prisma.stockMovement.count({ where }),
     ]);
 
-    return { movements, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      movements,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 }

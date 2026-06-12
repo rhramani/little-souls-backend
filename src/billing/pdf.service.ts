@@ -23,15 +23,16 @@ export class PdfService {
         .fontSize(10)
         .font('Helvetica')
         .text(`Invoice Number: ${invoice.invoiceNumber}`, { align: 'right' })
-        .text(`Date: ${invoice.invoiceDate.toLocaleDateString()}`, { align: 'right' })
-        .text(`Due Date: ${invoice.dueDate.toLocaleDateString()}`, { align: 'right' })
+        .text(`Date: ${invoice.invoiceDate.toLocaleDateString()}`, {
+          align: 'right',
+        })
+        .text(`Due Date: ${invoice.dueDate.toLocaleDateString()}`, {
+          align: 'right',
+        })
         .text(`Status: ${invoice.paymentStatus}`, { align: 'right' });
 
       // Company Info (Hardcoded for Little Souls)
-      doc
-        .fontSize(16)
-        .font('Helvetica-Bold')
-        .text('Little Souls B2B', 50, 50);
+      doc.fontSize(16).font('Helvetica-Bold').text('Little Souls B2B', 50, 50);
       doc
         .fontSize(10)
         .font('Helvetica')
@@ -54,7 +55,9 @@ export class PdfService {
       // Ship To
       doc.moveDown();
       doc.font('Helvetica-Bold').text('Ship To:');
-      doc.font('Helvetica').text(invoice.shippingAddress || invoice.billingAddress || 'N/A');
+      doc
+        .font('Helvetica')
+        .text(invoice.shippingAddress || invoice.billingAddress || 'N/A');
 
       doc.moveDown(3);
 
@@ -67,7 +70,10 @@ export class PdfService {
       doc.text('Price', 400, tableTop);
       doc.text('Total', 480, tableTop, { align: 'right' });
 
-      doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+      doc
+        .moveTo(50, tableTop + 15)
+        .lineTo(550, tableTop + 15)
+        .stroke();
 
       // Table Rows
       let currentY = tableTop + 25;
@@ -76,7 +82,10 @@ export class PdfService {
       invoice.items.forEach((item: any) => {
         doc.text(item.sku, 50, currentY);
         // Trim name if too long
-        const name = item.productName.length > 30 ? item.productName.substring(0, 30) + '...' : item.productName;
+        const name =
+          item.productName.length > 30
+            ? item.productName.substring(0, 30) + '...'
+            : item.productName;
         doc.text(name, 120, currentY);
         doc.text(item.quantity.toString(), 350, currentY);
         doc.text(item.price.toFixed(2), 400, currentY);
@@ -101,7 +110,9 @@ export class PdfService {
 
       if (invoice.discountTotal > 0) {
         doc.text('Discount:', 400, currentY);
-        doc.text(`-${invoice.discountTotal.toFixed(2)}`, 480, currentY, { align: 'right' });
+        doc.text(`-${invoice.discountTotal.toFixed(2)}`, 480, currentY, {
+          align: 'right',
+        });
         currentY += 20;
       }
 
@@ -110,7 +121,9 @@ export class PdfService {
       currentY += 20;
 
       doc.text('Shipping:', 400, currentY);
-      doc.text(invoice.shippingCharge.toFixed(2), 480, currentY, { align: 'right' });
+      doc.text(invoice.shippingCharge.toFixed(2), 480, currentY, {
+        align: 'right',
+      });
       currentY += 20;
 
       doc.moveTo(400, currentY).lineTo(550, currentY).stroke();
@@ -118,10 +131,18 @@ export class PdfService {
 
       doc.fontSize(12);
       doc.text('Grand Total:', 380, currentY);
-      doc.text(`Rs. ${invoice.grandTotal.toFixed(2)}`, 480, currentY, { align: 'right' });
+      doc.text(`Rs. ${invoice.grandTotal.toFixed(2)}`, 480, currentY, {
+        align: 'right',
+      });
 
       // Footer
-      doc.fontSize(10).font('Helvetica-Oblique').text('Thank you for your business!', 50, 750, { align: 'center', width: 500 });
+      doc
+        .fontSize(10)
+        .font('Helvetica-Oblique')
+        .text('Thank you for your business!', 50, 750, {
+          align: 'center',
+          width: 500,
+        });
 
       doc.end();
     });

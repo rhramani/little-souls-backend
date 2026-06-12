@@ -112,6 +112,7 @@ export class BillingService {
         productId: item.productId,
         sku: item.sku,
         productName: item.productName,
+        productImageUrl: item.productImageUrl || null,
         quantity: item.quantity,
         price: item.price,
         taxPercent: item.taxPercent || new Prisma.Decimal(0),
@@ -444,7 +445,13 @@ export class BillingService {
   }
 
   async findAllLedgerEntries(query: QueryBillingDto, customerId?: string) {
-    const { page = 1, limit = 20, customerId: filterCustId } = query;
+    const {
+      page = 1,
+      limit = 20,
+      customerId: filterCustId,
+      search,
+      type,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -452,6 +459,34 @@ export class BillingService {
       where.customerId = customerId;
     } else if (filterCustId) {
       where.customerId = filterCustId;
+    }
+
+    if (search && search.trim()) {
+      const searchTrimmed = search.trim();
+      where.OR = [
+        { referenceId: { contains: searchTrimmed, mode: 'insensitive' } },
+        { description: { contains: searchTrimmed, mode: 'insensitive' } },
+        {
+          customer: {
+            OR: [
+              {
+                businessName: { contains: searchTrimmed, mode: 'insensitive' },
+              },
+              {
+                customerCode: { contains: searchTrimmed, mode: 'insensitive' },
+              },
+            ],
+          },
+        },
+      ];
+    }
+
+    if (type) {
+      if (type === 'debit' || type === 'unpaid') {
+        where.debit = { gt: 0 };
+      } else if (type === 'credit' || type === 'paid') {
+        where.credit = { gt: 0 };
+      }
     }
 
     const [ledgerEntries, total] = await this.prisma.$transaction([
@@ -524,7 +559,9 @@ export class BillingService {
         },
       });
 
-      const newBalance = (customer.currentBalance || new Prisma.Decimal(0)).sub(amount);
+      const newBalance = (customer.currentBalance || new Prisma.Decimal(0)).sub(
+        amount,
+      );
 
       await tx.customer.update({
         where: { id: dto.customerId },
@@ -573,7 +610,9 @@ export class BillingService {
         },
       });
 
-      const newBalance = (customer.currentBalance || new Prisma.Decimal(0)).add(amount);
+      const newBalance = (customer.currentBalance || new Prisma.Decimal(0)).add(
+        amount,
+      );
 
       await tx.customer.update({
         where: { id: dto.customerId },
@@ -616,7 +655,11 @@ export class BillingService {
 
     // Style headers
     sheet.getRow(1).font = { bold: true };
-    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E4F7' } };
+    sheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFD6E4F7' },
+    };
 
     const where: any = {};
     if (customerId) where.customerId = customerId;
@@ -624,7 +667,9 @@ export class BillingService {
     const entries = await this.prisma.ledgerEntry.findMany({
       where,
       orderBy: { entryDate: 'asc' },
-      include: { customer: { select: { businessName: true, customerCode: true } } },
+      include: {
+        customer: { select: { businessName: true, customerCode: true } },
+      },
     });
 
     entries.forEach((e) => {
@@ -642,4 +687,3 @@ export class BillingService {
     return workbook.xlsx.writeBuffer() as Promise<Buffer>;
   }
 }
-

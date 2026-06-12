@@ -180,7 +180,6 @@ export class AuthService {
       return { user, customer, contact, session: null };
     });
 
-
     const response = {
       message: 'Customer registered successfully. Approval is pending.',
       user: {
@@ -227,8 +226,13 @@ export class AuthService {
       );
     }
 
-    if (user.userType === UserType.CUSTOMER && user.customer?.approvalStatus !== ApprovalStatus.APPROVED) {
-      throw new UnauthorizedException('Your account is pending admin approval.');
+    if (
+      user.userType === UserType.CUSTOMER &&
+      user.customer?.approvalStatus !== ApprovalStatus.APPROVED
+    ) {
+      throw new UnauthorizedException(
+        'Your account is pending admin approval.',
+      );
     }
 
     // 2. Compare passwords
@@ -312,7 +316,9 @@ export class AuthService {
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
-    console.log(`[AUTH] forgotPassword called with identifier: ${dto.identifier}`);
+    console.log(
+      `[AUTH] forgotPassword called with identifier: ${dto.identifier}`,
+    );
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [{ mobile: dto.identifier }, { email: dto.identifier }],
@@ -329,7 +335,9 @@ export class AuthService {
       };
     }
 
-    console.log(`[AUTH] User found: ID=${user.id}, email=${user.email}, mobile=${user.mobile}`);
+    console.log(
+      `[AUTH] User found: ID=${user.id}, email=${user.email}, mobile=${user.mobile}`,
+    );
 
     // Generate numeric 6-digit verification code or token
     const token = crypto.randomInt(100000, 999999).toString();
@@ -355,7 +363,9 @@ export class AuthService {
       }
     } else {
       // Logging token for debugging / local testing if no email
-      console.log(`[AUTH] User has no email. Falling back to console log. Password reset code for ${dto.identifier}: ${token}`);
+      console.log(
+        `[AUTH] User has no email. Falling back to console log. Password reset code for ${dto.identifier}: ${token}`,
+      );
     }
 
     return {
@@ -436,7 +446,9 @@ export class AuthService {
         where: { email: dto.email, id: { not: userId } },
       });
       if (existingEmail) {
-        throw new ConflictException('This email is already in use by another account');
+        throw new ConflictException(
+          'This email is already in use by another account',
+        );
       }
     }
 
@@ -446,7 +458,9 @@ export class AuthService {
         where: { mobile: dto.mobile, id: { not: userId } },
       });
       if (existingMobile) {
-        throw new ConflictException('This mobile number is already in use by another account');
+        throw new ConflictException(
+          'This mobile number is already in use by another account',
+        );
       }
     }
 
@@ -544,7 +558,12 @@ export class AuthService {
     };
   }
 
-  async verifyOtp(mobile: string, otp: string, userAgent?: string, ipAddress?: string) {
+  async verifyOtp(
+    mobile: string,
+    otp: string,
+    userAgent?: string,
+    ipAddress?: string,
+  ) {
     if (otp !== '123456') {
       throw new BadRequestException('Invalid OTP.');
     }
@@ -565,8 +584,13 @@ export class AuthService {
       throw new UnauthorizedException('Your account has been deactivated.');
     }
 
-    if (user.userType === UserType.CUSTOMER && user.customer?.approvalStatus !== ApprovalStatus.APPROVED) {
-      throw new UnauthorizedException('Your account is pending admin approval.');
+    if (
+      user.userType === UserType.CUSTOMER &&
+      user.customer?.approvalStatus !== ApprovalStatus.APPROVED
+    ) {
+      throw new UnauthorizedException(
+        'Your account is pending admin approval.',
+      );
     }
 
     // Create session & JWT just like login
@@ -616,7 +640,11 @@ export class AuthService {
     };
   }
 
-  async refreshToken(refreshToken: string, ipAddress?: string, userAgent?: string) {
+  async refreshToken(
+    refreshToken: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
     const session = await this.prisma.userSession.findFirst({
       where: {
         refreshToken,
@@ -664,5 +692,25 @@ export class AuthService {
       accessToken,
       refreshToken: newRefreshToken,
     };
+  }
+
+  async getCustomerStatus(id: string) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        businessName: true,
+        gstin: true,
+        approvalStatus: true,
+        rejectionReason: true,
+        isActive: true,
+      },
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Customer account not found');
+    }
+
+    return customer;
   }
 }

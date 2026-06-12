@@ -41,7 +41,9 @@ export class CustomerService {
     });
 
     if (existingUser) {
-      throw new ConflictException('A user with this email or mobile number already exists');
+      throw new ConflictException(
+        'A user with this email or mobile number already exists',
+      );
     }
 
     if (dto.gstin) {
@@ -162,7 +164,15 @@ export class CustomerService {
           contacts: { where: { isPrimary: true }, take: 1 },
           pricingGroup: { select: { name: true, code: true } },
           assignedSalesStaff: { select: { id: true, name: true } },
-          users: { select: { id: true, name: true, email: true, mobile: true, plainPassword: true } },
+          users: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              mobile: true,
+              plainPassword: true,
+            },
+          },
         },
       }),
       this.prisma.customer.count({ where }),
@@ -180,9 +190,19 @@ export class CustomerService {
       include: {
         contacts: true,
         pricingGroup: true,
-        assignedSalesStaff: { select: { id: true, name: true, email: true, mobile: true } },
+        assignedSalesStaff: {
+          select: { id: true, name: true, email: true, mobile: true },
+        },
         approvedByUser: { select: { id: true, name: true } },
-        users: { select: { id: true, name: true, email: true, mobile: true, plainPassword: true } },
+        users: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            mobile: true,
+            plainPassword: true,
+          },
+        },
       },
     });
     if (!customer) {
@@ -202,8 +222,15 @@ export class CustomerService {
       });
 
       // Update primary contact if contact fields are provided
-      if (name !== undefined || email !== undefined || mobile !== undefined || designation !== undefined || whatsapp !== undefined) {
-        const primaryContact = customer.contacts.find(c => c.isPrimary) || customer.contacts[0];
+      if (
+        name !== undefined ||
+        email !== undefined ||
+        mobile !== undefined ||
+        designation !== undefined ||
+        whatsapp !== undefined
+      ) {
+        const primaryContact =
+          customer.contacts.find((c) => c.isPrimary) || customer.contacts[0];
         if (primaryContact) {
           await tx.customerContact.update({
             where: { id: primaryContact.id },
@@ -215,9 +242,13 @@ export class CustomerService {
               whatsappNumber: whatsapp !== undefined ? whatsapp : undefined,
             },
           });
-          
+
           // Also update the User record to keep email/mobile in sync for login and password resets
-          if (name !== undefined || email !== undefined || mobile !== undefined) {
+          if (
+            name !== undefined ||
+            email !== undefined ||
+            mobile !== undefined
+          ) {
             const user = await tx.user.findFirst({ where: { customerId: id } });
             if (user) {
               await tx.user.update({
@@ -274,7 +305,8 @@ export class CustomerService {
     });
 
     // 3. Send email to primary contact
-    const primaryContact = customer.contacts.find((c) => c.isPrimary) || customer.contacts[0];
+    const primaryContact =
+      customer.contacts.find((c) => c.isPrimary) || customer.contacts[0];
     if (primaryContact && primaryContact.email) {
       await this.emailService.sendCustomerCredentials(
         primaryContact.email,
@@ -319,7 +351,9 @@ export class CustomerService {
   async activate(id: string) {
     const customer = await this.findOne(id);
     if (customer.approvalStatus !== ApprovalStatus.APPROVED) {
-      throw new BadRequestException('Cannot activate a customer that is not approved.');
+      throw new BadRequestException(
+        'Cannot activate a customer that is not approved.',
+      );
     }
     return this.prisma.customer.update({
       where: { id },
@@ -329,7 +363,6 @@ export class CustomerService {
 
   async remove(id: string) {
     const customer = await this.findOne(id);
-    
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -338,18 +371,28 @@ export class CustomerService {
         return tx.customer.delete({ where: { id } });
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-         throw new BadRequestException('Cannot delete customer because they have related records in the system.');
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new BadRequestException(
+          'Cannot delete customer because they have related records in the system.',
+        );
       }
       throw error;
     }
   }
 
-  async setOpeningBalance(id: string, dto: SetOpeningBalanceDto, userId: string) {
+  async setOpeningBalance(
+    id: string,
+    dto: SetOpeningBalanceDto,
+    userId: string,
+  ) {
     const customer = await this.findOne(id);
 
     const amount = new Prisma.Decimal(dto.amount);
-    const description = dto.description || `Opening balance set for ${customer.businessName}`;
+    const description =
+      dto.description || `Opening balance set for ${customer.businessName}`;
 
     return this.prisma.$transaction(async (tx) => {
       const updatedCustomer = await tx.customer.update({
@@ -396,7 +439,9 @@ export class CustomerService {
       where: { customerId, mobile: dto.mobile },
     });
     if (existing) {
-      throw new ConflictException('A contact with this mobile number already exists for this customer.');
+      throw new ConflictException(
+        'A contact with this mobile number already exists for this customer.',
+      );
     }
 
     // If setting as primary, unset all others first
@@ -426,12 +471,18 @@ export class CustomerService {
     });
   }
 
-  async updateContact(customerId: string, contactId: string, dto: UpdateContactDto) {
+  async updateContact(
+    customerId: string,
+    contactId: string,
+    dto: UpdateContactDto,
+  ) {
     const contact = await this.prisma.customerContact.findFirst({
       where: { id: contactId, customerId },
     });
     if (!contact) {
-      throw new NotFoundException(`Contact with ID '${contactId}' not found for this customer.`);
+      throw new NotFoundException(
+        `Contact with ID '${contactId}' not found for this customer.`,
+      );
     }
 
     if (dto.isPrimary === true) {
@@ -452,26 +503,38 @@ export class CustomerService {
       where: { id: contactId, customerId },
     });
     if (!contact) {
-      throw new NotFoundException(`Contact with ID '${contactId}' not found for this customer.`);
+      throw new NotFoundException(
+        `Contact with ID '${contactId}' not found for this customer.`,
+      );
     }
     if (contact.isPrimary) {
-      throw new BadRequestException('Cannot remove the primary contact. Set another contact as primary first.');
+      throw new BadRequestException(
+        'Cannot remove the primary contact. Set another contact as primary first.',
+      );
     }
 
     return this.prisma.customerContact.delete({ where: { id: contactId } });
   }
 
-  async provisionContactLogin(customerId: string, contactId: string, dto: ProvisionContactLoginDto) {
+  async provisionContactLogin(
+    customerId: string,
+    contactId: string,
+    dto: ProvisionContactLoginDto,
+  ) {
     const contact = await this.prisma.customerContact.findFirst({
       where: { id: contactId, customerId },
     });
 
     if (!contact) {
-      throw new NotFoundException(`Contact with ID '${contactId}' not found for this customer.`);
+      throw new NotFoundException(
+        `Contact with ID '${contactId}' not found for this customer.`,
+      );
     }
 
     if (!contact.loginAccess) {
-      throw new BadRequestException('This contact does not have loginAccess enabled.');
+      throw new BadRequestException(
+        'This contact does not have loginAccess enabled.',
+      );
     }
 
     // Check if user already exists for this contact
@@ -480,7 +543,9 @@ export class CustomerService {
     });
 
     if (existingUser) {
-      throw new ConflictException('A login account already exists for this contact.');
+      throw new ConflictException(
+        'A login account already exists for this contact.',
+      );
     }
 
     // Check if mobile/email is already used across the system for any user
@@ -494,7 +559,9 @@ export class CustomerService {
     });
 
     if (duplicateUser) {
-      throw new ConflictException('The mobile number or email associated with this contact is already in use by another user account.');
+      throw new ConflictException(
+        'The mobile number or email associated with this contact is already in use by another user account.',
+      );
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
