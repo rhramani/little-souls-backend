@@ -1,17 +1,17 @@
 import {
   IsString,
   IsNotEmpty,
-  IsUUID,
+  IsMongoId,
   IsOptional,
   IsInt,
 } from 'class-validator';
 
 export class SetProductPricingDto {
-  @IsUUID('4')
+  @IsMongoId()
   @IsNotEmpty()
   productId: string;
 
-  @IsUUID('4')
+  @IsMongoId()
   @IsNotEmpty()
   pricingGroupId: string;
 

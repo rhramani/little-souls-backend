@@ -1,5 +1,5 @@
 import {
-  IsUUID,
+  IsMongoId,
   IsNumber,
   Min,
   IsEnum,
@@ -9,7 +9,7 @@ import {
 import { IsR2Url } from '../../upload/decorators/is-r2-url.decorator';
 
 export class RecordPaymentDto {
-  @IsUUID('4')
+  @IsMongoId()
   customerId: string;
 
   @IsNumber()

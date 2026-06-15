@@ -1,7 +1,7 @@
 import {
   IsString,
   IsOptional,
-  IsUUID,
+  IsMongoId,
   IsInt,
   IsBoolean,
   IsDateString,
@@ -38,7 +38,7 @@ class ProductImageUpdateDto {
 }
 
 class ProductPricingUpdateDto {
-  @IsUUID('4')
+  @IsMongoId()
   @IsNotEmpty()
   pricingGroupId: string;
 
@@ -84,7 +84,7 @@ export class UpdateProductDto {
   @IsOptional()
   description?: string;
 
-  @IsUUID('4')
+  @IsMongoId()
   @IsOptional()
   categoryId?: string;
 

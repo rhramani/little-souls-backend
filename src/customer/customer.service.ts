@@ -58,7 +58,20 @@ export class CustomerService {
     const plainPassword = crypto.randomBytes(6).toString('hex');
     const passwordHash = await bcrypt.hash(plainPassword, 10);
 
+    let parsedCreditLimit: number | null = null;
+    if (dto.creditLimit !== undefined && dto.creditLimit !== null && dto.creditLimit !== '') {
+      const parsed = Number(dto.creditLimit);
+      parsedCreditLimit = isNaN(parsed) ? null : parsed;
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
+      // Auto-generate customerCode if not provided
+      let codeToAssign = dto.customerCode;
+      if (!codeToAssign) {
+        const count = await tx.customer.count();
+        codeToAssign = `LS-C-${String(count + 1).padStart(4, '0')}`;
+      }
+
       // Create Customer as APPROVED immediately
       const customer = await tx.customer.create({
         data: {
@@ -85,6 +98,8 @@ export class CustomerService {
           approvedBy: adminId,
           approvedAt: new Date(),
           isActive: true,
+          creditLimit: parsedCreditLimit,
+          customerCode: codeToAssign,
         },
       });
 
@@ -119,6 +134,28 @@ export class CustomerService {
           customerContactId: contact.id,
           isActive: true,
           isVerified: false,
+        },
+      });
+
+      // Find or create Customer role
+      let customerRole = await tx.role.findUnique({
+        where: { name: 'Customer' },
+      });
+      if (!customerRole) {
+        customerRole = await tx.role.create({
+          data: {
+            name: 'Customer',
+            description: 'Default role for registered customers',
+            isSystemRole: true,
+          },
+        });
+      }
+
+      // Assign Customer role to user
+      await tx.userRole.create({
+        data: {
+          userId: user.id,
+          roleId: customerRole.id,
         },
       });
 
@@ -213,12 +250,44 @@ export class CustomerService {
 
   async update(id: string, dto: UpdateCustomerDto) {
     const customer = await this.findOne(id);
-    const { name, email, mobile, designation, whatsapp, ...customerData } = dto;
+    const { name, email, mobile, designation, whatsapp, creditLimit, customerCode, ...customerData } = dto;
+
+    if (customerCode !== undefined && customerCode !== customer.customerCode) {
+      if (customerCode) {
+        const existingCode = await this.prisma.customer.findFirst({
+          where: {
+            customerCode: { equals: customerCode, mode: 'insensitive' },
+            id: { not: id },
+          },
+        });
+        if (existingCode) {
+          throw new ConflictException('Customer Code is already in use by another account');
+        }
+      }
+    }
+
+    let parsedCreditLimit: number | null | undefined = undefined;
+    if (creditLimit !== undefined) {
+      if (creditLimit === '' || creditLimit === null) {
+        parsedCreditLimit = null;
+      } else {
+        const parsed = Number(creditLimit);
+        parsedCreditLimit = isNaN(parsed) ? null : parsed;
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
+      const updatePayload: any = { ...customerData };
+      if (parsedCreditLimit !== undefined) {
+        updatePayload.creditLimit = parsedCreditLimit;
+      }
+      if (customerCode !== undefined) {
+        updatePayload.customerCode = customerCode || null;
+      }
+
       const updatedCustomer = await tx.customer.update({
         where: { id },
-        data: customerData,
+        data: updatePayload,
       });
 
       // Update primary contact if contact fields are provided
@@ -278,6 +347,13 @@ export class CustomerService {
     const passwordHash = await bcrypt.hash(plainPassword, 10);
 
     const updatedCustomer = await this.prisma.$transaction(async (tx) => {
+      // Auto-generate customerCode if not present
+      let codeToAssign = customer.customerCode;
+      if (!codeToAssign) {
+        const count = await tx.customer.count();
+        codeToAssign = `LS-C-${String(count + 1).padStart(4, '0')}`;
+      }
+
       // 1. Approve customer
       const updated = await tx.customer.update({
         where: { id },
@@ -287,6 +363,7 @@ export class CustomerService {
           approvedAt: new Date(),
           isActive: true,
           pricingGroupId: dto.pricingGroupId ?? customer.pricingGroupId,
+          customerCode: codeToAssign,
         },
       });
 
@@ -390,7 +467,7 @@ export class CustomerService {
   ) {
     const customer = await this.findOne(id);
 
-    const amount = new Prisma.Decimal(dto.amount);
+    const amount = Number(dto.amount);
     const description =
       dto.description || `Opening balance set for ${customer.businessName}`;
 
@@ -410,7 +487,7 @@ export class CustomerService {
           entryType: 'OPENING_BALANCE',
           referenceType: 'OPENING',
           debit: amount,
-          credit: new Prisma.Decimal(0),
+          credit: 0,
           balanceAfterEntry: amount,
           description,
           createdBy: userId,
@@ -566,25 +643,50 @@ export class CustomerService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    return this.prisma.user.create({
-      data: {
-        name: contact.name,
-        email: contact.email,
-        mobile: contact.mobile,
-        passwordHash,
-        userType: UserType.CUSTOMER,
-        customerId: customerId,
-        customerContactId: contactId,
-        isActive: true,
-        isVerified: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        mobile: true,
-        userType: true,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: contact.name,
+          email: contact.email,
+          mobile: contact.mobile,
+          passwordHash,
+          userType: UserType.CUSTOMER,
+          customerId: customerId,
+          customerContactId: contactId,
+          isActive: true,
+          isVerified: true,
+        },
+      });
+
+      // Find or create Customer role
+      let customerRole = await tx.role.findUnique({
+        where: { name: 'Customer' },
+      });
+      if (!customerRole) {
+        customerRole = await tx.role.create({
+          data: {
+            name: 'Customer',
+            description: 'Default role for registered customers',
+            isSystemRole: true,
+          },
+        });
+      }
+
+      // Assign Customer role to user
+      await tx.userRole.create({
+        data: {
+          userId: user.id,
+          roleId: customerRole.id,
+        },
+      });
+
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        mobile: user.mobile,
+        userType: user.userType,
+      };
     });
   }
 }

@@ -1,5 +1,5 @@
 import {
-  IsUUID,
+  IsMongoId,
   IsArray,
   ValidateNested,
   IsInt,
@@ -10,7 +10,7 @@ import {
 import { Type } from 'class-transformer';
 
 export class PurchaseOrderItemDto {
-  @IsUUID('4')
+  @IsMongoId()
   productId: string;
 
   @IsInt()
@@ -27,7 +27,7 @@ export class PurchaseOrderItemDto {
 }
 
 export class CreatePurchaseOrderDto {
-  @IsUUID('4')
+  @IsMongoId()
   supplierId: string;
 
   @IsArray()

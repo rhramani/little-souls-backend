@@ -2,7 +2,7 @@ import {
   IsString,
   IsNotEmpty,
   IsOptional,
-  IsUUID,
+  IsMongoId,
   IsBoolean,
   IsInt,
 } from 'class-validator';
@@ -21,7 +21,7 @@ export class CreateCategoryDto {
   @IsOptional()
   description?: string;
 
-  @IsUUID('4', { message: 'Parent Category ID must be a valid UUID' })
+  @IsMongoId({ message: 'Parent Category ID must be a valid Mongo ID' })
   @IsOptional()
   parentCategoryId?: string;
 

@@ -115,7 +115,7 @@ export class BillingService {
         productImageUrl: item.productImageUrl || null,
         quantity: item.quantity,
         price: item.price,
-        taxPercent: item.taxPercent || new Prisma.Decimal(0),
+        taxPercent: item.taxPercent || 0,
         lineSubTotal: item.lineSubTotal,
         lineTaxTotal: item.lineTaxTotal,
         lineTotal: item.lineTotal,
@@ -131,9 +131,7 @@ export class BillingService {
         select: { currentBalance: true },
       });
 
-      const newBalance = (
-        currentCust?.currentBalance || new Prisma.Decimal(0)
-      ).add(order.grandTotal);
+      const newBalance = (currentCust?.currentBalance || 0) + order.grandTotal;
 
       await tx.customer.update({
         where: { id: order.customerId },
@@ -149,7 +147,7 @@ export class BillingService {
           referenceType: 'INVOICE',
           referenceId: invoice.id,
           debit: order.grandTotal,
-          credit: new Prisma.Decimal(0),
+          credit: 0,
           balanceAfterEntry: newBalance,
           description: `Invoice ${invoiceNumber} generated for Order ${order.orderNumber}`,
           createdBy: userId,
@@ -182,7 +180,7 @@ export class BillingService {
 
     const paymentNumber = `PAY-${Date.now().toString().slice(-8)}-${Math.floor(1000 + Math.random() * 9000)}`;
     const transactionDate = new Date(dto.transactionDate);
-    const amountDec = new Prisma.Decimal(dto.amount);
+    const amountDec = Number(dto.amount);
 
     if (isVerified) {
       // Direct transactional staff payment recording
@@ -210,9 +208,7 @@ export class BillingService {
           select: { currentBalance: true },
         });
 
-        const newBalance = (
-          currentCust?.currentBalance || new Prisma.Decimal(0)
-        ).sub(amountDec);
+        const newBalance = (currentCust?.currentBalance || 0) - amountDec;
 
         await tx.customer.update({
           where: { id: dto.customerId },
@@ -227,7 +223,7 @@ export class BillingService {
             entryType: 'PAYMENT',
             referenceType: 'PAYMENT',
             referenceId: payment.id,
-            debit: new Prisma.Decimal(0),
+            debit: 0,
             credit: amountDec,
             balanceAfterEntry: newBalance,
             description: `Payment verified (${paymentNumber}) via ${dto.paymentMode}`,
@@ -288,9 +284,7 @@ export class BillingService {
         select: { currentBalance: true },
       });
 
-      const newBalance = (
-        currentCust?.currentBalance || new Prisma.Decimal(0)
-      ).sub(payment.amount);
+      const newBalance = (currentCust?.currentBalance || 0) - payment.amount;
 
       await tx.customer.update({
         where: { id: payment.customerId },
@@ -305,7 +299,7 @@ export class BillingService {
           entryType: 'PAYMENT',
           referenceType: 'PAYMENT',
           referenceId: payment.id,
-          debit: new Prisma.Decimal(0),
+          debit: 0,
           credit: payment.amount,
           balanceAfterEntry: newBalance,
           description: `Payment verification completed (${payment.paymentNumber}) via ${payment.paymentMode}`,
@@ -545,7 +539,7 @@ export class BillingService {
       if (!customer) throw new NotFoundException('Customer not found');
 
       const noteNumber = `CN-${Date.now().toString().slice(-8)}`;
-      const amount = new Prisma.Decimal(dto.amount);
+      const amount = Number(dto.amount);
 
       const note = await tx.creditDebitNote.create({
         data: {
@@ -559,9 +553,7 @@ export class BillingService {
         },
       });
 
-      const newBalance = (customer.currentBalance || new Prisma.Decimal(0)).sub(
-        amount,
-      );
+      const newBalance = (customer.currentBalance || 0) - amount;
 
       await tx.customer.update({
         where: { id: dto.customerId },
@@ -575,7 +567,7 @@ export class BillingService {
           entryType: 'CREDIT_NOTE',
           referenceType: 'MANUAL',
           referenceId: note.id,
-          debit: new Prisma.Decimal(0),
+          debit: 0,
           credit: amount,
           balanceAfterEntry: newBalance,
           description: `Credit Note ${noteNumber} issued: ${dto.reason}`,
@@ -596,7 +588,7 @@ export class BillingService {
       if (!customer) throw new NotFoundException('Customer not found');
 
       const noteNumber = `DN-${Date.now().toString().slice(-8)}`;
-      const amount = new Prisma.Decimal(dto.amount);
+      const amount = Number(dto.amount);
 
       const note = await tx.creditDebitNote.create({
         data: {
@@ -610,9 +602,7 @@ export class BillingService {
         },
       });
 
-      const newBalance = (customer.currentBalance || new Prisma.Decimal(0)).add(
-        amount,
-      );
+      const newBalance = (customer.currentBalance || 0) + amount;
 
       await tx.customer.update({
         where: { id: dto.customerId },
@@ -627,7 +617,7 @@ export class BillingService {
           referenceType: 'MANUAL',
           referenceId: note.id,
           debit: amount,
-          credit: new Prisma.Decimal(0),
+          credit: 0,
           balanceAfterEntry: newBalance,
           description: `Debit Note ${noteNumber} issued: ${dto.reason}`,
           createdBy: userId,

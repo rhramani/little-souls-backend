@@ -46,12 +46,31 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
     const result = await this.prisma.$transaction(async (tx) => {
+      let employeeCode = '';
+      if (!dto.employeeCode || !dto.employeeCode.trim()) {
+        let count = await tx.staffProfile.count();
+        let codeExists = true;
+        while (codeExists) {
+          employeeCode = `EMP${String(count + 1).padStart(3, '0')}`;
+          const existing = await tx.staffProfile.findUnique({
+            where: { employeeCode },
+          });
+          if (!existing) {
+            codeExists = false;
+          } else {
+            count++;
+          }
+        }
+      } else {
+        employeeCode = dto.employeeCode;
+      }
+
       const staffProfile = await tx.staffProfile.create({
         data: {
           name: dto.name,
           email: dto.email,
           mobile: dto.mobile,
-          employeeCode: dto.employeeCode,
+          employeeCode,
           designation: dto.designation || 'Staff',
           department: dto.department || 'General',
         },
@@ -117,6 +136,10 @@ export class AuthService {
 
     // 3. Perform atomic transaction to create Customer, Contact and User
     const result = await this.prisma.$transaction(async (tx) => {
+      // Auto-generate customerCode
+      const count = await tx.customer.count();
+      const customerCode = `LS-C-${String(count + 1).padStart(4, '0')}`;
+
       // Create Customer
       const customer = await tx.customer.create({
         data: {
@@ -140,6 +163,7 @@ export class AuthService {
           mainContactNumber: dto.mobile,
           approvalStatus: ApprovalStatus.PENDING, // Customer needs approval for wholesale rates
           isActive: false, // Inactive until approved
+          customerCode,
         },
       });
 
@@ -171,6 +195,28 @@ export class AuthService {
           customerContactId: contact.id,
           isActive: true,
           isVerified: false,
+        },
+      });
+
+      // Find or create Customer role
+      let customerRole = await tx.role.findUnique({
+        where: { name: 'Customer' },
+      });
+      if (!customerRole) {
+        customerRole = await tx.role.create({
+          data: {
+            name: 'Customer',
+            description: 'Default role for registered customers',
+            isSystemRole: true,
+          },
+        });
+      }
+
+      // Assign Customer role to user
+      await tx.userRole.create({
+        data: {
+          userId: user.id,
+          roleId: customerRole.id,
         },
       });
 
@@ -301,15 +347,23 @@ export class AuthService {
       });
     } else {
       // Revoke all active sessions for this user
-      await this.prisma.userSession.updateMany({
-        where: {
-          userId,
-          revokedAt: null,
-        },
-        data: {
-          revokedAt: new Date(),
-        },
+      const activeSessions = await this.prisma.userSession.findMany({
+        where: { userId },
       });
+      const sessionIdsToRevoke = activeSessions
+        .filter((s) => s.revokedAt === null)
+        .map((s) => s.id);
+
+      if (sessionIdsToRevoke.length > 0) {
+        await this.prisma.userSession.updateMany({
+          where: {
+            id: { in: sessionIdsToRevoke },
+          },
+          data: {
+            revokedAt: new Date(),
+          },
+        });
+      }
     }
 
     return { message: 'Logged out successfully' };
@@ -378,12 +432,11 @@ export class AuthService {
     const resetRecord = await this.prisma.passwordResetToken.findFirst({
       where: {
         token: dto.token,
-        usedAt: null,
         expiresAt: { gte: new Date() },
       },
     });
 
-    if (!resetRecord) {
+    if (!resetRecord || resetRecord.usedAt !== null) {
       throw new BadRequestException('Invalid or expired password reset token');
     }
 
@@ -489,7 +542,7 @@ export class AuthService {
   }
 
   async getProfile(userId: string) {
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -508,6 +561,7 @@ export class AuthService {
           select: {
             role: {
               select: {
+                id: true,
                 name: true,
                 rolePermissions: {
                   select: {
@@ -526,6 +580,131 @@ export class AuthService {
         },
       },
     });
+
+    if (!user) {
+      throw new NotFoundException('User profile not found');
+    }
+
+    // Auto-heal/assign role if missing for SUPER_ADMIN or CUSTOMER
+    if (user.userRoles.length === 0) {
+      if (user.userType === UserType.SUPER_ADMIN) {
+        let adminRole = await this.prisma.role.findUnique({
+          where: { name: 'Super Administrator' },
+        });
+        if (!adminRole) {
+          adminRole = await this.prisma.role.create({
+            data: {
+              name: 'Super Administrator',
+              description: 'Super Administrator with full system permissions',
+              isSystemRole: true,
+            },
+          });
+        }
+        await this.prisma.userRole.create({
+          data: {
+            userId: user.id,
+            roleId: adminRole.id,
+          },
+        });
+        // Refetch user
+        user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            mobile: true,
+            userType: true,
+            isActive: true,
+            isVerified: true,
+            lastLoginAt: true,
+            createdAt: true,
+            customer: true,
+            customerContact: true,
+            staff: true,
+            userRoles: {
+              select: {
+                role: {
+                  select: {
+                    id: true,
+                    name: true,
+                    rolePermissions: {
+                      select: {
+                        permission: {
+                          select: {
+                            module: true,
+                            action: true,
+                            description: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }) as any;
+      } else if (user.userType === UserType.CUSTOMER) {
+        let customerRole = await this.prisma.role.findUnique({
+          where: { name: 'Customer' },
+        });
+        if (!customerRole) {
+          customerRole = await this.prisma.role.create({
+            data: {
+              name: 'Customer',
+              description: 'Default role for registered customers',
+              isSystemRole: true,
+            },
+          });
+        }
+        await this.prisma.userRole.create({
+          data: {
+            userId: user.id,
+            roleId: customerRole.id,
+          },
+        });
+        // Refetch user
+        user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            mobile: true,
+            userType: true,
+            isActive: true,
+            isVerified: true,
+            lastLoginAt: true,
+            createdAt: true,
+            customer: true,
+            customerContact: true,
+            staff: true,
+            userRoles: {
+              select: {
+                role: {
+                  select: {
+                    id: true,
+                    name: true,
+                    rolePermissions: {
+                      select: {
+                        permission: {
+                          select: {
+                            module: true,
+                            action: true,
+                            description: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }) as any;
+      }
+    }
 
     if (!user) {
       throw new NotFoundException('User profile not found');
@@ -648,13 +827,12 @@ export class AuthService {
     const session = await this.prisma.userSession.findFirst({
       where: {
         refreshToken,
-        revokedAt: null,
         expiresAt: { gt: new Date() },
       },
       include: { user: true },
     });
 
-    if (!session || !session.user.isActive) {
+    if (!session || session.revokedAt !== null || !session.user.isActive) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 

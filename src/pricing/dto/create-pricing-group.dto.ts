@@ -13,6 +13,10 @@ export class CreatePricingGroupDto {
   @IsOptional()
   description?: string;
 
+  @IsString()
+  @IsOptional()
+  desc?: string;
+
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;

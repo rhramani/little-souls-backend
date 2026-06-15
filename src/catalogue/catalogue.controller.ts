@@ -44,8 +44,12 @@ export class CatalogueController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  async findAll(@Query('search') search?: string) {
-    return this.catalogueService.findAll(search);
+  async findAll(
+    @Query('search') search?: string,
+    @Query('publishedOnly') publishedOnly?: string,
+  ) {
+    const pubOnly = publishedOnly === 'true';
+    return this.catalogueService.findAll(search, pubOnly);
   }
 
   @Get(':id')
@@ -55,12 +59,15 @@ export class CatalogueController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('publishedOnly') publishedOnly?: string,
   ) {
+    const pubOnly = publishedOnly === 'true';
     return this.catalogueService.findOne(
       id,
       search,
       page ? parseInt(page, 10) : undefined,
       limit ? parseInt(limit, 10) : undefined,
+      pubOnly,
     );
   }
 

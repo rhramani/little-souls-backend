@@ -99,4 +99,11 @@ export class CreateCustomerDto {
   @IsString()
   @IsOptional()
   whatsapp?: string;
+
+  @IsOptional()
+  creditLimit?: any;
+
+  @IsString()
+  @IsOptional()
+  customerCode?: string;
 }

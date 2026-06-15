@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
-import { Prisma } from '@prisma/client';
+import { UserType } from '@prisma/client';
 
 @Injectable()
 export class SettingsService {
@@ -10,18 +10,29 @@ export class SettingsService {
   async getSettings() {
     let settings = await this.prisma.setting.findFirst();
     if (!settings) {
+      // Find Super Admin to use as default contact
+      const superAdmin = await this.prisma.user.findFirst({
+        where: { userType: UserType.SUPER_ADMIN },
+      });
+
       // Auto-create default settings on first access
       settings = await this.prisma.setting.create({
         data: {
           businessName: 'Little Souls',
           currency: 'INR',
           taxEnabled: true,
-          defaultTaxPercent: new Prisma.Decimal(18),
+          defaultTaxPercent: 18,
           lowStockThreshold: 10,
           orderPrefix: 'LS',
           invoicePrefix: 'INV',
           paymentPrefix: 'PAY',
           purchaseOrderPrefix: 'PO',
+          businessLogoUrl: '/logo.png',
+          faviconUrl: '/favicon.png',
+          contactEmail: superAdmin?.email || null,
+          contactPhone: superAdmin?.mobile || null,
+          whatsappOrderNumber: superAdmin?.mobile || null,
+          companyAddress: 'Rajkot, Gujarat, India',
         },
       });
     }
@@ -47,10 +58,7 @@ export class SettingsService {
       return this.prisma.setting.create({
         data: {
           ...dto,
-          defaultTaxPercent:
-            dto.defaultTaxPercent !== undefined
-              ? new Prisma.Decimal(dto.defaultTaxPercent)
-              : undefined,
+          defaultTaxPercent: dto.defaultTaxPercent,
         },
       });
     }
@@ -59,10 +67,7 @@ export class SettingsService {
       where: { id: settings.id },
       data: {
         ...dto,
-        defaultTaxPercent:
-          dto.defaultTaxPercent !== undefined
-            ? new Prisma.Decimal(dto.defaultTaxPercent)
-            : undefined,
+        defaultTaxPercent: dto.defaultTaxPercent,
       },
     });
   }

@@ -32,7 +32,7 @@ export class PricingService {
       data: {
         name: dto.name,
         code,
-        description: dto.description,
+        description: dto.description !== undefined ? dto.description : dto.desc,
         isActive: dto.isActive !== undefined ? dto.isActive : true,
       },
     });
@@ -96,7 +96,7 @@ export class PricingService {
       data: {
         name: dto.name,
         code,
-        description: dto.description,
+        description: dto.description !== undefined ? dto.description : dto.desc,
         isActive: dto.isActive,
       },
     });
@@ -153,10 +153,10 @@ export class PricingService {
       );
     }
 
-    const price = new Prisma.Decimal(dto.price);
-    const mrp = dto.mrp ? new Prisma.Decimal(dto.mrp) : null;
+    const price = parseFloat(dto.price);
+    const mrp = dto.mrp ? parseFloat(dto.mrp) : null;
     const discountPercent = dto.discountPercent
-      ? new Prisma.Decimal(dto.discountPercent)
+      ? parseFloat(dto.discountPercent)
       : null;
 
     // 3. Upsert Product Pricing record
@@ -352,13 +352,13 @@ export class PricingService {
               },
             },
             update: {
-              price: new Prisma.Decimal(priceEntry.price),
+              price: priceEntry.price,
               updatedBy: userId,
             },
             create: {
               productId: product.id,
               pricingGroupId: priceEntry.groupId,
-              price: new Prisma.Decimal(priceEntry.price),
+              price: priceEntry.price,
               createdBy: userId,
             },
           });

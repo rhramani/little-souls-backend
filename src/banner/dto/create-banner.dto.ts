@@ -4,7 +4,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
-  IsUUID,
+  IsMongoId,
 } from 'class-validator';
 
 export class CreateBannerDto {
@@ -25,7 +25,7 @@ export class CreateBannerDto {
   linkType: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsMongoId()
   linkReferenceId?: string;
 
   @IsOptional()

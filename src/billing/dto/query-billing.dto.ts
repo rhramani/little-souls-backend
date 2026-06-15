@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, IsUUID, IsString } from 'class-validator';
+import { IsOptional, IsInt, IsMongoId, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QueryBillingDto {
@@ -12,7 +12,7 @@ export class QueryBillingDto {
   @Type(() => Number)
   limit?: number = 10;
 
-  @IsUUID('4')
+  @IsMongoId()
   @IsOptional()
   customerId?: string;
 

@@ -1,7 +1,7 @@
-import { IsUUID, IsOptional } from 'class-validator';
+import { IsMongoId, IsOptional } from 'class-validator';
 
 export class ApproveCustomerDto {
-  @IsUUID('4')
+  @IsMongoId()
   @IsOptional()
   pricingGroupId?: string;
 }

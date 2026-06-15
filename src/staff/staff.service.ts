@@ -144,11 +144,13 @@ export class StaffService {
     if (existingMobile)
       throw new BadRequestException('Mobile number is already registered.');
 
-    const existingCode = await this.prisma.staffProfile.findUnique({
-      where: { employeeCode: dto.employeeCode },
-    });
-    if (existingCode)
-      throw new BadRequestException('Employee code is already in use.');
+    if (dto.employeeCode && dto.employeeCode.trim()) {
+      const existingCode = await this.prisma.staffProfile.findUnique({
+        where: { employeeCode: dto.employeeCode },
+      });
+      if (existingCode)
+        throw new BadRequestException('Employee code is already in use.');
+    }
 
     const role = await this.prisma.role.findUnique({
       where: { id: dto.roleId },
@@ -158,10 +160,29 @@ export class StaffService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
     return this.prisma.$transaction(async (tx) => {
+      let employeeCode = '';
+      if (!dto.employeeCode || !dto.employeeCode.trim()) {
+        let count = await tx.staffProfile.count();
+        let codeExists = true;
+        while (codeExists) {
+          employeeCode = `EMP${String(count + 1).padStart(3, '0')}`;
+          const existing = await tx.staffProfile.findUnique({
+            where: { employeeCode },
+          });
+          if (!existing) {
+            codeExists = false;
+          } else {
+            count++;
+          }
+        }
+      } else {
+        employeeCode = dto.employeeCode;
+      }
+
       // 1. Create Staff Profile
       const staffProfile = await tx.staffProfile.create({
         data: {
-          employeeCode: dto.employeeCode,
+          employeeCode,
           name: dto.name,
           mobile: dto.mobile,
           email: dto.email,
@@ -198,7 +219,7 @@ export class StaffService {
         .sendStaffCredentials(
           dto.email,
           dto.name,
-          dto.employeeCode,
+          employeeCode,
           dto.password,
         )
         .catch((err) => {
@@ -215,6 +236,13 @@ export class StaffService {
     const [staff, total, activeCount, disabledCount] =
       await this.prisma.$transaction([
         this.prisma.staffProfile.findMany({
+          where: {
+            users: {
+              none: {
+                userType: UserType.SUPER_ADMIN,
+              },
+            },
+          },
           skip,
           take: limit,
           orderBy: { name: 'asc' },
@@ -223,16 +251,48 @@ export class StaffService {
               select: {
                 id: true,
                 email: true,
+                mobile: true,
                 isActive: true,
                 userType: true,
                 lastLoginAt: true,
+                userRoles: {
+                  include: {
+                    role: true,
+                  },
+                },
               },
             },
           },
         }),
-        this.prisma.staffProfile.count(),
-        this.prisma.staffProfile.count({ where: { isActive: true } }),
-        this.prisma.staffProfile.count({ where: { isActive: false } }),
+        this.prisma.staffProfile.count({
+          where: {
+            users: {
+              none: {
+                userType: UserType.SUPER_ADMIN,
+              },
+            },
+          },
+        }),
+        this.prisma.staffProfile.count({
+          where: {
+            isActive: true,
+            users: {
+              none: {
+                userType: UserType.SUPER_ADMIN,
+              },
+            },
+          },
+        }),
+        this.prisma.staffProfile.count({
+          where: {
+            isActive: false,
+            users: {
+              none: {
+                userType: UserType.SUPER_ADMIN,
+              },
+            },
+          },
+        }),
       ]);
     return {
       staff,
@@ -259,6 +319,11 @@ export class StaffService {
             isActive: true,
             userType: true,
             lastLoginAt: true,
+            userRoles: {
+              include: {
+                role: true,
+              },
+            },
           },
         },
       },
@@ -269,19 +334,101 @@ export class StaffService {
   }
 
   async updateStaff(staffId: string, dto: UpdateStaffDto) {
-    await this.findOneStaff(staffId);
-    return this.prisma.staffProfile.update({
-      where: { id: staffId },
-      data: {
-        name: dto.name,
-        designation: dto.designation,
-        department: dto.department,
-        photoUrl: dto.photoUrl,
-        salary:
-          dto.salary !== undefined ? new Prisma.Decimal(dto.salary) : undefined,
-      },
+    const staff = await this.findOneStaff(staffId);
+
+    // Check if email is already registered by another user
+    if (dto.email && dto.email !== staff.email) {
+      const existingEmail = await this.prisma.user.findFirst({
+        where: { email: dto.email, NOT: { staffId } },
+      });
+      if (existingEmail) {
+        throw new BadRequestException('Email is already registered.');
+      }
+    }
+
+    // Check if mobile number is already registered by another user
+    if (dto.mobile && dto.mobile !== staff.mobile) {
+      const existingMobile = await this.prisma.user.findFirst({
+        where: { mobile: dto.mobile, NOT: { staffId } },
+      });
+      if (existingMobile) {
+        throw new BadRequestException('Mobile number is already registered.');
+      }
+    }
+
+    let resolvedDesignation = dto.designation;
+
+    // Check role validity and update userRoles
+    let targetRole: any = null;
+    if (dto.roleId) {
+      targetRole = await this.prisma.role.findUnique({
+        where: { id: dto.roleId },
+      });
+      if (!targetRole) throw new NotFoundException('Role not found.');
+
+      // If designation is not provided or matches the old designation, set it to the new role name
+      if (!dto.designation) {
+        resolvedDesignation = targetRole.name;
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Update Staff Profile
+      const updatedStaff = await tx.staffProfile.update({
+        where: { id: staffId },
+        data: {
+          name: dto.name,
+          designation: resolvedDesignation,
+          department: dto.department,
+          photoUrl: dto.photoUrl,
+          salary: dto.salary !== undefined ? Number(dto.salary) : undefined,
+          mobile: dto.mobile,
+          email: dto.email,
+        },
+      });
+
+      // 2. Update linked Users
+      const linkedUsers = await tx.user.findMany({ where: { staffId } });
+      for (const user of linkedUsers) {
+        let updatedUserType = user.userType;
+        if (targetRole) {
+          // If the role is Super Administrator, set user type to SUPER_ADMIN
+          const isSuperAdminRole =
+            targetRole.name.toLowerCase().includes('super administrator') ||
+            targetRole.name.toLowerCase().includes('super admin');
+          updatedUserType = isSuperAdminRole ? UserType.SUPER_ADMIN : UserType.STAFF;
+        }
+
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            name: dto.name,
+            email: dto.email,
+            mobile: dto.mobile,
+            userType: updatedUserType,
+          },
+        });
+
+        // 3. Assign Role to User if roleId is provided
+        if (dto.roleId) {
+          // Remove existing roles
+          await tx.userRole.deleteMany({
+            where: { userId: user.id },
+          });
+          // Add new role
+          await tx.userRole.create({
+            data: {
+              userId: user.id,
+              roleId: dto.roleId,
+            },
+          });
+        }
+      }
+
+      return updatedStaff;
     });
   }
+
 
   async deactivateStaff(staffId: string) {
     await this.findOneStaff(staffId);
@@ -555,17 +702,15 @@ export class StaffService {
     });
 
     const totalOrdersCount = salesOrders.length;
-    let totalSalesVolume = new Prisma.Decimal(0);
+    let totalSalesVolume = 0;
     for (const order of salesOrders)
-      totalSalesVolume = totalSalesVolume.add(order.grandTotal);
+      totalSalesVolume = totalSalesVolume + Number(order.grandTotal);
 
     const averageOrderValue =
-      totalOrdersCount > 0
-        ? totalSalesVolume.div(totalOrdersCount)
-        : new Prisma.Decimal(0);
+      totalOrdersCount > 0 ? totalSalesVolume / totalOrdersCount : 0;
 
     const commissionRatePercent = 2.5;
-    const commissionEarned = totalSalesVolume.mul(commissionRatePercent / 100);
+    const commissionEarned = totalSalesVolume * (commissionRatePercent / 100);
 
     return {
       staffId: salesStaffId,
@@ -595,9 +740,9 @@ export class StaffService {
     );
     const valid = results.filter(Boolean);
     return valid.sort((a, b) => {
-      const volA = a?.totalSalesVolume || new Prisma.Decimal(0);
-      const volB = b?.totalSalesVolume || new Prisma.Decimal(0);
-      return volA.gt(volB) ? -1 : volA.lt(volB) ? 1 : 0;
+      const volA = Number(a?.totalSalesVolume || 0);
+      const volB = Number(b?.totalSalesVolume || 0);
+      return volA > volB ? -1 : volA < volB ? 1 : 0;
     });
   }
 
@@ -774,7 +919,7 @@ export class StaffService {
         leaveType: dto.leaveType,
         startDate: start,
         endDate: end,
-        totalDays: new Prisma.Decimal(diffDays),
+        totalDays: diffDays,
         reason: dto.reason,
         status: 'PENDING',
       },
@@ -904,7 +1049,7 @@ export class StaffService {
     if (!staff)
       throw new NotFoundException(`Staff Profile '${staffId}' not found.`);
 
-    const basicSalary = staff.salary || new Prisma.Decimal(0);
+    const basicSalary = Number(staff.salary || 0);
     const startDate = new Date(Number(salaryYear), Number(salaryMonth) - 1, 1);
     const endDate = new Date(Number(salaryYear), Number(salaryMonth), 0);
 
@@ -918,15 +1063,13 @@ export class StaffService {
       if (a.status === 'HALF_DAY') presentDays += 0.5;
     });
 
-    const dailyRate = basicSalary.div(30);
-    const calculatedSalary = dailyRate.mul(presentDays);
-    const overtimeAmount = new Prisma.Decimal(0);
-    const deductions = new Prisma.Decimal(0);
-    const bonus = new Prisma.Decimal(0);
-    const payableSalary = calculatedSalary
-      .add(overtimeAmount)
-      .add(bonus)
-      .sub(deductions);
+    const dailyRate = basicSalary / 30;
+    const calculatedSalary = dailyRate * presentDays;
+    const overtimeAmount = 0;
+    const deductions = 0;
+    const bonus = 0;
+    const payableSalary =
+      calculatedSalary + overtimeAmount + bonus - deductions;
 
     return this.prisma.payroll.upsert({
       where: {

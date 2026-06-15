@@ -72,22 +72,22 @@ export class PurchaseOrderService {
     const poNumber = `PO-${Date.now().toString().slice(-8)}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     // 3. Compute Precision Totals
-    let subTotal = new Prisma.Decimal(0);
-    let taxTotal = new Prisma.Decimal(0);
-    let grandTotal = new Prisma.Decimal(0);
+    let subTotal = 0;
+    let taxTotal = 0;
+    let grandTotal = 0;
 
     const itemsData = dto.items.map((item) => {
-      const costDec = new Prisma.Decimal(item.costPrice);
-      const taxRate = new Prisma.Decimal(item.taxPercent);
-      const qtyDec = new Prisma.Decimal(item.quantity);
+      const costDec = Number(item.costPrice);
+      const taxRate = Number(item.taxPercent);
+      const qtyDec = Number(item.quantity);
 
-      const lineSubTotal = costDec.mul(qtyDec);
-      const lineTaxTotal = lineSubTotal.mul(taxRate.div(100));
-      const lineTotal = lineSubTotal.add(lineTaxTotal);
+      const lineSubTotal = costDec * qtyDec;
+      const lineTaxTotal = lineSubTotal * (taxRate / 100);
+      const lineTotal = lineSubTotal + lineTaxTotal;
 
-      subTotal = subTotal.add(lineSubTotal);
-      taxTotal = taxTotal.add(lineTaxTotal);
-      grandTotal = grandTotal.add(lineTotal);
+      subTotal = subTotal + lineSubTotal;
+      taxTotal = taxTotal + lineTaxTotal;
+      grandTotal = grandTotal + lineTotal;
 
       return {
         productId: item.productId,

@@ -27,8 +27,8 @@ export class CreateStaffDto {
   password: string;
 
   @IsString()
-  @IsNotEmpty()
-  employeeCode: string;
+  @IsOptional()
+  employeeCode?: string;
 
   @IsString()
   @IsNotEmpty()

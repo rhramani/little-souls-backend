@@ -2,7 +2,7 @@ import {
   IsString,
   IsNotEmpty,
   IsOptional,
-  IsUUID,
+  IsMongoId,
   IsInt,
   IsBoolean,
   IsDecimal,
@@ -35,7 +35,7 @@ class ProductImageDto {
 }
 
 class ProductPricingDto {
-  @IsUUID('4')
+  @IsMongoId()
   @IsNotEmpty()
   pricingGroupId: string;
 
@@ -81,7 +81,7 @@ export class CreateProductDto {
   @IsOptional()
   description?: string;
 
-  @IsUUID('4')
+  @IsMongoId()
   @IsNotEmpty()
   categoryId: string;
 

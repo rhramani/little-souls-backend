@@ -48,6 +48,7 @@ export class OrderService {
             product: {
               include: {
                 images: { orderBy: { sortOrder: 'asc' } },
+                catalogue: true,
               },
             },
           },
@@ -104,10 +105,10 @@ export class OrderService {
     // 4. Calculate prices, inventory checks, and compile items inside Transaction
     const result = await this.prisma.$transaction(async (tx) => {
       let totalQuantity = 0;
-      let subTotal = new Prisma.Decimal(0);
-      let taxTotal = new Prisma.Decimal(0);
-      let discountTotal = new Prisma.Decimal(0);
-      const shippingCharge = new Prisma.Decimal(dto.shippingCharge || '0');
+      let subTotal = 0;
+      let taxTotal = 0;
+      let discountTotal = 0;
+      const shippingCharge = Number(dto.shippingCharge || 0);
 
       const orderItemsData: any[] = [];
       const productUpdates: any[] = [];
@@ -120,13 +121,17 @@ export class OrderService {
           );
         }
 
+        if (product.catalogueId && !product.catalogue?.isPublished) {
+          throw new BadRequestException(
+            `Product '${product.name}' belongs to a catalogue that is no longer published.`,
+          );
+        }
+
         const quantity = item.quantity;
         totalQuantity += quantity;
 
         // Resolve tax percent
-        const taxPercent = product.taxPercent
-          ? new Prisma.Decimal(product.taxPercent)
-          : new Prisma.Decimal(0);
+        const taxPercent = product.taxPercent ? Number(product.taxPercent) : 0;
 
         // Fetch B2B product custom pricing group definition
         const customer = await tx.customer.findUnique({
@@ -134,9 +139,9 @@ export class OrderService {
           select: { pricingGroupId: true },
         });
 
-        let price = product.productPrice || new Prisma.Decimal(0);
-        let mrp: Prisma.Decimal | null = null;
-        let discountPercent = new Prisma.Decimal(0);
+        let price = product.productPrice ? Number(product.productPrice) : 0;
+        let mrp: number | null = null;
+        let discountPercent = 0;
 
         if (customer?.pricingGroupId) {
           const pricing = await tx.productPricing.findUnique({
@@ -149,23 +154,25 @@ export class OrderService {
           });
 
           if (pricing) {
-            price = pricing.price;
-            mrp = pricing.mrp || null;
-            discountPercent = pricing.discountPercent || new Prisma.Decimal(0);
+            price = Number(pricing.price);
+            mrp = pricing.mrp ? Number(pricing.mrp) : null;
+            discountPercent = pricing.discountPercent
+              ? Number(pricing.discountPercent)
+              : 0;
           }
         }
 
         // Calculations exclusive of tax
-        const lineSubTotal = price.mul(quantity);
-        subTotal = subTotal.add(lineSubTotal);
+        const lineSubTotal = price * quantity;
+        subTotal = subTotal + lineSubTotal;
 
-        const lineTaxTotal = lineSubTotal.mul(taxPercent.div(100));
-        taxTotal = taxTotal.add(lineTaxTotal);
+        const lineTaxTotal = lineSubTotal * (taxPercent / 100);
+        taxTotal = taxTotal + lineTaxTotal;
 
-        const lineDiscountTotal = lineSubTotal.mul(discountPercent.div(100));
-        discountTotal = discountTotal.add(lineDiscountTotal);
+        const lineDiscountTotal = lineSubTotal * (discountPercent / 100);
+        discountTotal = discountTotal + lineDiscountTotal;
 
-        const lineTotal = lineSubTotal.add(lineTaxTotal).sub(lineDiscountTotal);
+        const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
 
         // Inventory check
         if (product.stockQuantity < quantity) {
@@ -196,10 +203,7 @@ export class OrderService {
       }
 
       // Final calculations
-      const grandTotal = subTotal
-        .add(taxTotal)
-        .sub(discountTotal)
-        .add(shippingCharge);
+      const grandTotal = subTotal + taxTotal - discountTotal + shippingCharge;
 
       // Create Order
       const order = await tx.order.create({
@@ -751,9 +755,8 @@ export class OrderService {
           trackingNumber: dto.trackingNumber,
           trackingUrl: dto.trackingUrl,
           shippingProvider: dto.shippingProvider,
-          shippingCost: dto.shippingCost
-            ? new Prisma.Decimal(dto.shippingCost)
-            : null,
+          shippingCost:
+            dto.shippingCost != null ? Number(dto.shippingCost) : null,
           shipmentStatus: 'SHIPPED',
           shippedAt: new Date(),
           createdBy: userId,
@@ -871,17 +874,19 @@ export class OrderService {
 
       // 3. Re-calculate totals and prepare new items
       let totalQuantity = 0;
-      let subTotal = new Prisma.Decimal(0);
-      const shippingCharge = order.shippingCharge || new Prisma.Decimal(0);
+      let subTotal = 0;
+      const shippingCharge = order.shippingCharge
+        ? Number(order.shippingCharge)
+        : 0;
 
       // Pre-calculate subTotal by resolving all products
       const resolvedItems: {
         itemInput: any;
         product: any;
-        price: Prisma.Decimal;
-        lineSubTotal: Prisma.Decimal;
-        taxPercent: Prisma.Decimal;
-        discountPercent: Prisma.Decimal;
+        price: number;
+        lineSubTotal: number;
+        taxPercent: number;
+        discountPercent: number;
       }[] = [];
 
       for (const itemInput of dto.items) {
@@ -901,21 +906,22 @@ export class OrderService {
 
         const taxPercent =
           dto.taxPercent !== undefined
-            ? new Prisma.Decimal(dto.taxPercent)
+            ? Number(dto.taxPercent)
             : product.taxPercent
-              ? new Prisma.Decimal(product.taxPercent)
-              : new Prisma.Decimal(0);
+              ? Number(product.taxPercent)
+              : 0;
 
-        const price = new Prisma.Decimal(itemInput.price);
+        const price = Number(itemInput.price);
 
         const oldItem = order.items.find(
           (i) => i.productId === itemInput.productId,
         );
-        const discountPercent =
-          oldItem?.discountPercent || new Prisma.Decimal(0);
+        const discountPercent = oldItem?.discountPercent
+          ? Number(oldItem.discountPercent)
+          : 0;
 
-        const lineSubTotal = price.mul(quantity);
-        subTotal = subTotal.add(lineSubTotal);
+        const lineSubTotal = price * quantity;
+        subTotal = subTotal + lineSubTotal;
 
         resolvedItems.push({
           itemInput,
@@ -928,12 +934,10 @@ export class OrderService {
       }
 
       const orderDiscountTotal =
-        dto.discountTotal !== undefined
-          ? new Prisma.Decimal(dto.discountTotal)
-          : null;
+        dto.discountTotal !== undefined ? Number(dto.discountTotal) : null;
 
-      let taxTotal = new Prisma.Decimal(0);
-      let calculatedDiscountTotal = new Prisma.Decimal(0);
+      let taxTotal = 0;
+      let calculatedDiscountTotal = 0;
       const orderItemsData: any[] = [];
 
       for (const resolved of resolvedItems) {
@@ -949,25 +953,22 @@ export class OrderService {
           (i) => i.productId === itemInput.productId,
         );
 
-        let lineDiscountTotal = new Prisma.Decimal(0);
+        let lineDiscountTotal = 0;
         if (orderDiscountTotal !== null) {
-          if (subTotal.gt(0)) {
-            lineDiscountTotal = orderDiscountTotal
-              .mul(lineSubTotal)
-              .div(subTotal);
+          if (subTotal > 0) {
+            lineDiscountTotal = (orderDiscountTotal * lineSubTotal) / subTotal;
           }
         } else {
-          lineDiscountTotal = lineSubTotal.mul(discountPercent.div(100));
+          lineDiscountTotal = lineSubTotal * (discountPercent / 100);
         }
-        calculatedDiscountTotal =
-          calculatedDiscountTotal.add(lineDiscountTotal);
+        calculatedDiscountTotal = calculatedDiscountTotal + lineDiscountTotal;
 
-        const diff = lineSubTotal.sub(lineDiscountTotal);
-        const taxableLineValue = diff.gt(0) ? diff : new Prisma.Decimal(0);
-        const lineTaxTotal = taxableLineValue.mul(taxPercent.div(100));
-        taxTotal = taxTotal.add(lineTaxTotal);
+        const diff = lineSubTotal - lineDiscountTotal;
+        const taxableLineValue = diff > 0 ? diff : 0;
+        const lineTaxTotal = taxableLineValue * (taxPercent / 100);
+        taxTotal = taxTotal + lineTaxTotal;
 
-        const lineTotal = lineSubTotal.add(lineTaxTotal).sub(lineDiscountTotal);
+        const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
 
         orderItemsData.push({
           orderId: order.id,
@@ -981,12 +982,12 @@ export class OrderService {
           shortageQuantity: null,
           backorderQuantity: null,
           price,
-          mrp: oldItem?.mrp || null,
+          mrp: oldItem?.mrp ? Number(oldItem.mrp) : null,
           discountPercent:
             orderDiscountTotal !== null
-              ? lineSubTotal.gt(0)
-                ? lineDiscountTotal.mul(100).div(lineSubTotal)
-                : new Prisma.Decimal(0)
+              ? subTotal > 0
+                ? (lineDiscountTotal * 100) / subTotal
+                : 0
               : discountPercent,
           taxPercent,
           lineSubTotal,
@@ -1001,10 +1002,8 @@ export class OrderService {
           ? orderDiscountTotal
           : calculatedDiscountTotal;
 
-      const grandTotal = subTotal
-        .add(taxTotal)
-        .sub(finalDiscountTotal)
-        .add(shippingCharge);
+      const grandTotal =
+        subTotal + taxTotal - finalDiscountTotal + shippingCharge;
 
       // 4. If APPROVED, deduct inventory for new items
       if (order.orderStatus === 'APPROVED') {
@@ -1141,15 +1140,15 @@ export class OrderService {
 
       // 3. Process Items and calculate totals
       let totalQuantity = 0;
-      let subTotal = new Prisma.Decimal(0);
-      const orderDiscountTotal = new Prisma.Decimal(dto.discountTotal || 0);
+      let subTotal = 0;
+      const orderDiscountTotal = Number(dto.discountTotal || 0);
 
       const resolvedItems: {
         itemInput: any;
         product: any;
-        price: Prisma.Decimal;
-        lineSubTotal: Prisma.Decimal;
-        taxPercent: Prisma.Decimal;
+        price: number;
+        lineSubTotal: number;
+        taxPercent: number;
       }[] = [];
 
       for (const itemInput of dto.items) {
@@ -1172,17 +1171,17 @@ export class OrderService {
 
         const quantity = itemInput.quantity;
         totalQuantity += quantity;
-        const price = new Prisma.Decimal(itemInput.price);
+        const price = Number(itemInput.price);
 
         const taxPercent =
           dto.taxPercent !== undefined
-            ? new Prisma.Decimal(dto.taxPercent)
+            ? Number(dto.taxPercent)
             : product.taxPercent
-              ? new Prisma.Decimal(product.taxPercent)
-              : new Prisma.Decimal(0);
+              ? Number(product.taxPercent)
+              : 0;
 
-        const lineSubTotal = price.mul(quantity);
-        subTotal = subTotal.add(lineSubTotal);
+        const lineSubTotal = price * quantity;
+        subTotal = subTotal + lineSubTotal;
 
         resolvedItems.push({
           itemInput,
@@ -1193,7 +1192,7 @@ export class OrderService {
         });
       }
 
-      let taxTotal = new Prisma.Decimal(0);
+      let taxTotal = 0;
       const orderItemsData: any[] = [];
       const stockMovementsData: any[] = [];
 
@@ -1203,19 +1202,17 @@ export class OrderService {
         const quantity = itemInput.quantity;
 
         // Distribute discountTotal proportionally
-        let lineDiscountTotal = new Prisma.Decimal(0);
-        if (orderDiscountTotal.gt(0) && subTotal.gt(0)) {
-          lineDiscountTotal = orderDiscountTotal
-            .mul(lineSubTotal)
-            .div(subTotal);
+        let lineDiscountTotal = 0;
+        if (orderDiscountTotal > 0 && subTotal > 0) {
+          lineDiscountTotal = (orderDiscountTotal * lineSubTotal) / subTotal;
         }
 
-        const diff = lineSubTotal.sub(lineDiscountTotal);
-        const taxableLineValue = diff.gt(0) ? diff : new Prisma.Decimal(0);
-        const lineTaxTotal = taxableLineValue.mul(taxPercent.div(100));
-        taxTotal = taxTotal.add(lineTaxTotal);
+        const diff = lineSubTotal - lineDiscountTotal;
+        const taxableLineValue = diff > 0 ? diff : 0;
+        const lineTaxTotal = taxableLineValue * (taxPercent / 100);
+        taxTotal = taxTotal + lineTaxTotal;
 
-        const lineTotal = lineSubTotal.add(lineTaxTotal).sub(lineDiscountTotal);
+        const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
 
         orderItemsData.push({
           productId: product.id,
@@ -1226,10 +1223,9 @@ export class OrderService {
           moq: product.moq,
           availableStock: product.stockQuantity, // Pre-deduction snapshot
           price,
-          mrp: product.productPrice || null,
-          discountPercent: lineSubTotal.gt(0)
-            ? lineDiscountTotal.mul(100).div(lineSubTotal)
-            : new Prisma.Decimal(0),
+          mrp: product.productPrice ? Number(product.productPrice) : null,
+          discountPercent:
+            lineSubTotal > 0 ? (lineDiscountTotal * 100) / lineSubTotal : 0,
           taxPercent,
           lineSubTotal,
           lineTaxTotal,
@@ -1264,7 +1260,7 @@ export class OrderService {
         });
       }
 
-      const grandTotal = subTotal.add(taxTotal).sub(orderDiscountTotal);
+      const grandTotal = subTotal + taxTotal - orderDiscountTotal;
 
       // 4. Create Order
       const order = await tx.order.create({
@@ -1277,7 +1273,7 @@ export class OrderService {
           subTotal,
           discountTotal: orderDiscountTotal,
           taxTotal,
-          shippingCharge: new Prisma.Decimal(0),
+          shippingCharge: 0,
           grandTotal,
           paymentStatus: dto.paymentMethod === 'UNPAID' ? 'UNPAID' : 'PAID',
           notes: `POS Walk-in. Payment: ${dto.paymentMethod || 'CASH'}.`,

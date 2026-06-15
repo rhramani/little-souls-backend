@@ -54,8 +54,12 @@ export class EmailService {
     let resolvedLogoUrl = logoUrl;
     if (logoUrl) {
       if (logoUrl.startsWith('/uploads/')) {
-        const basePublicUrl = (this.configService.get<string>('R2_PUBLIC_URL') || '').replace(/\/+$/, '');
-        resolvedLogoUrl = basePublicUrl ? `${basePublicUrl}${logoUrl}` : `http://localhost:8080${logoUrl}`;
+        const basePublicUrl = (
+          this.configService.get<string>('R2_PUBLIC_URL') || ''
+        ).replace(/\/+$/, '');
+        resolvedLogoUrl = basePublicUrl
+          ? `${basePublicUrl}${logoUrl}`
+          : `http://localhost:8080${logoUrl}`;
       } else if (logoUrl.startsWith('/')) {
         resolvedLogoUrl = `http://localhost:8080${logoUrl}`;
       }

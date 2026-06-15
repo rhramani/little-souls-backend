@@ -26,6 +26,7 @@ export class CartService {
                 images: {
                   orderBy: { sortOrder: 'asc' },
                 },
+                catalogue: true,
               },
             },
           },
@@ -48,6 +49,7 @@ export class CartService {
                   images: {
                     orderBy: { sortOrder: 'asc' },
                   },
+                  catalogue: true,
                 },
               },
             },
@@ -62,7 +64,7 @@ export class CartService {
   async getB2BProductPrice(
     productId: string,
     customerId: string,
-  ): Promise<Prisma.Decimal> {
+  ): Promise<number> {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
     });
@@ -79,7 +81,7 @@ export class CartService {
 
     if (!customer.pricingGroupId) {
       if (product && product.productPrice) return product.productPrice;
-      return new Prisma.Decimal(0);
+      return 0;
     }
 
     // 2. Fetch price defined for the group
@@ -94,7 +96,7 @@ export class CartService {
 
     if (!pricing) {
       if (product && product.productPrice) return product.productPrice;
-      return new Prisma.Decimal(0);
+      return 0;
     }
 
     return pricing.price;
@@ -106,10 +108,17 @@ export class CartService {
     // 1. Verify Product exists and is active
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
+      include: { catalogue: true },
     });
 
     if (!product || !product.isActive) {
       throw new NotFoundException('Product is inactive or does not exist.');
+    }
+
+    if (product.catalogueId && !product.catalogue?.isPublished) {
+      throw new BadRequestException(
+        `Product '${product.name}' belongs to a catalogue that is no longer published.`,
+      );
     }
 
     // 2b. Verify Stock Availability
@@ -137,7 +146,7 @@ export class CartService {
           `Total quantity in cart '${newQuantity}' would exceed available stock of ${product.stockQuantity} units. Please reduce quantity.`,
         );
       }
-      const lineTotal = price.mul(newQuantity);
+      const lineTotal = price * newQuantity;
 
       await this.prisma.cartItem.update({
         where: { id: existingItem.id },
@@ -148,7 +157,7 @@ export class CartService {
         },
       });
     } else {
-      const lineTotal = price.mul(quantity);
+      const lineTotal = price * quantity;
 
       await this.prisma.cartItem.create({
         data: {
@@ -183,6 +192,12 @@ export class CartService {
 
     const product = cartItem.product;
 
+    if (product.catalogueId && !product.catalogue?.isPublished) {
+      throw new BadRequestException(
+        `Product '${product.name}' belongs to a catalogue that is no longer published.`,
+      );
+    }
+
     // 2b. Verify Stock Availability
     if (quantity > product.stockQuantity) {
       throw new BadRequestException(
@@ -192,7 +207,7 @@ export class CartService {
 
     // 3. Re-resolve B2B custom pricing to verify no changes occurred
     const price = await this.getB2BProductPrice(product.id, customerId);
-    const lineTotal = price.mul(quantity);
+    const lineTotal = price * quantity;
 
     await this.prisma.cartItem.update({
       where: { id: cartItemId },

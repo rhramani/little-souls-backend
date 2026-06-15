@@ -96,4 +96,11 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsString()
   whatsapp?: string;
+
+  @IsOptional()
+  creditLimit?: any;
+
+  @IsString()
+  @IsOptional()
+  customerCode?: string;
 }

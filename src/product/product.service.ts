@@ -75,10 +75,8 @@ export class ProductService {
           material: dto.material,
           unit: dto.unit || 'PCS',
           hsnCode: dto.hsnCode,
-          weight: dto.weight ? new Prisma.Decimal(dto.weight) : null,
-          taxPercent: dto.taxPercent
-            ? new Prisma.Decimal(dto.taxPercent)
-            : null,
+          weight: dto.weight ? Number(dto.weight) : null,
+          taxPercent: dto.taxPercent ? Number(dto.taxPercent) : null,
           stockQuantity: dto.stockQuantity || 0,
           stockStatus: dto.stockStatus || 'IN_STOCK',
           allowBackorder: dto.allowBackorder || false,
@@ -89,12 +87,10 @@ export class ProductService {
           productImage: dto.productImage,
           productPictureUrl: dto.productPictureUrl,
           productPrice:
-            dto.productPrice !== undefined
-              ? new Prisma.Decimal(dto.productPrice)
-              : null,
+            dto.productPrice !== undefined ? Number(dto.productPrice) : null,
           discountedPrice:
             dto.discountedPrice !== undefined
-              ? new Prisma.Decimal(dto.discountedPrice)
+              ? Number(dto.discountedPrice)
               : null,
           taxType: dto.taxType,
           parentProductSku: dto.parentProductSku,
@@ -140,10 +136,10 @@ export class ProductService {
           data: dto.pricing.map((prc) => ({
             productId: product.id,
             pricingGroupId: prc.pricingGroupId,
-            price: new Prisma.Decimal(prc.price),
-            mrp: prc.mrp ? new Prisma.Decimal(prc.mrp) : null,
+            price: Number(prc.price),
+            mrp: prc.mrp ? Number(prc.mrp) : null,
             discountPercent: prc.discountPercent
-              ? new Prisma.Decimal(prc.discountPercent)
+              ? Number(prc.discountPercent)
               : null,
             minQuantity: prc.minQuantity,
             maxQuantity: prc.maxQuantity,
@@ -223,6 +219,15 @@ export class ProductService {
     }
 
     const andConditions: any[] = [];
+
+    if (userPricingGroupId) {
+      andConditions.push({
+        OR: [
+          { catalogueId: null },
+          { catalogue: { isPublished: true } },
+        ],
+      });
+    }
 
     if (stockStatus) {
       where.stockStatus = stockStatus;
@@ -350,10 +355,15 @@ export class ProductService {
             pricingGroup: true,
           },
         },
+        catalogue: true,
       },
     });
 
     if (!product) {
+      throw new NotFoundException(`Product with ID '${id}' not found.`);
+    }
+
+    if (userPricingGroupId && product.catalogueId && !product.catalogue?.isPublished) {
       throw new NotFoundException(`Product with ID '${id}' not found.`);
     }
 
@@ -383,10 +393,15 @@ export class ProductService {
             pricingGroup: true,
           },
         },
+        catalogue: true,
       },
     });
 
     if (!product) {
+      throw new NotFoundException(`Product with slug '${slug}' not found.`);
+    }
+
+    if (userPricingGroupId && product.catalogueId && !product.catalogue?.isPublished) {
       throw new NotFoundException(`Product with slug '${slug}' not found.`);
     }
 
@@ -473,10 +488,8 @@ export class ProductService {
           material: dto.material,
           unit: dto.unit,
           hsnCode: dto.hsnCode,
-          weight: dto.weight ? new Prisma.Decimal(dto.weight) : undefined,
-          taxPercent: dto.taxPercent
-            ? new Prisma.Decimal(dto.taxPercent)
-            : undefined,
+          weight: dto.weight ? Number(dto.weight) : undefined,
+          taxPercent: dto.taxPercent ? Number(dto.taxPercent) : undefined,
           stockQuantity: dto.stockQuantity,
           stockStatus: dto.stockStatus,
           allowBackorder: dto.allowBackorder,
@@ -494,13 +507,13 @@ export class ProductService {
             dto.productPrice !== undefined
               ? dto.productPrice === null
                 ? null
-                : new Prisma.Decimal(dto.productPrice)
+                : Number(dto.productPrice)
               : undefined,
           discountedPrice:
             dto.discountedPrice !== undefined
               ? dto.discountedPrice === null
                 ? null
-                : new Prisma.Decimal(dto.discountedPrice)
+                : Number(dto.discountedPrice)
               : undefined,
           taxType: dto.taxType !== undefined ? dto.taxType : undefined,
           parentProductSku:
@@ -571,10 +584,10 @@ export class ProductService {
             data: dto.pricing.map((prc) => ({
               productId: id,
               pricingGroupId: prc.pricingGroupId,
-              price: new Prisma.Decimal(prc.price),
-              mrp: prc.mrp ? new Prisma.Decimal(prc.mrp) : null,
+              price: Number(prc.price),
+              mrp: prc.mrp ? Number(prc.mrp) : null,
               discountPercent: prc.discountPercent
-                ? new Prisma.Decimal(prc.discountPercent)
+                ? Number(prc.discountPercent)
                 : null,
               minQuantity: prc.minQuantity,
               maxQuantity: prc.maxQuantity,
@@ -617,9 +630,20 @@ export class ProductService {
       );
     }
 
-    // 2. Safe deletion of relations in cascade (Prisma handles model-level Cascades if configured, or manual delete)
-    await this.prisma.product.delete({
-      where: { id },
+    // 2. Safe deletion of relations in cascade inside transaction
+    await this.prisma.$transaction(async (tx) => {
+      await tx.productImage.deleteMany({ where: { productId: id } });
+      await tx.productPricing.deleteMany({ where: { productId: id } });
+      await tx.productCatalogFile.deleteMany({ where: { productId: id } });
+      await tx.productVideo.deleteMany({ where: { productId: id } });
+      await tx.cartItem.deleteMany({ where: { productId: id } });
+      await tx.stockMovement.deleteMany({ where: { productId: id } });
+      await tx.imageCleaningTask.deleteMany({ where: { productId: id } });
+      await tx.backorderApproval.deleteMany({ where: { productId: id } });
+
+      await tx.product.delete({
+        where: { id },
+      });
     });
 
     return { message: 'Product deleted successfully' };

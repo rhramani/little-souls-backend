@@ -8,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateCatalogueDto } from './dto/create-catalogue.dto';
 import { UpdateCatalogueDto } from './dto/update-catalogue.dto';
 import { Prisma } from '@prisma/client';
-import { randomUUID } from 'crypto';
+import { randomBytes } from 'crypto';
 import axios from 'axios';
 import * as bwipjs from 'bwip-js';
 import { UploadService } from '../upload/upload.service';
@@ -93,8 +93,8 @@ export class CatalogueService {
     // 2. Pre-generate all temp IDs synchronously — NO barcode upload here.
     //    These are TEMP SKUs that get replaced during Excel import, so barcodes
     //    are generated there (on real SKUs) instead.
-    const tempProductsData = dto.images.map((img) => {
-      const tempId = randomUUID();
+    const tempProductsData = (dto.images || []).map((img) => {
+      const tempId = randomBytes(12).toString('hex');
       const tempSku = `TEMP-SKU-${tempId}`;
       const tempSlug = `temp-sku-${tempId}`;
       const baseName =
@@ -112,32 +112,34 @@ export class CatalogueService {
         },
       });
 
-      // Bulk create all products at once (barcodeUrl left null — set during Excel import on real SKUs)
-      await tx.product.createMany({
-        data: tempProductsData.map((data) => ({
-          id: data.tempId,
-          sku: data.tempSku,
-          name: data.baseName,
-          slug: data.tempSlug,
-          categoryId: category.id,
-          catalogueId: catalogue.id,
-          moq: 1,
-          stockQuantity: 0,
-          stockStatus: 'OUT_OF_STOCK',
-          isActive: false,
-          createdBy: userId,
-        })),
-      });
+      if (tempProductsData.length > 0) {
+        // Bulk create all products at once (barcodeUrl left null — set during Excel import on real SKUs)
+        await tx.product.createMany({
+          data: tempProductsData.map((data) => ({
+            id: data.tempId,
+            sku: data.tempSku,
+            name: data.baseName,
+            slug: data.tempSlug,
+            categoryId: category.id,
+            catalogueId: catalogue.id,
+            moq: 1,
+            stockQuantity: 0,
+            stockStatus: 'OUT_OF_STOCK',
+            isActive: false,
+            createdBy: userId,
+          })),
+        });
 
-      // Bulk create all product images at once
-      await tx.productImage.createMany({
-        data: tempProductsData.map((data) => ({
-          productId: data.tempId,
-          originalUrl: data.img.url,
-          isPrimary: true,
-          createdBy: userId,
-        })),
-      });
+        // Bulk create all product images at once
+        await tx.productImage.createMany({
+          data: tempProductsData.map((data) => ({
+            productId: data.tempId,
+            originalUrl: data.img.url,
+            isPrimary: true,
+            createdBy: userId,
+          })),
+        });
+      }
 
       return tx.catalogue.findUnique({
         where: { id: catalogue.id },
@@ -155,10 +157,14 @@ export class CatalogueService {
     return result;
   }
 
-  async findAll(search?: string) {
-    const where = search
-      ? { name: { contains: search, mode: 'insensitive' as const } }
-      : {};
+  async findAll(search?: string, publishedOnly = false) {
+    const where: any = {};
+    if (search) {
+      where.name = { contains: search, mode: 'insensitive' as const };
+    }
+    if (publishedOnly) {
+      where.isPublished = true;
+    }
     const catalogues = await this.prisma.catalogue.findMany({
       where,
       include: {
@@ -190,6 +196,7 @@ export class CatalogueService {
         name: c.name,
         description: c.description,
         imageUrl: c.imageUrl,
+        isPublished: c.isPublished,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
         productsCount: c._count.products,
@@ -198,10 +205,9 @@ export class CatalogueService {
     });
   }
 
-  async findOne(id: string, search?: string, page?: number, limit?: number) {
-    const uuidRegex =
-      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    if (!uuidRegex.test(id)) {
+  async findOne(id: string, search?: string, page?: number, limit?: number, publishedOnly = false) {
+    const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+    if (!objectIdRegex.test(id)) {
       throw new BadRequestException(`Invalid catalogue ID format: ${id}`);
     }
 
@@ -244,7 +250,7 @@ export class CatalogueService {
       }),
     ]);
 
-    if (!catalogue) {
+    if (!catalogue || (publishedOnly && !catalogue.isPublished)) {
       throw new NotFoundException(`Catalogue with ID '${id}' not found.`);
     }
 
@@ -317,7 +323,17 @@ export class CatalogueService {
             },
           });
         } else {
-          // Safely delete product (Prisma cascade relations will handle product images, pricing, stock movements, etc.)
+          // Cascade delete product relations inside the transaction
+          await tx.productImage.deleteMany({ where: { productId: product.id } });
+          await tx.productPricing.deleteMany({ where: { productId: product.id } });
+          await tx.productCatalogFile.deleteMany({ where: { productId: product.id } });
+          await tx.productVideo.deleteMany({ where: { productId: product.id } });
+          await tx.cartItem.deleteMany({ where: { productId: product.id } });
+          await tx.stockMovement.deleteMany({ where: { productId: product.id } });
+          await tx.imageCleaningTask.deleteMany({ where: { productId: product.id } });
+          await tx.backorderApproval.deleteMany({ where: { productId: product.id } });
+
+          // Safely delete product
           await tx.product.delete({
             where: { id: product.id },
           });
@@ -888,42 +904,53 @@ export class CatalogueService {
       });
     });
 
-    // ─── UUID validation helper ───────────────────────────────────────────────
-    const UUID_REGEX =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const isValidUuid = (v: string | null) => !!v && UUID_REGEX.test(v);
+    // ─── ObjectId validation helper ───────────────────────────────────────────
+    const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
+    const isValidObjectId = (v: string | null) =>
+      !!v && OBJECT_ID_REGEX.test(v);
 
     // ─── Classify rows: existing products to UPDATE vs new products to CREATE ──
     const catalogProductIds = new Set(catalogue.products.map((p) => p.id));
+    const allSkusInFile = parsedRows.map((r) => r.sku).filter(Boolean);
+    const validObjectIdsInFile = parsedRows.map((r) => r.id).filter(isValidObjectId);
+
+    const dbProducts = await this.prisma.product.findMany({
+      where: {
+        OR: [
+          { sku: { in: allSkusInFile } },
+          { id: { in: validObjectIdsInFile } }
+        ]
+      },
+      select: { id: true, sku: true, barcodeUrl: true }
+    });
+
+    const skuToDbProductMap = new Map(dbProducts.map(p => [p.sku.toUpperCase(), p]));
+    const idToDbProductMap = new Map(dbProducts.map(p => [p.id, p]));
+
     for (const row of parsedRows) {
-      row.isNew = !isValidUuid(row.id) || !catalogProductIds.has(row.id);
-      if (row.isNew) {
-        // Assign a fresh UUID so downstream code always has a valid ID
-        row.id = randomUUID();
+      const upperSku = row.sku ? row.sku.toUpperCase() : '';
+      let dbProduct = skuToDbProductMap.get(upperSku);
+      if (!dbProduct && isValidObjectId(row.id)) {
+        dbProduct = idToDbProductMap.get(row.id);
+      }
+
+      if (dbProduct) {
+        row.id = dbProduct.id;
+        row.isNew = false;
+        if (upperSku === dbProduct.sku.toUpperCase()) {
+          row.barcodeUrl = dbProduct.barcodeUrl;
+        } else {
+          row.barcodeUrl = null;
+        }
+      } else {
+        row.isNew = true;
+        row.id = randomBytes(12).toString('hex');
+        row.barcodeUrl = null;
       }
     }
 
-    // ─── SKU uniqueness check (only validate SKUs that already exist for OTHER products) ──
+    // ─── SKU uniqueness check ───
     const skuSet = new Set<string>();
-    const allSkusInFile = parsedRows.map((r) => r.sku).filter(Boolean);
-    const existingIdsInFile = parsedRows
-      .filter((r) => !r.isNew)
-      .map((r) => r.id)
-      .filter(Boolean);
-
-    const duplicateProducts = await this.prisma.product.findMany({
-      where: {
-        sku: { in: allSkusInFile },
-        ...(existingIdsInFile.length > 0
-          ? { id: { notIn: existingIdsInFile } }
-          : {}),
-      },
-      select: { sku: true },
-    });
-    const duplicateSkuSet = new Set(
-      duplicateProducts.map((p) => p.sku.toUpperCase()),
-    );
-
     for (const row of parsedRows) {
       if (!row.sku)
         throw new BadRequestException(`Row ${row.rowNumber}: SKU is required.`);
@@ -938,19 +965,9 @@ export class CatalogueService {
           `Duplicate SKU "${row.sku}" found in the uploaded Excel sheet.`,
         );
       skuSet.add(upperSku);
-
-      // Only block duplicate SKUs if the product is truly new AND the SKU exists elsewhere
-      if (row.isNew && duplicateSkuSet.has(upperSku)) {
-        this.logger.warn(
-          `Row ${row.rowNumber}: SKU "${row.sku}" exists in DB — will be treated as update if possible.`,
-        );
-      }
     }
 
     // --- OPTIMIZATION: Generate & upload barcodes in parallel (concurrency=8) for changed/new SKUs only ---
-    const existingProductMap = new Map(
-      catalogue.products.map((p) => [p.id, p]),
-    );
     const barcodeLimit = pLimit(8);
 
     this.logger.log(
@@ -959,15 +976,8 @@ export class CatalogueService {
     await Promise.all(
       parsedRows.map((row) =>
         barcodeLimit(async () => {
-          const existingProduct = existingProductMap.get(row.id);
-          if (
-            !existingProduct ||
-            existingProduct.sku !== row.sku ||
-            !existingProduct.barcodeUrl
-          ) {
+          if (!row.barcodeUrl) {
             row.barcodeUrl = await this.generateAndUploadBarcode(row.sku);
-          } else {
-            row.barcodeUrl = existingProduct.barcodeUrl;
           }
         }),
       ),
@@ -1014,6 +1024,30 @@ export class CatalogueService {
           });
         }
 
+        // 1b. Resolve or create all missing pricing groups sequentially to avoid race conditions
+        for (const groupCode of allGroupCodes) {
+          let pricingGroup = pricingGroupMap.get(groupCode);
+          if (!pricingGroup) {
+            const dbGroup = await tx.pricingGroup.findUnique({
+              where: { code: groupCode },
+            });
+            if (dbGroup) {
+              pricingGroup = dbGroup;
+            } else {
+              pricingGroup = await tx.pricingGroup.create({
+                data: {
+                  name:
+                    groupCode.charAt(0) + groupCode.slice(1).toLowerCase(),
+                  code: groupCode,
+                  description: `Automatically created during catalog import`,
+                  isActive: true,
+                },
+              });
+            }
+            pricingGroupMap.set(groupCode, pricingGroup);
+          }
+        }
+
         // 2. Delete catalogue products omitted from Excel (only for rows that WERE in the catalogue)
         const uploadedExistingIds = new Set(
           parsedRows.filter((r) => !r.isNew).map((r) => r.id),
@@ -1041,14 +1075,8 @@ export class CatalogueService {
                   description: row.description,
                   productImage: row.productImage,
                   productPictureUrl: row.productPictureUrl,
-                  productPrice:
-                    row.productPrice !== null
-                      ? new Prisma.Decimal(row.productPrice)
-                      : null,
-                  discountedPrice:
-                    row.discountedPrice !== null
-                      ? new Prisma.Decimal(row.discountedPrice)
-                      : null,
+                  productPrice: row.productPrice,
+                  discountedPrice: row.discountedPrice,
                   stockQuantity: row.stockQuantity,
                   moq: row.moq,
                   brand: row.brand,
@@ -1056,12 +1084,8 @@ export class CatalogueService {
                   color: row.color,
                   unit: row.unit || 'PCS',
                   taxType: row.taxType,
-                  taxPercent:
-                    row.taxPercent !== null
-                      ? new Prisma.Decimal(row.taxPercent)
-                      : null,
-                  weight:
-                    row.weight !== null ? new Prisma.Decimal(row.weight) : null,
+                  taxPercent: row.taxPercent,
+                  weight: row.weight,
                   parentProductSku: row.parentProductSku,
                   parentProductId: row.parentProductId,
                   privateNotes: row.privateNotes,
@@ -1110,14 +1134,8 @@ export class CatalogueService {
                   description: row.description,
                   productImage: row.productImage,
                   productPictureUrl: row.productPictureUrl,
-                  productPrice:
-                    row.productPrice !== null
-                      ? new Prisma.Decimal(row.productPrice)
-                      : null,
-                  discountedPrice:
-                    row.discountedPrice !== null
-                      ? new Prisma.Decimal(row.discountedPrice)
-                      : null,
+                  productPrice: row.productPrice,
+                  discountedPrice: row.discountedPrice,
                   stockQuantity: row.stockQuantity,
                   moq: row.moq,
                   brand: row.brand,
@@ -1125,12 +1143,8 @@ export class CatalogueService {
                   color: row.color,
                   unit: row.unit,
                   taxType: row.taxType,
-                  taxPercent:
-                    row.taxPercent !== null
-                      ? new Prisma.Decimal(row.taxPercent)
-                      : null,
-                  weight:
-                    row.weight !== null ? new Prisma.Decimal(row.weight) : null,
+                  taxPercent: row.taxPercent,
+                  weight: row.weight,
                   parentProductSku: row.parentProductSku,
                   parentProductId: row.parentProductId,
                   privateNotes: row.privateNotes,
@@ -1150,6 +1164,7 @@ export class CatalogueService {
                   barcodeUrl: row.barcodeUrl,
                   stockStatus:
                     row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+                  catalogueId: catalogueId,
                   updatedBy: userId,
                 },
               });
@@ -1186,7 +1201,6 @@ export class CatalogueService {
                       isPrimary: false,
                       createdBy: userId,
                     })),
-                    skipDuplicates: true,
                   });
                 }
               }
@@ -1202,19 +1216,7 @@ export class CatalogueService {
                 )
                   return;
 
-                let pricingGroup = pricingGroupMap.get(groupCode);
-                if (!pricingGroup) {
-                  pricingGroup = await tx.pricingGroup.create({
-                    data: {
-                      name:
-                        groupCode.charAt(0) + groupCode.slice(1).toLowerCase(),
-                      code: groupCode,
-                      description: `Automatically created during catalog import`,
-                      isActive: true,
-                    },
-                  });
-                  pricingGroupMap.set(groupCode, pricingGroup);
-                }
+                const pricingGroup = pricingGroupMap.get(groupCode)!;
 
                 await tx.productPricing.upsert({
                   where: {
@@ -1224,29 +1226,17 @@ export class CatalogueService {
                     },
                   },
                   update: {
-                    price: new Prisma.Decimal(groupPricing.price),
-                    mrp:
-                      groupPricing.mrp != null
-                        ? new Prisma.Decimal(groupPricing.mrp)
-                        : null,
-                    discountPercent:
-                      groupPricing.discountPercent != null
-                        ? new Prisma.Decimal(groupPricing.discountPercent)
-                        : null,
+                    price: groupPricing.price,
+                    mrp: groupPricing.mrp,
+                    discountPercent: groupPricing.discountPercent,
                     updatedBy: userId,
                   },
                   create: {
                     productId: row.id,
                     pricingGroupId: pricingGroup.id,
-                    price: new Prisma.Decimal(groupPricing.price),
-                    mrp:
-                      groupPricing.mrp != null
-                        ? new Prisma.Decimal(groupPricing.mrp)
-                        : null,
-                    discountPercent:
-                      groupPricing.discountPercent != null
-                        ? new Prisma.Decimal(groupPricing.discountPercent)
-                        : null,
+                    price: groupPricing.price,
+                    mrp: groupPricing.mrp,
+                    discountPercent: groupPricing.discountPercent,
                     createdBy: userId,
                   },
                 });

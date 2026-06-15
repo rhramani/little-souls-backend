@@ -1,7 +1,7 @@
 import {
   IsString,
   IsOptional,
-  IsUUID,
+  IsMongoId,
   IsInt,
   IsBoolean,
   IsEnum,
@@ -24,11 +24,11 @@ export class QueryProductDto {
   @IsOptional()
   search?: string;
 
-  @IsUUID('4')
+  @IsMongoId()
   @IsOptional()
   categoryId?: string;
 
-  @IsUUID('4')
+  @IsMongoId()
   @IsOptional()
   catalogueId?: string;
 

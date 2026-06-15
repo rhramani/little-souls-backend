@@ -21,8 +21,8 @@ export class RegisterStaffDto {
   name: string;
 
   @IsString()
-  @IsNotEmpty()
-  employeeCode: string;
+  @IsOptional()
+  employeeCode?: string;
 
   @IsString()
   @IsNotEmpty()

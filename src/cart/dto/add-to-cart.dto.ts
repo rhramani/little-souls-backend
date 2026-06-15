@@ -1,7 +1,7 @@
-import { IsUUID, IsInt, Min } from 'class-validator';
+import { IsMongoId, IsInt, Min } from 'class-validator';
 
 export class AddToCartDto {
-  @IsUUID('4')
+  @IsMongoId()
   productId: string;
 
   @IsInt()

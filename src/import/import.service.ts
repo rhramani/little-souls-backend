@@ -106,11 +106,9 @@ export class ImportService {
                 unit: rowData.unit || 'PCS',
                 hsnCode: rowData.hsnCode || null,
                 moq: rowData.moq ? parseInt(rowData.moq) : 1,
-                weight: rowData.weight
-                  ? new Prisma.Decimal(rowData.weight)
-                  : null,
+                weight: rowData.weight ? Number(rowData.weight) : null,
                 taxPercent: rowData.taxPercent
-                  ? new Prisma.Decimal(rowData.taxPercent)
+                  ? Number(rowData.taxPercent)
                   : null,
                 stockQuantity: rowData.stockQuantity
                   ? parseInt(rowData.stockQuantity)
@@ -132,10 +130,10 @@ export class ImportService {
                 data: {
                   productId: product.id,
                   pricingGroupId: rowData.pricingGroupId,
-                  price: new Prisma.Decimal(rowData.price),
-                  mrp: rowData.mrp ? new Prisma.Decimal(rowData.mrp) : null,
+                  price: Number(rowData.price),
+                  mrp: rowData.mrp ? Number(rowData.mrp) : null,
                   discountPercent: rowData.discountPercent
-                    ? new Prisma.Decimal(rowData.discountPercent)
+                    ? Number(rowData.discountPercent)
                     : null,
                   createdBy: userId,
                 },
@@ -165,11 +163,9 @@ export class ImportService {
                 unit: rowData.unit || undefined,
                 hsnCode: rowData.hsnCode || undefined,
                 moq: rowData.moq ? parseInt(rowData.moq) : undefined,
-                weight: rowData.weight
-                  ? new Prisma.Decimal(rowData.weight)
-                  : undefined,
+                weight: rowData.weight ? Number(rowData.weight) : undefined,
                 taxPercent: rowData.taxPercent
-                  ? new Prisma.Decimal(rowData.taxPercent)
+                  ? Number(rowData.taxPercent)
                   : undefined,
                 updatedBy: userId,
               },
@@ -241,10 +237,10 @@ export class ImportService {
               );
             }
 
-            const price = new Prisma.Decimal(rowData.price);
-            const mrp = rowData.mrp ? new Prisma.Decimal(rowData.mrp) : null;
+            const price = Number(rowData.price);
+            const mrp = rowData.mrp ? Number(rowData.mrp) : null;
             const discountPercent = rowData.discountPercent
-              ? new Prisma.Decimal(rowData.discountPercent)
+              ? Number(rowData.discountPercent)
               : null;
 
             await this.prisma.productPricing.upsert({

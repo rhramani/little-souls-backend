@@ -1,9 +1,9 @@
-import { IsUUID } from 'class-validator';
+import { IsMongoId } from 'class-validator';
 
 export class AssignCustomerDto {
-  @IsUUID('4')
+  @IsMongoId()
   customerId: string;
 
-  @IsUUID('4')
+  @IsMongoId()
   salesStaffId: string;
 }
