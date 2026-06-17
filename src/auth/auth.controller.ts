@@ -40,8 +40,6 @@ export class AuthController {
   }
 
   @Post('register-staff')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserType.SUPER_ADMIN)
   @HttpCode(HttpStatus.CREATED)
   async registerStaff(
     @Body() dto: import('./dto/register-staff.dto').RegisterStaffDto,

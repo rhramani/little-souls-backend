@@ -12,14 +12,20 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserType } from '@prisma/client';
 
 @Controller('dashboard')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)
   async getSummary() {
     return this.dashboardService.getSummary();
+  }
+
+  @Get('public-stats')
+  @HttpCode(HttpStatus.OK)
+  async getPublicStats() {
+    return this.dashboardService.getPublicStats();
   }
 }

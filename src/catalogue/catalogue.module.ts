@@ -5,9 +5,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { UploadModule } from '../upload/upload.module';
 import { NotificationModule } from '../notification/notification.module';
+import { ImageCleaningModule } from '../image-cleaning/image-cleaning.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UploadModule, NotificationModule],
+  imports: [PrismaModule, AuthModule, UploadModule, NotificationModule, ImageCleaningModule],
   providers: [CatalogueService],
   controllers: [CatalogueController],
   exports: [CatalogueService],

@@ -335,6 +335,19 @@ export class OrderService {
             select: {
               businessName: true,
               customerCode: true,
+              billingAddressLine1: true,
+              billingAddressLine2: true,
+              billingCity: true,
+              billingState: true,
+              billingPincode: true,
+              billingCountry: true,
+              shippingAddressLine1: true,
+              shippingAddressLine2: true,
+              shippingCity: true,
+              shippingState: true,
+              shippingPincode: true,
+              shippingCountry: true,
+              gstin: true,
             },
           },
         },
@@ -1350,12 +1363,41 @@ export class OrderService {
     return this.prisma.$transaction(async (tx) => {
       if (order.invoices && order.invoices.length > 0) {
         const invoiceIds = order.invoices.map((i) => i.id);
+        
+        await tx.invoiceItem.deleteMany({
+          where: { invoiceId: { in: invoiceIds } },
+        });
+
+        await tx.invoice.deleteMany({
+          where: { id: { in: invoiceIds } },
+        });
+
         await tx.ledgerEntry.deleteMany({
           where: {
             OR: [{ referenceId: { in: invoiceIds } }, { referenceId: id }],
           },
         });
       }
+
+      await tx.orderStatusHistory.deleteMany({
+        where: { orderId: id },
+      });
+
+      await tx.orderItem.deleteMany({
+        where: { orderId: id },
+      });
+
+      await tx.backorderApproval.deleteMany({
+        where: { orderId: id },
+      });
+
+      await tx.packingSlip.deleteMany({
+        where: { orderId: id },
+      });
+
+      await tx.shipment.deleteMany({
+        where: { orderId: id },
+      });
 
       return tx.order.delete({
         where: { id },
@@ -1373,6 +1415,14 @@ export class OrderService {
       const invoiceIds = orders.flatMap((o) => o.invoices.map((i) => i.id));
 
       if (invoiceIds.length > 0) {
+        await tx.invoiceItem.deleteMany({
+          where: { invoiceId: { in: invoiceIds } },
+        });
+
+        await tx.invoice.deleteMany({
+          where: { id: { in: invoiceIds } },
+        });
+
         await tx.ledgerEntry.deleteMany({
           where: {
             OR: [
@@ -1382,6 +1432,26 @@ export class OrderService {
           },
         });
       }
+
+      await tx.orderStatusHistory.deleteMany({
+        where: { orderId: { in: ids } },
+      });
+
+      await tx.orderItem.deleteMany({
+        where: { orderId: { in: ids } },
+      });
+
+      await tx.backorderApproval.deleteMany({
+        where: { orderId: { in: ids } },
+      });
+
+      await tx.packingSlip.deleteMany({
+        where: { orderId: { in: ids } },
+      });
+
+      await tx.shipment.deleteMany({
+        where: { orderId: { in: ids } },
+      });
 
       const deleteResult = await tx.order.deleteMany({
         where: { id: { in: ids } },

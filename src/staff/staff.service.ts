@@ -623,8 +623,12 @@ export class StaffService {
           await tx.user.delete({ where: { id: user.id } });
         }
 
-        // The other relations (AttendanceRecord, LeaveRequest, Payroll)
-        // have onDelete: Cascade so they will be automatically deleted.
+        // Manually delete related records of StaffProfile to avoid foreign key constraint violations
+        // since the schema has onDelete: NoAction for these relations.
+        await tx.attendanceRecord.deleteMany({ where: { staffId } });
+        await tx.leaveRequest.deleteMany({ where: { staffId } });
+        await tx.payroll.deleteMany({ where: { staffId } });
+
         return await tx.staffProfile.delete({
           where: { id: staffId },
         });
@@ -777,7 +781,7 @@ export class StaffService {
         skip,
         take: limit,
         orderBy: { attendanceDate: 'desc' },
-        include: { staff: { select: { name: true, employeeCode: true } } },
+        include: { staff: { select: { name: true, employeeCode: true, designation: true } } },
       }),
       this.prisma.attendanceRecord.count({ where }),
     ]);
@@ -833,14 +837,15 @@ export class StaffService {
       },
     });
 
-    if (existing?.checkInTime)
-      throw new BadRequestException('Already checked in today.');
+    if (existing?.checkInTime && !existing?.checkOutTime)
+      throw new BadRequestException('Already checked in. Please check out first.');
 
     if (existing) {
       return this.prisma.attendanceRecord.update({
         where: { id: existing.id },
         data: {
           checkInTime: new Date(),
+          checkOutTime: null,
           status: 'PRESENT',
           note: note || existing.note,
         },
@@ -881,12 +886,13 @@ export class StaffService {
     if (!existing?.checkInTime)
       throw new BadRequestException('Must check in before checking out.');
     if (existing.checkOutTime)
-      throw new BadRequestException('Already checked out today.');
+      throw new BadRequestException('Already checked out. Please check in first.');
 
     const checkOutTime = new Date();
-    const totalWorkMinutes = Math.floor(
+    const sessionMinutes = Math.floor(
       (checkOutTime.getTime() - existing.checkInTime.getTime()) / 60000,
     );
+    const totalWorkMinutes = (existing.totalWorkMinutes || 0) + sessionMinutes;
 
     return this.prisma.attendanceRecord.update({
       where: { id: existing.id },

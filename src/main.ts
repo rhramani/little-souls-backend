@@ -7,6 +7,8 @@ import {
 } from 'nest-winston';
 import * as winston from 'winston';
 
+import { PrismaClientExceptionFilter } from './common/filters/prisma-client-exception.filter';
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: WinstonModule.createLogger({
@@ -37,6 +39,9 @@ async function bootstrap() {
 
   // Enable Global Prefix
   app.setGlobalPrefix('api');
+
+  // Register Global Prisma Exception Filter
+  app.useGlobalFilters(new PrismaClientExceptionFilter());
 
   // Enable Global Validation Pipe
   app.useGlobalPipes(

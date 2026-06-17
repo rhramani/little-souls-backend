@@ -105,26 +105,18 @@ export class PricingService {
   async removeGroup(id: string) {
     const group = await this.findOneGroup(id);
 
-    // 1. Check if group has customers linked
-    const customersCount = await this.prisma.customer.count({
+    // 1. Decouple group from assigned customers (reset pricingGroupId to null)
+    await this.prisma.customer.updateMany({
+      where: { pricingGroupId: id },
+      data: { pricingGroupId: null },
+    });
+
+    // 2. Delete all related product price definitions
+    await this.prisma.productPricing.deleteMany({
       where: { pricingGroupId: id },
     });
-    if (customersCount > 0) {
-      throw new BadRequestException(
-        `Cannot delete pricing group that is currently assigned to ${customersCount} customer(s).`,
-      );
-    }
 
-    // 2. Check if active product pricings exist
-    const pricingsCount = await this.prisma.productPricing.count({
-      where: { pricingGroupId: id },
-    });
-    if (pricingsCount > 0) {
-      throw new BadRequestException(
-        `Cannot delete pricing group with ${pricingsCount} active product price definition(s).`,
-      );
-    }
-
+    // 3. Finally, delete the pricing group
     await this.prisma.pricingGroup.delete({
       where: { id },
     });

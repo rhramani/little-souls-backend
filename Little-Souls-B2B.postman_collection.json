@@ -11,6 +11,11 @@
       "type": "string"
     },
     {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
       "key": "token",
       "value": "",
       "type": "string"
@@ -311,6 +316,7 @@
                   "    var jsonData = pm.response.json();",
                   "    if (jsonData.token) {",
                   "        pm.environment.set(\"staffToken\", jsonData.token);",
+                  "        pm.environment.set(\"super_admin_token\", jsonData.token);",
                   "        pm.environment.set(\"token\", jsonData.token);",
                   "    }",
                   "}"

@@ -13,6 +13,7 @@ import axios from 'axios';
 import * as bwipjs from 'bwip-js';
 import { UploadService } from '../upload/upload.service';
 import pLimit from 'p-limit';
+import { ImageCleaningService } from '../image-cleaning/image-cleaning.service';
 
 @Injectable()
 export class CatalogueService {
@@ -21,6 +22,7 @@ export class CatalogueService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uploadService: UploadService,
+    private readonly imageCleaningService: ImageCleaningService,
   ) {}
 
   private async generateAndUploadBarcode(sku: string): Promise<string | null> {
@@ -154,6 +156,13 @@ export class CatalogueService {
     this.logger.log(
       `Catalogue created with ${dto.images.length} products in ${Date.now() - start}ms`,
     );
+
+    if (result) {
+      this.imageCleaningService
+        .triggerBackgroundCleaningForCatalogue(result.id, userId)
+        .catch(() => {});
+    }
+
     return result;
   }
 
@@ -324,13 +333,13 @@ export class CatalogueService {
           });
         } else {
           // Cascade delete product relations inside the transaction
+          await tx.imageCleaningTask.deleteMany({ where: { productId: product.id } });
           await tx.productImage.deleteMany({ where: { productId: product.id } });
           await tx.productPricing.deleteMany({ where: { productId: product.id } });
           await tx.productCatalogFile.deleteMany({ where: { productId: product.id } });
           await tx.productVideo.deleteMany({ where: { productId: product.id } });
           await tx.cartItem.deleteMany({ where: { productId: product.id } });
           await tx.stockMovement.deleteMany({ where: { productId: product.id } });
-          await tx.imageCleaningTask.deleteMany({ where: { productId: product.id } });
           await tx.backorderApproval.deleteMany({ where: { productId: product.id } });
 
           // Safely delete product
@@ -1251,6 +1260,11 @@ export class CatalogueService {
     this.logger.log(
       `Import completed for ${parsedRows.length} products in ${Date.now() - start}ms`,
     );
+
+    this.imageCleaningService
+      .triggerBackgroundCleaningForCatalogue(catalogueId, userId)
+      .catch(() => {});
+
     return { message: 'Catalogue products successfully updated and replaced.' };
   }
 }

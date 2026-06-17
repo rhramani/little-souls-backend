@@ -68,8 +68,21 @@ export class CustomerService {
       // Auto-generate customerCode if not provided
       let codeToAssign = dto.customerCode;
       if (!codeToAssign) {
-        const count = await tx.customer.count();
-        codeToAssign = `LS-C-${String(count + 1).padStart(4, '0')}`;
+        const customers = await tx.customer.findMany({
+          where: { customerCode: { startsWith: 'LS-C-' } },
+          select: { customerCode: true },
+        });
+        let nextNumber = 1;
+        const numbers = customers
+          .map((c) => {
+            const match = c.customerCode?.match(/^LS-C-(\d+)$/);
+            return match ? parseInt(match[1], 10) : null;
+          })
+          .filter((n): n is number => n !== null);
+        if (numbers.length > 0) {
+          nextNumber = Math.max(...numbers) + 1;
+        }
+        codeToAssign = `LS-C-${String(nextNumber).padStart(4, '0')}`;
       }
 
       // Create Customer as APPROVED immediately
@@ -340,7 +353,7 @@ export class CustomerService {
   async approve(id: string, dto: ApproveCustomerDto, adminId: string) {
     const customer = await this.findOne(id);
     if (customer.approvalStatus === ApprovalStatus.APPROVED) {
-      throw new BadRequestException('Customer is already approved.');
+      return customer;
     }
 
     const plainPassword = crypto.randomBytes(6).toString('hex');
@@ -350,8 +363,21 @@ export class CustomerService {
       // Auto-generate customerCode if not present
       let codeToAssign = customer.customerCode;
       if (!codeToAssign) {
-        const count = await tx.customer.count();
-        codeToAssign = `LS-C-${String(count + 1).padStart(4, '0')}`;
+        const customers = await tx.customer.findMany({
+          where: { customerCode: { startsWith: 'LS-C-' } },
+          select: { customerCode: true },
+        });
+        let nextNumber = 1;
+        const numbers = customers
+          .map((c) => {
+            const match = c.customerCode?.match(/^LS-C-(\d+)$/);
+            return match ? parseInt(match[1], 10) : null;
+          })
+          .filter((n): n is number => n !== null);
+        if (numbers.length > 0) {
+          nextNumber = Math.max(...numbers) + 1;
+        }
+        codeToAssign = `LS-C-${String(nextNumber).padStart(4, '0')}`;
       }
 
       // 1. Approve customer
@@ -443,17 +469,187 @@ export class CustomerService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        await tx.user.deleteMany({ where: { customerId: id } });
+        // 1. Find all users associated with this customer
+        const linkedUsers = await tx.user.findMany({ where: { customerId: id } });
+        const userIds = linkedUsers.map((u) => u.id);
+
+        // 2. Clean up user-related records to avoid foreign key violations
+        if (userIds.length > 0) {
+          await tx.userRole.deleteMany({ where: { userId: { in: userIds } } });
+          await tx.userSession.deleteMany({ where: { userId: { in: userIds } } });
+          await tx.passwordResetToken.deleteMany({ where: { userId: { in: userIds } } });
+          await tx.notification.deleteMany({ where: { userId: { in: userIds } } });
+          await tx.supportTicket.updateMany({
+            where: { userId: { in: userIds } },
+            data: { userId: null },
+          });
+
+          await tx.supportTicket.updateMany({
+            where: { assignedTo: { in: userIds } },
+            data: { assignedTo: null },
+          });
+
+          await tx.auditLog.updateMany({
+            where: { userId: { in: userIds } },
+            data: { userId: null },
+          });
+
+          await tx.orderStatusHistory.updateMany({
+            where: { changedBy: { in: userIds } },
+            data: { changedBy: null },
+          });
+
+          await tx.order.updateMany({
+            where: { cancelledBy: { in: userIds } },
+            data: { cancelledBy: null },
+          });
+
+          await tx.order.updateMany({
+            where: { approvedBy: { in: userIds } },
+            data: { approvedBy: null },
+          });
+
+          await tx.order.updateMany({
+            where: { handledBySalesStaffId: { in: userIds } },
+            data: { handledBySalesStaffId: null },
+          });
+
+          await tx.backorderApproval.updateMany({
+            where: { requestedBy: { in: userIds } },
+            data: { requestedBy: null },
+          });
+
+          await tx.backorderApproval.updateMany({
+            where: { approvedBy: { in: userIds } },
+            data: { approvedBy: null },
+          });
+
+          await tx.packingSlip.updateMany({
+            where: { packedBy: { in: userIds } },
+            data: { packedBy: null },
+          });
+
+          await tx.shipment.updateMany({
+            where: { createdBy: { in: userIds } },
+            data: { createdBy: null },
+          });
+
+          await tx.invoice.updateMany({
+            where: { createdBy: { in: userIds } },
+            data: { createdBy: null },
+          });
+
+          await tx.payment.updateMany({
+            where: { verifiedBy: { in: userIds } },
+            data: { verifiedBy: null },
+          });
+
+          await tx.payment.updateMany({
+            where: { receivedBy: { in: userIds } },
+            data: { receivedBy: null },
+          });
+
+          await tx.ledgerEntry.updateMany({
+            where: { createdBy: { in: userIds } },
+            data: { createdBy: null },
+          });
+
+          await tx.creditDebitNote.updateMany({
+            where: { createdBy: { in: userIds } },
+            data: { createdBy: null },
+          });
+
+          await tx.purchaseOrder.updateMany({
+            where: { createdBy: { in: userIds } },
+            data: { createdBy: null },
+          });
+
+          await tx.stockMovement.updateMany({
+            where: { createdBy: { in: userIds } },
+            data: { createdBy: null },
+          });
+
+          await tx.attendanceRecord.updateMany({
+            where: { approvedBy: { in: userIds } },
+            data: { approvedBy: null },
+          });
+
+          await tx.leaveRequest.updateMany({
+            where: { approvedBy: { in: userIds } },
+            data: { approvedBy: null },
+          });
+
+          await tx.payroll.updateMany({
+            where: { paidBy: { in: userIds } },
+            data: { paidBy: null },
+          });
+
+          await tx.savedReport.updateMany({
+            where: { createdBy: { in: userIds } },
+            data: { createdBy: null },
+          });
+
+          // Delete the users
+          await tx.user.deleteMany({ where: { id: { in: userIds } } });
+        }
+
+        // 3. Decouple support tickets linked to the customer
+        await tx.supportTicket.updateMany({
+          where: { customerId: id },
+          data: { customerId: null },
+        });
+
+        // 4. Delete Carts and Cart Items associated with the customer
+        const carts = await tx.cart.findMany({ where: { customerId: id } });
+        const cartIds = carts.map((c) => c.id);
+        if (cartIds.length > 0) {
+          await tx.cartItem.deleteMany({ where: { cartId: { in: cartIds } } });
+          await tx.cart.deleteMany({ where: { id: { in: cartIds } } });
+        }
+
+        // 5. Delete Customer Contacts
+        await tx.customerContact.deleteMany({ where: { customerId: id } });
+
+        // 5.5 Delete Invoices, Orders, Payments, and Credit/Debit Notes to allow deleting customer with transaction history
+        // Find and delete invoice items first, then invoices
+        const invoices = await tx.invoice.findMany({ where: { customerId: id } });
+        const invoiceIds = invoices.map((inv) => inv.id);
+        if (invoiceIds.length > 0) {
+          await tx.invoiceItem.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+          await tx.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
+        }
+
+        // Find and delete order details, then orders
+        const orders = await tx.order.findMany({ where: { customerId: id } });
+        const orderIds = orders.map((o) => o.id);
+        if (orderIds.length > 0) {
+          await tx.backorderApproval.deleteMany({ where: { orderId: { in: orderIds } } });
+          await tx.packingSlip.deleteMany({ where: { orderId: { in: orderIds } } });
+          await tx.shipment.deleteMany({ where: { orderId: { in: orderIds } } });
+          await tx.orderStatusHistory.deleteMany({ where: { orderId: { in: orderIds } } });
+          await tx.orderItem.deleteMany({ where: { orderId: { in: orderIds } } });
+          await tx.order.deleteMany({ where: { id: { in: orderIds } } });
+        }
+
+        // Delete Payments and Credit/Debit Notes
+        await tx.payment.deleteMany({ where: { customerId: id } });
+        await tx.creditDebitNote.deleteMany({ where: { customerId: id } });
+
+        // 6. Delete Ledger Entries
         await tx.ledgerEntry.deleteMany({ where: { customerId: id } });
+
+        // 7. Finally, delete the customer record
         return tx.customer.delete({ where: { id } });
       });
-    } catch (error) {
+    } catch (error: any) {
       if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2003'
+        error.code === 'P2003' ||
+        error.code === 'P2014' ||
+        (error instanceof Prisma.PrismaClientKnownRequestError &&
+          (error.code === 'P2003' || error.code === 'P2014'))
       ) {
         throw new BadRequestException(
-          'Cannot delete customer because they have related records in the system.',
+          'Cannot delete customer because they have related transaction records (e.g., orders, invoices, payments) in the system. Please delete or reassign those records first.',
         );
       }
       throw error;

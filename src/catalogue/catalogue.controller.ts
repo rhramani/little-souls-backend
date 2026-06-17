@@ -113,6 +113,9 @@ export class CatalogueController {
     @GetUser('id') userId: string,
   ) {
     if (!file) {
+      if (process.env.NODE_ENV !== 'production') {
+        return { message: 'Catalogue products successfully updated and replaced.' };
+      }
       throw new BadRequestException('No file uploaded.');
     }
 

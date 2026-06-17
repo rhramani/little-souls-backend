@@ -9,10 +9,14 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductDto } from './dto/query-product.dto';
 import { Prisma } from '@prisma/client';
+import { ImageCleaningService } from '../image-cleaning/image-cleaning.service';
 
 @Injectable()
 export class ProductService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly imageCleaningService: ImageCleaningService,
+  ) {}
 
   private slugify(text: string): string {
     return text
@@ -58,7 +62,7 @@ export class ProductService {
     }
 
     // 4. Create Product with relations inside Transaction
-    return this.prisma.$transaction(async (tx) => {
+    const product = await this.prisma.$transaction(async (tx) => {
       const product = await tx.product.create({
         data: {
           sku: dto.sku,
@@ -68,7 +72,7 @@ export class ProductService {
           description: dto.description,
           categoryId: dto.categoryId,
           moq: dto.moq || 1,
-          barcode: dto.barcode,
+          barcode: dto.barcode || dto.sku,
           brand: dto.brand,
           size: dto.size,
           color: dto.color,
@@ -161,6 +165,14 @@ export class ProductService {
         },
       });
     });
+
+    if (product) {
+      this.imageCleaningService
+        .triggerBackgroundCleaningForProduct(product.id, userId)
+        .catch(() => {});
+    }
+
+    return product;
   }
 
   async findAll(query: QueryProductDto, userPricingGroupId?: string) {
@@ -470,7 +482,7 @@ export class ProductService {
     }
 
     // 4. Update in Transaction
-    return this.prisma.$transaction(async (tx) => {
+    const updatedProduct = await this.prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id },
         data: {
@@ -481,7 +493,12 @@ export class ProductService {
           description: dto.description,
           categoryId: dto.categoryId,
           moq: dto.moq,
-          barcode: dto.barcode,
+          barcode:
+            dto.barcode !== undefined
+              ? dto.barcode || (dto.sku || product.sku)
+              : dto.sku !== undefined
+                ? dto.sku
+                : undefined,
           brand: dto.brand,
           size: dto.size,
           color: dto.color,
@@ -610,6 +627,14 @@ export class ProductService {
         },
       });
     });
+
+    if (updatedProduct) {
+      this.imageCleaningService
+        .triggerBackgroundCleaningForProduct(id, userId)
+        .catch(() => {});
+    }
+
+    return updatedProduct;
   }
 
   async remove(id: string) {
@@ -632,13 +657,13 @@ export class ProductService {
 
     // 2. Safe deletion of relations in cascade inside transaction
     await this.prisma.$transaction(async (tx) => {
+      await tx.imageCleaningTask.deleteMany({ where: { productId: id } });
       await tx.productImage.deleteMany({ where: { productId: id } });
       await tx.productPricing.deleteMany({ where: { productId: id } });
       await tx.productCatalogFile.deleteMany({ where: { productId: id } });
       await tx.productVideo.deleteMany({ where: { productId: id } });
       await tx.cartItem.deleteMany({ where: { productId: id } });
       await tx.stockMovement.deleteMany({ where: { productId: id } });
-      await tx.imageCleaningTask.deleteMany({ where: { productId: id } });
       await tx.backorderApproval.deleteMany({ where: { productId: id } });
 
       await tx.product.delete({

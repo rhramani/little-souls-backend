@@ -20,9 +20,12 @@ export class BillingService {
       where: { orderId },
     });
     if (existingInvoice) {
-      throw new ConflictException(
-        `An invoice already exists for order ID '${orderId}'.`,
-      );
+      return this.prisma.invoice.findUnique({
+        where: { id: existingInvoice.id },
+        include: {
+          items: true,
+        },
+      });
     }
 
     // 2. Fetch the order details
