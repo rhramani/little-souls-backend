@@ -513,6 +513,14 @@ export class StaffService {
             where: { createdBy: user.id },
             data: { createdBy: null },
           });
+          const catalogImports = await tx.catalogImport.findMany({
+            where: { uploadedBy: user.id },
+            select: { id: true },
+          });
+          const importIds = catalogImports.map((c) => c.id);
+          await tx.catalogImportRow.deleteMany({
+            where: { catalogImportId: { in: importIds } },
+          });
           await tx.catalogImport.deleteMany({ where: { uploadedBy: user.id } });
           await tx.productPricing.updateMany({
             where: { createdBy: user.id },
@@ -757,6 +765,51 @@ export class StaffService {
     });
   }
 
+  private async autoCheckoutPreviousDays(staffId?: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const where: any = {
+      checkInTime: { not: null },
+      checkOutTime: null,
+      attendanceDate: {
+        lt: today,
+      },
+    };
+    if (staffId) {
+      where.staffId = staffId;
+    }
+
+    const openRecords = await this.prisma.attendanceRecord.findMany({
+      where,
+    });
+
+    if (openRecords.length === 0) return;
+
+    const updates: any[] = [];
+    for (const record of openRecords) {
+      if (!record.checkInTime) continue;
+      const checkOutTime = new Date(record.attendanceDate);
+      checkOutTime.setHours(23, 59, 59, 999);
+      const sessionMinutes = Math.floor(
+        (checkOutTime.getTime() - record.checkInTime.getTime()) / 60000,
+      );
+      updates.push(
+        this.prisma.attendanceRecord.update({
+          where: { id: record.id },
+          data: {
+            checkOutTime,
+            totalWorkMinutes: (record.totalWorkMinutes || 0) + sessionMinutes,
+          },
+        }),
+      );
+    }
+
+    if (updates.length > 0) {
+      await this.prisma.$transaction(updates);
+    }
+  }
+
   // =============== ATTENDANCE ===============
 
   async getAttendanceHistory(
@@ -766,6 +819,7 @@ export class StaffService {
     page = 1,
     limit = 30,
   ) {
+    await this.autoCheckoutPreviousDays(staffId);
     const skip = (page - 1) * limit;
     const where: any = {};
     if (staffId) where.staffId = staffId;
@@ -825,6 +879,8 @@ export class StaffService {
     if (!user?.staffId)
       throw new BadRequestException('User is not linked to a staff profile.');
 
+    await this.autoCheckoutPreviousDays(user.staffId);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -870,6 +926,8 @@ export class StaffService {
     });
     if (!user?.staffId)
       throw new BadRequestException('User is not linked to a staff profile.');
+
+    await this.autoCheckoutPreviousDays(user.staffId);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
