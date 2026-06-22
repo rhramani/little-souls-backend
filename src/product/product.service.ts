@@ -234,10 +234,7 @@ export class ProductService {
 
     if (userPricingGroupId) {
       andConditions.push({
-        OR: [
-          { catalogueId: null },
-          { catalogue: { isPublished: true } },
-        ],
+        OR: [{ catalogueId: null }, { catalogue: { isPublished: true } }],
       });
     }
 
@@ -375,7 +372,11 @@ export class ProductService {
       throw new NotFoundException(`Product with ID '${id}' not found.`);
     }
 
-    if (userPricingGroupId && product.catalogueId && !product.catalogue?.isPublished) {
+    if (
+      userPricingGroupId &&
+      product.catalogueId &&
+      !product.catalogue?.isPublished
+    ) {
       throw new NotFoundException(`Product with ID '${id}' not found.`);
     }
 
@@ -413,7 +414,11 @@ export class ProductService {
       throw new NotFoundException(`Product with slug '${slug}' not found.`);
     }
 
-    if (userPricingGroupId && product.catalogueId && !product.catalogue?.isPublished) {
+    if (
+      userPricingGroupId &&
+      product.catalogueId &&
+      !product.catalogue?.isPublished
+    ) {
       throw new NotFoundException(`Product with slug '${slug}' not found.`);
     }
 
@@ -495,7 +500,7 @@ export class ProductService {
           moq: dto.moq,
           barcode:
             dto.barcode !== undefined
-              ? dto.barcode || (dto.sku || product.sku)
+              ? dto.barcode || dto.sku || product.sku
               : dto.sku !== undefined
                 ? dto.sku
                 : undefined,

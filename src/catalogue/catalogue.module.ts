@@ -8,7 +8,13 @@ import { NotificationModule } from '../notification/notification.module';
 import { ImageCleaningModule } from '../image-cleaning/image-cleaning.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UploadModule, NotificationModule, ImageCleaningModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    UploadModule,
+    NotificationModule,
+    ImageCleaningModule,
+  ],
   providers: [CatalogueService],
   controllers: [CatalogueController],
   exports: [CatalogueService],

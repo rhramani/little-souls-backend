@@ -216,12 +216,7 @@ export class StaffService {
 
       // 4. Send Email Credentials
       await this.emailService
-        .sendStaffCredentials(
-          dto.email,
-          dto.name,
-          employeeCode,
-          dto.password,
-        )
+        .sendStaffCredentials(dto.email, dto.name, employeeCode, dto.password)
         .catch((err) => {
           // Silently catch email errors so it doesn't fail staff creation if SMTP is down
           console.error('Failed to send staff email:', err);
@@ -396,7 +391,9 @@ export class StaffService {
           const isSuperAdminRole =
             targetRole.name.toLowerCase().includes('super administrator') ||
             targetRole.name.toLowerCase().includes('super admin');
-          updatedUserType = isSuperAdminRole ? UserType.SUPER_ADMIN : UserType.STAFF;
+          updatedUserType = isSuperAdminRole
+            ? UserType.SUPER_ADMIN
+            : UserType.STAFF;
         }
 
         await tx.user.update({
@@ -428,7 +425,6 @@ export class StaffService {
       return updatedStaff;
     });
   }
-
 
   async deactivateStaff(staffId: string) {
     await this.findOneStaff(staffId);
@@ -835,7 +831,11 @@ export class StaffService {
         skip,
         take: limit,
         orderBy: { attendanceDate: 'desc' },
-        include: { staff: { select: { name: true, employeeCode: true, designation: true } } },
+        include: {
+          staff: {
+            select: { name: true, employeeCode: true, designation: true },
+          },
+        },
       }),
       this.prisma.attendanceRecord.count({ where }),
     ]);
@@ -894,7 +894,9 @@ export class StaffService {
     });
 
     if (existing?.checkInTime && !existing?.checkOutTime)
-      throw new BadRequestException('Already checked in. Please check out first.');
+      throw new BadRequestException(
+        'Already checked in. Please check out first.',
+      );
 
     if (existing) {
       return this.prisma.attendanceRecord.update({
@@ -944,7 +946,9 @@ export class StaffService {
     if (!existing?.checkInTime)
       throw new BadRequestException('Must check in before checking out.');
     if (existing.checkOutTime)
-      throw new BadRequestException('Already checked out. Please check in first.');
+      throw new BadRequestException(
+        'Already checked out. Please check in first.',
+      );
 
     const checkOutTime = new Date();
     const sessionMinutes = Math.floor(

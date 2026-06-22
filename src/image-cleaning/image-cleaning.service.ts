@@ -63,7 +63,10 @@ export class ImageCleaningService {
     };
   }
 
-  async triggerBackgroundCleaningForProduct(productId: string, userId?: string) {
+  async triggerBackgroundCleaningForProduct(
+    productId: string,
+    userId?: string,
+  ) {
     const images = await this.prisma.productImage.findMany({
       where: {
         productId,

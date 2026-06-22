@@ -214,7 +214,13 @@ export class CatalogueService {
     });
   }
 
-  async findOne(id: string, search?: string, page?: number, limit?: number, publishedOnly = false) {
+  async findOne(
+    id: string,
+    search?: string,
+    page?: number,
+    limit?: number,
+    publishedOnly = false,
+  ) {
     const objectIdRegex = /^[0-9a-fA-F]{24}$/;
     if (!objectIdRegex.test(id)) {
       throw new BadRequestException(`Invalid catalogue ID format: ${id}`);
@@ -333,14 +339,28 @@ export class CatalogueService {
           });
         } else {
           // Cascade delete product relations inside the transaction
-          await tx.imageCleaningTask.deleteMany({ where: { productId: product.id } });
-          await tx.productImage.deleteMany({ where: { productId: product.id } });
-          await tx.productPricing.deleteMany({ where: { productId: product.id } });
-          await tx.productCatalogFile.deleteMany({ where: { productId: product.id } });
-          await tx.productVideo.deleteMany({ where: { productId: product.id } });
+          await tx.imageCleaningTask.deleteMany({
+            where: { productId: product.id },
+          });
+          await tx.productImage.deleteMany({
+            where: { productId: product.id },
+          });
+          await tx.productPricing.deleteMany({
+            where: { productId: product.id },
+          });
+          await tx.productCatalogFile.deleteMany({
+            where: { productId: product.id },
+          });
+          await tx.productVideo.deleteMany({
+            where: { productId: product.id },
+          });
           await tx.cartItem.deleteMany({ where: { productId: product.id } });
-          await tx.stockMovement.deleteMany({ where: { productId: product.id } });
-          await tx.backorderApproval.deleteMany({ where: { productId: product.id } });
+          await tx.stockMovement.deleteMany({
+            where: { productId: product.id },
+          });
+          await tx.backorderApproval.deleteMany({
+            where: { productId: product.id },
+          });
 
           // Safely delete product
           await tx.product.delete({
@@ -921,20 +941,24 @@ export class CatalogueService {
     // ─── Classify rows: existing products to UPDATE vs new products to CREATE ──
     const catalogProductIds = new Set(catalogue.products.map((p) => p.id));
     const allSkusInFile = parsedRows.map((r) => r.sku).filter(Boolean);
-    const validObjectIdsInFile = parsedRows.map((r) => r.id).filter(isValidObjectId);
+    const validObjectIdsInFile = parsedRows
+      .map((r) => r.id)
+      .filter(isValidObjectId);
 
     const dbProducts = await this.prisma.product.findMany({
       where: {
         OR: [
           { sku: { in: allSkusInFile } },
-          { id: { in: validObjectIdsInFile } }
-        ]
+          { id: { in: validObjectIdsInFile } },
+        ],
       },
-      select: { id: true, sku: true, barcodeUrl: true }
+      select: { id: true, sku: true, barcodeUrl: true },
     });
 
-    const skuToDbProductMap = new Map(dbProducts.map(p => [p.sku.toUpperCase(), p]));
-    const idToDbProductMap = new Map(dbProducts.map(p => [p.id, p]));
+    const skuToDbProductMap = new Map(
+      dbProducts.map((p) => [p.sku.toUpperCase(), p]),
+    );
+    const idToDbProductMap = new Map(dbProducts.map((p) => [p.id, p]));
 
     for (const row of parsedRows) {
       const upperSku = row.sku ? row.sku.toUpperCase() : '';
@@ -1045,8 +1069,7 @@ export class CatalogueService {
             } else {
               pricingGroup = await tx.pricingGroup.create({
                 data: {
-                  name:
-                    groupCode.charAt(0) + groupCode.slice(1).toLowerCase(),
+                  name: groupCode.charAt(0) + groupCode.slice(1).toLowerCase(),
                   code: groupCode,
                   description: `Automatically created during catalog import`,
                   isActive: true,

@@ -102,7 +102,9 @@ describe('ImageCleaningService', () => {
     });
 
     it('should successfully create task and return message', async () => {
-      mockPrismaService.productImage.findUnique.mockResolvedValue(mockProductImage);
+      mockPrismaService.productImage.findUnique.mockResolvedValue(
+        mockProductImage,
+      );
       mockPrismaService.imageCleaningTask.create.mockResolvedValue(mockTask);
       mockPrismaService.productImage.update.mockResolvedValue({
         ...mockProductImage,
@@ -110,7 +112,9 @@ describe('ImageCleaningService', () => {
       });
 
       // Stub background processor to avoid actual runtime behavior during this test
-      jest.spyOn(service, 'processTaskInBackground').mockResolvedValue(undefined);
+      jest
+        .spyOn(service, 'processTaskInBackground')
+        .mockResolvedValue(undefined);
 
       const result = await service.submitTask(
         { productImageId: 'img-123' },
@@ -142,8 +146,12 @@ describe('ImageCleaningService', () => {
 
   describe('triggerBackgroundCleaningForProduct', () => {
     it('should find images and trigger autoCleanImage for eligible images', async () => {
-      mockPrismaService.productImage.findMany.mockResolvedValue([mockProductImage]);
-      const spyAutoClean = jest.spyOn(service, 'autoCleanImage').mockResolvedValue(undefined);
+      mockPrismaService.productImage.findMany.mockResolvedValue([
+        mockProductImage,
+      ]);
+      const spyAutoClean = jest
+        .spyOn(service, 'autoCleanImage')
+        .mockResolvedValue(undefined);
 
       await service.triggerBackgroundCleaningForProduct('prod-123', 'user-123');
 
@@ -159,10 +167,17 @@ describe('ImageCleaningService', () => {
 
   describe('triggerBackgroundCleaningForCatalogue', () => {
     it('should find images for catalogue and trigger autoCleanImage', async () => {
-      mockPrismaService.productImage.findMany.mockResolvedValue([mockProductImage]);
-      const spyAutoClean = jest.spyOn(service, 'autoCleanImage').mockResolvedValue(undefined);
+      mockPrismaService.productImage.findMany.mockResolvedValue([
+        mockProductImage,
+      ]);
+      const spyAutoClean = jest
+        .spyOn(service, 'autoCleanImage')
+        .mockResolvedValue(undefined);
 
-      await service.triggerBackgroundCleaningForCatalogue('cat-123', 'user-123');
+      await service.triggerBackgroundCleaningForCatalogue(
+        'cat-123',
+        'user-123',
+      );
 
       expect(mockPrismaService.productImage.findMany).toHaveBeenCalledWith({
         where: {
@@ -187,10 +202,14 @@ describe('ImageCleaningService', () => {
     });
 
     it('should create a task and call processTaskInBackground', async () => {
-      mockPrismaService.productImage.findUnique.mockResolvedValue(mockProductImage);
+      mockPrismaService.productImage.findUnique.mockResolvedValue(
+        mockProductImage,
+      );
       mockPrismaService.imageCleaningTask.create.mockResolvedValue(mockTask);
       mockPrismaService.productImage.update.mockResolvedValue(undefined);
-      const spyProcess = jest.spyOn(service, 'processTaskInBackground').mockResolvedValue(undefined);
+      const spyProcess = jest
+        .spyOn(service, 'processTaskInBackground')
+        .mockResolvedValue(undefined);
 
       await service.autoCleanImage('img-123', 'user-123');
 
@@ -206,7 +225,9 @@ describe('ImageCleaningService', () => {
   describe('processTaskInBackground', () => {
     it('should complete with mock URL if API key is invalid/missing', async () => {
       mockConfigService.get.mockReturnValue('dummy_key');
-      mockPrismaService.imageCleaningTask.findUnique.mockResolvedValue(mockTask);
+      mockPrismaService.imageCleaningTask.findUnique.mockResolvedValue(
+        mockTask,
+      );
       mockPrismaService.imageCleaningTask.update.mockResolvedValue(undefined);
       mockPrismaService.productImage.update.mockResolvedValue(undefined);
 
@@ -231,7 +252,9 @@ describe('ImageCleaningService', () => {
 
     it('should call Photoroom API v2 and upload to R2 if API key is valid', async () => {
       mockConfigService.get.mockReturnValue('real_photoroom_api_key');
-      mockPrismaService.imageCleaningTask.findUnique.mockResolvedValue(mockTask);
+      mockPrismaService.imageCleaningTask.findUnique.mockResolvedValue(
+        mockTask,
+      );
       mockPrismaService.imageCleaningTask.update.mockResolvedValue(undefined);
       mockPrismaService.productImage.update.mockResolvedValue(undefined);
 
@@ -275,7 +298,9 @@ describe('ImageCleaningService', () => {
 
     it('should set status to FAILED if Photoroom API or upload fails', async () => {
       mockConfigService.get.mockReturnValue('real_photoroom_api_key');
-      mockPrismaService.imageCleaningTask.findUnique.mockResolvedValue(mockTask);
+      mockPrismaService.imageCleaningTask.findUnique.mockResolvedValue(
+        mockTask,
+      );
       mockPrismaService.imageCleaningTask.update.mockResolvedValue(undefined);
       mockPrismaService.productImage.update.mockResolvedValue(undefined);
 

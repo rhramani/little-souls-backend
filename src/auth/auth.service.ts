@@ -76,7 +76,9 @@ export class AuthService {
         },
       });
 
-      const isTestEmail = dto.email && (dto.email.endsWith('@test.com') || dto.email.endsWith('@example.com'));
+      const isTestEmail =
+        dto.email &&
+        (dto.email.endsWith('@test.com') || dto.email.endsWith('@example.com'));
       const user = await tx.user.create({
         data: {
           name: dto.name,
@@ -175,8 +177,18 @@ export class AuthService {
           storePhotoUrl: dto.storePhotoUrl,
           customerSource: dto.customerSource,
           mainContactNumber: dto.mobile,
-          approvalStatus: dto.email && (dto.email.endsWith('@test.com') || dto.email.endsWith('@example.com')) ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING,
-          isActive: dto.email && (dto.email.endsWith('@test.com') || dto.email.endsWith('@example.com')) ? true : false,
+          approvalStatus:
+            dto.email &&
+            (dto.email.endsWith('@test.com') ||
+              dto.email.endsWith('@example.com'))
+              ? ApprovalStatus.APPROVED
+              : ApprovalStatus.PENDING,
+          isActive:
+            dto.email &&
+            (dto.email.endsWith('@test.com') ||
+              dto.email.endsWith('@example.com'))
+              ? true
+              : false,
           customerCode,
         },
       });
@@ -442,7 +454,12 @@ export class AuthService {
         'If a matching account exists, a password reset link/code has been sent.',
     };
 
-    if (process.env.NODE_ENV !== 'production' || (user.email && (user.email.endsWith('@test.com') || user.email.endsWith('@example.com')))) {
+    if (
+      process.env.NODE_ENV !== 'production' ||
+      (user.email &&
+        (user.email.endsWith('@test.com') ||
+          user.email.endsWith('@example.com')))
+    ) {
       responsePayload.resetCode = token;
     }
 
@@ -665,7 +682,7 @@ export class AuthService {
               },
             },
           },
-        }) as any;
+        });
       } else if (user.userType === UserType.CUSTOMER) {
         let customerRole = await this.prisma.role.findUnique({
           where: { name: 'Customer' },
@@ -723,7 +740,7 @@ export class AuthService {
               },
             },
           },
-        }) as any;
+        });
       }
     }
 

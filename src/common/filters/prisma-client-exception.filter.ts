@@ -1,4 +1,9 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpStatus } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpStatus,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Response } from 'express';
 
@@ -7,7 +12,7 @@ export class PrismaClientExceptionFilter implements ExceptionFilter {
   catch(exception: Prisma.PrismaClientKnownRequestError, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    
+
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = exception.message;
     let error = 'Internal Server Error';
@@ -25,7 +30,9 @@ export class PrismaClientExceptionFilter implements ExceptionFilter {
         break;
       case 'P2023':
         status = HttpStatus.BAD_REQUEST;
-        message = (exception.meta?.message as string) || 'Inconsistent column data (Malformed ObjectID)';
+        message =
+          (exception.meta?.message as string) ||
+          'Inconsistent column data (Malformed ObjectID)';
         error = 'Bad Request';
         break;
       case 'P2003':

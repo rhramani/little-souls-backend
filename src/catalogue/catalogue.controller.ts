@@ -114,7 +114,9 @@ export class CatalogueController {
   ) {
     if (!file) {
       if (process.env.NODE_ENV !== 'production') {
-        return { message: 'Catalogue products successfully updated and replaced.' };
+        return {
+          message: 'Catalogue products successfully updated and replaced.',
+        };
       }
       throw new BadRequestException('No file uploaded.');
     }

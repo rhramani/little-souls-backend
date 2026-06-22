@@ -2,6 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { isAxiosError } from 'axios';
+
+interface MetaApiErrorResponse {
+  error?: {
+    message?: string;
+  };
+}
 
 @Injectable()
 export class WhatsappService {
@@ -27,7 +34,7 @@ export class WhatsappService {
     toNumber: string,
     orderNumber: string,
     customerName: string,
-  ) {
+  ): Promise<Record<string, any> | undefined> {
     if (!this.phoneNumberId || !this.accessToken) {
       this.logger.warn(
         'WhatsApp API credentials not configured. Skipping message.',
@@ -58,7 +65,7 @@ export class WhatsappService {
       };
 
       const response = await firstValueFrom(
-        this.httpService.post(url, payload, {
+        this.httpService.post<Record<string, any>>(url, payload, {
           headers: {
             Authorization: `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
@@ -70,15 +77,28 @@ export class WhatsappService {
         `WhatsApp message sent successfully to ${toNumber} for order ${orderNumber}`,
       );
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let errMsg = 'Unknown error';
+      if (isAxiosError(error)) {
+        const errorData = error.response?.data as
+          | MetaApiErrorResponse
+          | undefined;
+        errMsg = errorData?.error?.message || error.message;
+      } else if (error instanceof Error) {
+        errMsg = error.message;
+      }
       this.logger.error(
-        `Failed to send WhatsApp message to ${toNumber}: ${error.message}`,
+        `Failed to send WhatsApp message to ${toNumber}: ${errMsg}`,
       );
       // Don't throw to prevent breaking the main transaction flow
     }
   }
 
-  async sendInvoice(toNumber: string, invoiceNumber: string, pdfUrl: string) {
+  async sendInvoice(
+    toNumber: string,
+    invoiceNumber: string,
+    pdfUrl: string,
+  ): Promise<Record<string, any> | undefined> {
     if (!this.phoneNumberId || !this.accessToken) {
       this.logger.warn(
         'WhatsApp API credentials not configured. Skipping message.',
@@ -100,7 +120,7 @@ export class WhatsappService {
       };
 
       const response = await firstValueFrom(
-        this.httpService.post(url, payload, {
+        this.httpService.post<Record<string, any>>(url, payload, {
           headers: {
             Authorization: `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
@@ -110,14 +130,27 @@ export class WhatsappService {
 
       this.logger.log(`WhatsApp invoice sent successfully to ${toNumber}`);
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let errMsg = 'Unknown error';
+      if (isAxiosError(error)) {
+        const errorData = error.response?.data as
+          | MetaApiErrorResponse
+          | undefined;
+        errMsg = errorData?.error?.message || error.message;
+      } else if (error instanceof Error) {
+        errMsg = error.message;
+      }
       this.logger.error(
-        `Failed to send WhatsApp invoice to ${toNumber}: ${error.message}`,
+        `Failed to send WhatsApp invoice to ${toNumber}: ${errMsg}`,
       );
     }
   }
 
-  async sendImage(toNumber: string, imageUrl: string, caption?: string) {
+  async sendImage(
+    toNumber: string,
+    imageUrl: string,
+    caption?: string,
+  ): Promise<Record<string, any> | undefined> {
     if (!this.phoneNumberId || !this.accessToken) {
       this.logger.warn(
         'WhatsApp API credentials not configured. Skipping image message.',
@@ -128,22 +161,19 @@ export class WhatsappService {
     try {
       const url = `${this.apiUrl}/${this.phoneNumberId}/messages`;
 
-      const payload: any = {
+      const payload = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
         to: toNumber,
         type: 'image',
         image: {
           link: imageUrl,
+          ...(caption ? { caption } : {}),
         },
       };
 
-      if (caption) {
-        payload.image.caption = caption;
-      }
-
       const response = await firstValueFrom(
-        this.httpService.post(url, payload, {
+        this.httpService.post<Record<string, any>>(url, payload, {
           headers: {
             Authorization: `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
@@ -153,9 +183,18 @@ export class WhatsappService {
 
       this.logger.log(`WhatsApp image sent successfully to ${toNumber}`);
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let errMsg = 'Unknown error';
+      if (isAxiosError(error)) {
+        const errorData = error.response?.data as
+          | MetaApiErrorResponse
+          | undefined;
+        errMsg = errorData?.error?.message || error.message;
+      } else if (error instanceof Error) {
+        errMsg = error.message;
+      }
       this.logger.error(
-        `Failed to send WhatsApp image to ${toNumber}: ${error.response?.data?.error?.message || error.message}`,
+        `Failed to send WhatsApp image to ${toNumber}: ${errMsg}`,
       );
       throw error;
     }

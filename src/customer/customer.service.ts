@@ -59,7 +59,11 @@ export class CustomerService {
     const passwordHash = await bcrypt.hash(plainPassword, 10);
 
     let parsedCreditLimit: number | null = null;
-    if (dto.creditLimit !== undefined && dto.creditLimit !== null && dto.creditLimit !== '') {
+    if (
+      dto.creditLimit !== undefined &&
+      dto.creditLimit !== null &&
+      dto.creditLimit !== ''
+    ) {
       const parsed = Number(dto.creditLimit);
       parsedCreditLimit = isNaN(parsed) ? null : parsed;
     }
@@ -263,7 +267,16 @@ export class CustomerService {
 
   async update(id: string, dto: UpdateCustomerDto) {
     const customer = await this.findOne(id);
-    const { name, email, mobile, designation, whatsapp, creditLimit, customerCode, ...customerData } = dto;
+    const {
+      name,
+      email,
+      mobile,
+      designation,
+      whatsapp,
+      creditLimit,
+      customerCode,
+      ...customerData
+    } = dto;
 
     if (customerCode !== undefined && customerCode !== customer.customerCode) {
       if (customerCode) {
@@ -274,7 +287,9 @@ export class CustomerService {
           },
         });
         if (existingCode) {
-          throw new ConflictException('Customer Code is already in use by another account');
+          throw new ConflictException(
+            'Customer Code is already in use by another account',
+          );
         }
       }
     }
@@ -470,15 +485,23 @@ export class CustomerService {
     try {
       return await this.prisma.$transaction(async (tx) => {
         // 1. Find all users associated with this customer
-        const linkedUsers = await tx.user.findMany({ where: { customerId: id } });
+        const linkedUsers = await tx.user.findMany({
+          where: { customerId: id },
+        });
         const userIds = linkedUsers.map((u) => u.id);
 
         // 2. Clean up user-related records to avoid foreign key violations
         if (userIds.length > 0) {
           await tx.userRole.deleteMany({ where: { userId: { in: userIds } } });
-          await tx.userSession.deleteMany({ where: { userId: { in: userIds } } });
-          await tx.passwordResetToken.deleteMany({ where: { userId: { in: userIds } } });
-          await tx.notification.deleteMany({ where: { userId: { in: userIds } } });
+          await tx.userSession.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          await tx.passwordResetToken.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          await tx.notification.deleteMany({
+            where: { userId: { in: userIds } },
+          });
           await tx.supportTicket.updateMany({
             where: { userId: { in: userIds } },
             data: { userId: null },
@@ -612,10 +635,14 @@ export class CustomerService {
 
         // 5.5 Delete Invoices, Orders, Payments, and Credit/Debit Notes to allow deleting customer with transaction history
         // Find and delete invoice items first, then invoices
-        const invoices = await tx.invoice.findMany({ where: { customerId: id } });
+        const invoices = await tx.invoice.findMany({
+          where: { customerId: id },
+        });
         const invoiceIds = invoices.map((inv) => inv.id);
         if (invoiceIds.length > 0) {
-          await tx.invoiceItem.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+          await tx.invoiceItem.deleteMany({
+            where: { invoiceId: { in: invoiceIds } },
+          });
           await tx.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
         }
 
@@ -623,11 +650,21 @@ export class CustomerService {
         const orders = await tx.order.findMany({ where: { customerId: id } });
         const orderIds = orders.map((o) => o.id);
         if (orderIds.length > 0) {
-          await tx.backorderApproval.deleteMany({ where: { orderId: { in: orderIds } } });
-          await tx.packingSlip.deleteMany({ where: { orderId: { in: orderIds } } });
-          await tx.shipment.deleteMany({ where: { orderId: { in: orderIds } } });
-          await tx.orderStatusHistory.deleteMany({ where: { orderId: { in: orderIds } } });
-          await tx.orderItem.deleteMany({ where: { orderId: { in: orderIds } } });
+          await tx.backorderApproval.deleteMany({
+            where: { orderId: { in: orderIds } },
+          });
+          await tx.packingSlip.deleteMany({
+            where: { orderId: { in: orderIds } },
+          });
+          await tx.shipment.deleteMany({
+            where: { orderId: { in: orderIds } },
+          });
+          await tx.orderStatusHistory.deleteMany({
+            where: { orderId: { in: orderIds } },
+          });
+          await tx.orderItem.deleteMany({
+            where: { orderId: { in: orderIds } },
+          });
           await tx.order.deleteMany({ where: { id: { in: orderIds } } });
         }
 

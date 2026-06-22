@@ -1363,7 +1363,7 @@ export class OrderService {
     return this.prisma.$transaction(async (tx) => {
       if (order.invoices && order.invoices.length > 0) {
         const invoiceIds = order.invoices.map((i) => i.id);
-        
+
         await tx.invoiceItem.deleteMany({
           where: { invoiceId: { in: invoiceIds } },
         });
