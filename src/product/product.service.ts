@@ -275,14 +275,26 @@ export class ProductService {
     }
 
     if (search) {
+      const orConditions: any[] = [
+        { sku: { contains: search, mode: 'insensitive' } },
+        { barcode: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { brand: { contains: search, mode: 'insensitive' } },
+      ];
+
+      // If search is alphanumeric, construct a regex pattern to allow optional hyphens (e.g. "2514" -> "^2-?5-?1-?4$")
+      const isAlphanumeric = /^[a-zA-Z0-9]+$/.test(search);
+      if (isAlphanumeric) {
+        const hyphenRegex = search.split('').join('-?');
+        orConditions.push(
+          { sku: { regex: `^${hyphenRegex}$`, options: 'i' } },
+          { barcode: { regex: `^${hyphenRegex}$`, options: 'i' } },
+        );
+      }
+
       andConditions.push({
-        OR: [
-          { sku: { contains: search, mode: 'insensitive' } },
-          { barcode: { contains: search, mode: 'insensitive' } },
-          { name: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-          { brand: { contains: search, mode: 'insensitive' } },
-        ],
+        OR: orConditions,
       });
     }
 

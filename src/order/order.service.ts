@@ -1460,4 +1460,36 @@ export class OrderService {
       return { deletedCount: deleteResult.count };
     });
   }
+
+  async bulkUpdateStatus(ids: string[], newStatus: string, userId: string) {
+    const results = {
+      successCount: 0,
+      failureCount: 0,
+      failures: [] as Array<{ id: string; orderNumber: string; error: string }>,
+    };
+
+    for (const id of ids) {
+      try {
+        await this.updateStatus(id, newStatus, userId);
+        results.successCount++;
+      } catch (err: any) {
+        results.failureCount++;
+        let orderNumber = 'Unknown';
+        try {
+          const o = await this.prisma.order.findUnique({
+            where: { id },
+            select: { orderNumber: true },
+          });
+          if (o) orderNumber = o.orderNumber;
+        } catch {}
+        results.failures.push({
+          id,
+          orderNumber,
+          error: err.message || 'Unknown error',
+        });
+      }
+    }
+
+    return results;
+  }
 }

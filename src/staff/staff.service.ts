@@ -1079,7 +1079,11 @@ export class StaffService {
         skip,
         take: limit,
         orderBy: [{ salaryYear: 'desc' }, { salaryMonth: 'desc' }],
-        include: { staff: { select: { name: true, employeeCode: true } } },
+        include: {
+          staff: {
+            select: { name: true, employeeCode: true, designation: true },
+          },
+        },
       }),
       this.prisma.payroll.count({ where }),
     ]);

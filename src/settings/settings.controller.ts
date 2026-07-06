@@ -2,12 +2,18 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Body,
   UseGuards,
   HttpCode,
   HttpStatus,
   Query,
+  Res,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import * as express from 'express';
 import { SettingsService } from './settings.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -58,5 +64,22 @@ export class SettingsController {
       Number(page) || 1,
       Number(limit) || 50,
     );
+  }
+
+  @Get('backup/export')
+  // TODO: Re-enable Auth Guards when frontend login is fully connected
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(UserType.SUPER_ADMIN)
+  async exportBackup(@Res() res: express.Response) {
+    return this.settingsService.exportBackup(res);
+  }
+
+  @Post('backup/restore')
+  @UseInterceptors(FileInterceptor('file'))
+  // TODO: Re-enable Auth Guards when frontend login is fully connected
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(UserType.SUPER_ADMIN)
+  async restoreBackup(@UploadedFile() file: Express.Multer.File) {
+    return this.settingsService.restoreBackup(file);
   }
 }

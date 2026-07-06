@@ -79,6 +79,16 @@ export class OrderController {
     return this.orderService.findOne(id, customerId);
   }
 
+  @Patch('bulk-status')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async bulkUpdateStatus(
+    @Body() dto: { ids: string[]; status: string },
+    @GetUser('id') userId: string,
+  ) {
+    return this.orderService.bulkUpdateStatus(dto.ids, dto.status, userId);
+  }
+
   @Patch(':id/status')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
   @HttpCode(HttpStatus.OK)

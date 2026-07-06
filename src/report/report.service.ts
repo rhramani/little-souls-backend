@@ -15,21 +15,71 @@ export class ReportService {
 
     const orders = await this.prisma.order.findMany({
       where,
-      select: { grandTotal: true, createdAt: true, orderStatus: true },
+      select: {
+        grandTotal: true,
+        createdAt: true,
+        orderStatus: true,
+        orderSource: true,
+        taxTotal: true,
+        shippingCharge: true,
+      },
     });
 
-    let totalRevenue = 0;
-    const totalOrders = orders.length;
+    const dailyData: Record<
+      string,
+      {
+        date: string;
+        sales: number;
+        orders: number;
+        posSales: number;
+        wholesaleSales: number;
+        tax: number;
+        shipping: number;
+      }
+    > = {};
 
     orders.forEach((order) => {
-      if (order.orderStatus !== 'CANCELLED') {
-        totalRevenue += Number(order.grandTotal);
+      if (order.orderStatus === 'CANCELLED') return;
+      const dateStr = order.createdAt.toISOString().split('T')[0];
+      if (!dailyData[dateStr]) {
+        dailyData[dateStr] = {
+          date: dateStr,
+          sales: 0,
+          orders: 0,
+          posSales: 0,
+          wholesaleSales: 0,
+          tax: 0,
+          shipping: 0,
+        };
       }
+      const item = dailyData[dateStr];
+      const amt = Number(order.grandTotal) || 0;
+      item.sales += amt;
+      item.orders += 1;
+      if (order.orderSource === 'POS') {
+        item.posSales += amt;
+      } else {
+        item.wholesaleSales += amt;
+      }
+      item.tax += Number(order.taxTotal) || 0;
+      item.shipping += Number(order.shippingCharge) || 0;
+    });
+
+    const sales = Object.values(dailyData).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+
+    let totalRevenue = 0;
+    let totalOrders = 0;
+    sales.forEach((s) => {
+      totalRevenue += s.sales;
+      totalOrders += s.orders;
     });
 
     return {
       totalOrders,
       totalRevenue,
+      sales,
       dateRange: { startDate, endDate },
     };
   }
@@ -103,21 +153,41 @@ export class ReportService {
 
     const orderItems = await this.prisma.orderItem.findMany({
       where: { order: where },
-      include: { product: { select: { name: true, sku: true } } },
+      include: {
+        product: {
+          select: {
+            name: true,
+            sku: true,
+            stockQuantity: true,
+            productPrice: true,
+          },
+        },
+      },
     });
 
     const productMap = new Map<
       string,
-      { name: string; sku: string; quantitySold: number; revenue: number }
+      {
+        id: string;
+        name: string;
+        sku: string;
+        quantitySold: number;
+        revenue: number;
+        stock: number;
+        price: number;
+      }
     >();
     orderItems.forEach((item) => {
       const pid = item.productId;
       if (!productMap.has(pid)) {
         productMap.set(pid, {
+          id: pid,
           name: item.product?.name || 'Unknown',
           sku: item.product?.sku || 'N/A',
           quantitySold: 0,
           revenue: 0,
+          stock: item.product?.stockQuantity || 0,
+          price: item.product?.productPrice || 0,
         });
       }
       const data = productMap.get(pid)!;
@@ -132,6 +202,7 @@ export class ReportService {
     return {
       topPerforming: products.slice(0, 10),
       bottomPerforming: products.slice(-10).reverse(),
+      products,
       all: products,
     };
   }
@@ -148,17 +219,35 @@ export class ReportService {
       where,
       include: {
         _count: { select: { orders: true } },
+        orders: {
+          where: { orderStatus: { not: 'CANCELLED' } },
+          select: { grandTotal: true },
+        },
+        contacts: {
+          where: { isPrimary: true },
+          select: { name: true },
+        },
       },
     });
 
     return customers
-      .map((c) => ({
-        id: c.id,
-        businessName: c.businessName,
-        customerCode: c.customerCode,
-        ordersCount: c._count.orders,
-        currentBalance: Number(c.currentBalance),
-      }))
+      .map((c) => {
+        let totalSpent = 0;
+        c.orders.forEach((o) => {
+          totalSpent += Number(o.grandTotal) || 0;
+        });
+
+        return {
+          id: c.id,
+          name: c.contacts[0]?.name || c.businessName || 'Walk-In Customer',
+          businessName: c.businessName || 'Direct B2C / Retail',
+          gstin: c.gstin || 'N/A',
+          ordersCount: c._count.orders,
+          totalSpent,
+          outstanding: Number(c.currentBalance) || 0,
+          currentBalance: Number(c.currentBalance) || 0,
+        };
+      })
       .sort((a, b) => b.ordersCount - a.ordersCount);
   }
 
