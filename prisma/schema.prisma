@@ -94,7 +94,6 @@ model User {
   receivedPayments            Payment[]            @relation("PaymentReceivedBy")
   createdLedgerEntries        LedgerEntry[]        @relation("LedgerEntryCreatedBy")
   createdCreditDebitNotes     CreditDebitNote[]    @relation("CreditDebitNoteCreatedBy")
-  createdPurchaseOrders       PurchaseOrder[]      @relation("PurchaseOrderCreatedBy")
   createdStockMovements       StockMovement[]      @relation("StockMovementCreatedBy")
   approvedAttendanceRecords   AttendanceRecord[]   @relation("AttendanceRecordApprovedBy")
   approvedLeaveRequests       LeaveRequest[]       @relation("LeaveRequestApprovedBy")
@@ -393,8 +392,8 @@ model Product {
   createdByUser User?    @relation("ProductCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedByUser User?    @relation("ProductUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  catalogueId   String?    @map("catalogue_id") @db.ObjectId
-  catalogue     Catalogue? @relation(fields: [catalogueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  catalogueIds  String[]    @map("catalogue_ids") @db.ObjectId
+  catalogues    Catalogue[] @relation(fields: [catalogueIds], references: [id])
 
   images  ProductImage[]
   pricing ProductPricing[]
@@ -407,7 +406,6 @@ model Product {
   orderItems         OrderItem[]
   backorderApprovals BackorderApproval[]
   invoiceItems       InvoiceItem[]
-  purchaseOrderItems PurchaseOrderItem[]
   stockMovements     StockMovement[]
 
   @@map("products")
@@ -870,56 +868,6 @@ model CreditDebitNote {
   @@map("credit_debit_notes")
 }
 
-model Supplier {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  mobile    String?
-  email     String?
-  gstin     String?
-  address   String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  purchaseOrders PurchaseOrder[]
-
-  @@map("suppliers")
-}
-
-model PurchaseOrder {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  poNumber   String   @unique @map("po_number")
-  supplierId String   @map("supplier_id") @db.ObjectId
-  status     String // "DRAFT", "SENT", "RECEIVED", "CANCELLED"
-  subTotal   Float  @map("sub_total")
-  taxTotal   Float  @map("tax_total")
-  grandTotal Float  @map("grand_total")
-  createdBy  String?  @map("created_by") @db.ObjectId
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  supplier      Supplier            @relation(fields: [supplierId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdByUser User?               @relation("PurchaseOrderCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  items         PurchaseOrderItem[]
-
-  @@map("purchase_orders")
-}
-
-model PurchaseOrderItem {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  purchaseOrderId String   @map("purchase_order_id") @db.ObjectId
-  productId       String   @map("product_id") @db.ObjectId
-  quantity        Int
-  costPrice       Float  @map("cost_price")
-  taxPercent      Float  @map("tax_percent")
-  lineTotal       Float  @map("line_total")
-  createdAt       DateTime @default(now()) @map("created_at")
-
-  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  product       Product       @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@map("purchase_order_items")
-}
 
 model StockMovement {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -1067,7 +1015,6 @@ model Setting {
   orderPrefix            String?  @map("order_prefix")
   invoicePrefix          String?  @map("invoice_prefix")
   paymentPrefix          String?  @map("payment_prefix")
-  purchaseOrderPrefix    String?  @map("purchase_order_prefix")
   currency               String?  @default("INR")
   taxEnabled             Boolean  @default(true) @map("tax_enabled")
   defaultTaxPercent      Float? @map("default_tax_percent")
@@ -1115,7 +1062,9 @@ model Catalogue {
   isPublished Boolean   @default(true) @map("is_published")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
-  products    Product[]
+  productIds  String[]  @map("product_ids") @db.ObjectId
+  products    Product[] @relation(fields: [productIds], references: [id])
 
   @@map("catalogues")
 }
+

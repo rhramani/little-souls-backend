@@ -212,9 +212,9 @@ export class ProductService {
 
     if (hasCatalogue !== undefined) {
       if (hasCatalogue || String(hasCatalogue) === 'true') {
-        where.catalogueId = { not: null };
+        where.catalogueIds = { isEmpty: false };
       } else {
-        where.catalogueId = null;
+        where.catalogueIds = { isEmpty: true };
       }
     }
 
@@ -223,7 +223,7 @@ export class ProductService {
     }
 
     if (catalogueId) {
-      where.catalogueId = catalogueId;
+      where.catalogueIds = { has: catalogueId };
     }
 
     if (brand) {
@@ -234,7 +234,10 @@ export class ProductService {
 
     if (userPricingGroupId) {
       andConditions.push({
-        OR: [{ catalogueId: null }, { catalogue: { isPublished: true } }],
+        OR: [
+          { catalogueIds: { isEmpty: true } },
+          { catalogues: { some: { isPublished: true } } },
+        ],
       });
     }
 
@@ -376,7 +379,7 @@ export class ProductService {
             pricingGroup: true,
           },
         },
-        catalogue: true,
+        catalogues: true,
       },
     });
 
@@ -386,8 +389,8 @@ export class ProductService {
 
     if (
       userPricingGroupId &&
-      product.catalogueId &&
-      !product.catalogue?.isPublished
+      product.catalogueIds.length > 0 &&
+      !product.catalogues.some((c) => c.isPublished)
     ) {
       throw new NotFoundException(`Product with ID '${id}' not found.`);
     }
@@ -418,7 +421,7 @@ export class ProductService {
             pricingGroup: true,
           },
         },
-        catalogue: true,
+        catalogues: true,
       },
     });
 
@@ -428,8 +431,8 @@ export class ProductService {
 
     if (
       userPricingGroupId &&
-      product.catalogueId &&
-      !product.catalogue?.isPublished
+      product.catalogueIds.length > 0 &&
+      !product.catalogues.some((c) => c.isPublished)
     ) {
       throw new NotFoundException(`Product with slug '${slug}' not found.`);
     }
@@ -689,6 +692,59 @@ export class ProductService {
     });
 
     return { message: 'Product deleted successfully' };
+  }
+
+  async bulkDelete(ids: string[]) {
+    const orderItems = await this.prisma.orderItem.findMany({
+      where: { productId: { in: ids } },
+      select: { productId: true },
+    });
+    const orderProductIds = new Set(orderItems.map((item) => item.productId));
+
+    const deletableIds = ids.filter((id) => !orderProductIds.has(id));
+    if (deletableIds.length === 0) {
+      throw new BadRequestException(
+        'Cannot delete selected products as they all have active customer orders associated with them.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.imageCleaningTask.deleteMany({
+        where: { productId: { in: deletableIds } },
+      });
+      await tx.productImage.deleteMany({
+        where: { productId: { in: deletableIds } },
+      });
+      await tx.productPricing.deleteMany({
+        where: { productId: { in: deletableIds } },
+      });
+      await tx.productCatalogFile.deleteMany({
+        where: { productId: { in: deletableIds } },
+      });
+      await tx.productVideo.deleteMany({
+        where: { productId: { in: deletableIds } },
+      });
+      await tx.cartItem.deleteMany({
+        where: { productId: { in: deletableIds } },
+      });
+      await tx.stockMovement.deleteMany({
+        where: { productId: { in: deletableIds } },
+      });
+      await tx.backorderApproval.deleteMany({
+        where: { productId: { in: deletableIds } },
+      });
+
+      await tx.product.deleteMany({
+        where: { id: { in: deletableIds } },
+      });
+    });
+
+    const skippedCount = ids.length - deletableIds.length;
+    return {
+      message: `${deletableIds.length} products deleted successfully.${skippedCount > 0 ? ` ${skippedCount} products skipped because they have active orders.` : ''}`,
+      deletedCount: deletableIds.length,
+      skippedCount,
+    };
   }
 
   async addVideo(productId: string, dto: any, userId: string) {

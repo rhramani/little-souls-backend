@@ -19,11 +19,10 @@ async function main() {
         console.log('Products in catalog:', products.map(p => p.id));
         for (const product of products) {
           const orderItemCount = await tx.orderItem.count({ where: { productId: product.id } });
-          const purchaseOrderItemCount = await tx.purchaseOrderItem.count({ where: { productId: product.id } });
           const backorderApprovalCount = await tx.backorderApproval.count({ where: { productId: product.id } });
-          console.log(`Product ${product.id} reference counts:`, { orderItemCount, purchaseOrderItemCount, backorderApprovalCount });
+          console.log(`Product ${product.id} reference counts:`, { orderItemCount, backorderApprovalCount });
           
-          const isReferenced = orderItemCount > 0 || purchaseOrderItemCount > 0 || backorderApprovalCount > 0;
+          const isReferenced = orderItemCount > 0 || backorderApprovalCount > 0;
           if (isReferenced) {
             console.log(`Product ${product.id} is referenced, updating to null...`);
             await tx.product.update({

@@ -400,7 +400,7 @@ export class PricingService {
     // 2. Get all products with existing pricing (filtered by catalog if provided)
     const where: any = { isActive: true };
     if (catalogueId) {
-      where.catalogueId = catalogueId;
+      where.catalogueIds = { has: catalogueId };
     }
 
     const products = await this.prisma.product.findMany({

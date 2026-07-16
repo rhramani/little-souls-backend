@@ -48,7 +48,7 @@ export class OrderService {
             product: {
               include: {
                 images: { orderBy: { sortOrder: 'asc' } },
-                catalogue: true,
+                catalogues: true,
               },
             },
           },
@@ -121,7 +121,11 @@ export class OrderService {
           );
         }
 
-        if (product.catalogueId && !product.catalogue?.isPublished) {
+        if (
+          product.catalogueIds &&
+          product.catalogueIds.length > 0 &&
+          !product.catalogues.some((c) => c.isPublished)
+        ) {
           throw new BadRequestException(
             `Product '${product.name}' belongs to a catalogue that is no longer published.`,
           );

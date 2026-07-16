@@ -12,10 +12,11 @@ import {
   Res,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   BadRequestException,
   Query,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { CatalogueService } from './catalogue.service';
 import { WhatsappService } from '../notification/whatsapp.service';
@@ -89,8 +90,12 @@ export class CatalogueController {
 
   @Get(':id/export')
   @HttpCode(HttpStatus.OK)
-  async exportCatalogue(@Param('id') id: string, @Res() res: Response) {
-    const buffer = await this.catalogueService.exportCatalogue(id);
+  async exportCatalogue(
+    @Param('id') id: string,
+    @Query('productIds') productIds: string | undefined,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.catalogueService.exportCatalogue(id, productIds);
 
     res.set({
       'Content-Type':
@@ -157,5 +162,35 @@ export class CatalogueController {
     }
 
     return { success: true, message: `Images sent to ${body.phone}` };
+  }
+
+  @Post(':id/bulk-add-products')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @UseInterceptors(FilesInterceptor('files'))
+  @HttpCode(HttpStatus.OK)
+  async bulkAddProducts(
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @GetUser('id') userId: string,
+  ) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files uploaded.');
+    }
+    return this.catalogueService.bulkAddProducts(id, files, userId);
+  }
+
+  @Post(':id/products')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async addProducts(
+    @Param('id') id: string,
+    @Body('productIds') productIds: string[],
+  ) {
+    if (!productIds || productIds.length === 0) {
+      throw new BadRequestException('productIds array is required.');
+    }
+    return this.catalogueService.addProductsToCatalogue(id, productIds);
   }
 }

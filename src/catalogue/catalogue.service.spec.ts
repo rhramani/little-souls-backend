@@ -3,6 +3,8 @@ import { CatalogueService } from './catalogue.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BadRequestException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
+import { UploadService } from '../upload/upload.service';
+import { ImageCleaningService } from '../image-cleaning/image-cleaning.service';
 
 jest.mock('axios', () => ({
   get: jest.fn().mockResolvedValue({
@@ -10,6 +12,14 @@ jest.mock('axios', () => ({
     headers: { 'content-type': 'image/jpeg' },
   }),
 }));
+
+jest.mock('sharp', () => {
+  return jest.fn(() => ({
+    resize: jest.fn().mockReturnThis(),
+    jpeg: jest.fn().mockReturnThis(),
+    toBuffer: jest.fn().mockResolvedValue(Buffer.from('dummy-resized-image-data')),
+  }));
+});
 
 describe('CatalogueService', () => {
   let service: CatalogueService;
@@ -68,10 +78,11 @@ describe('CatalogueService', () => {
         discountPercent: '10.00',
       },
     ],
+    catalogueIds: ['60a8f9c0e4b0c53641b5a5b5'],
   };
 
   const mockCatalogue = {
-    id: 'cat-uuid-1',
+    id: '60a8f9c0e4b0c53641b5a5b5',
     name: 'Test Catalogue',
     products: [mockProduct],
   };
@@ -86,27 +97,66 @@ describe('CatalogueService', () => {
     },
     product: {
       findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([mockProduct]),
+      count: jest.fn().mockResolvedValue(1),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       update: jest.fn().mockResolvedValue(mockProduct),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      delete: jest.fn().mockResolvedValue({}),
     },
     productImage: {
       findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       create: jest.fn().mockResolvedValue({}),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     productPricing: {
       upsert: jest.fn().mockResolvedValue({}),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
+    category: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'cat-uncategorized-id', name: 'Uncategorized', slug: 'uncategorized' }),
+      create: jest.fn().mockResolvedValue({ id: 'cat-uncategorized-id', name: 'Uncategorized', slug: 'uncategorized' }),
+    },
+    orderItem: { count: jest.fn().mockResolvedValue(0) },
+    backorderApproval: {
+      count: jest.fn().mockResolvedValue(0),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    imageCleaningTask: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    productCatalogFile: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    productVideo: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    cartItem: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    stockMovement: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     $transaction: jest.fn((cb) => cb(mockPrismaService)),
   };
 
   beforeEach(async () => {
+    const mockUploadService = {
+      uploadBuffer: jest.fn().mockResolvedValue({ fileUrl: 'https://cdn.example.com/mock.png' }),
+    };
+
+    const mockImageCleaningService = {
+      triggerBackgroundCleaningForCatalogue: jest.fn().mockResolvedValue({}),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CatalogueService,
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: UploadService,
+          useValue: mockUploadService,
+        },
+        {
+          provide: ImageCleaningService,
+          useValue: mockImageCleaningService,
         },
       ],
     }).compile();
@@ -124,7 +174,7 @@ describe('CatalogueService', () => {
 
   describe('exportCatalogue', () => {
     it('should generate an Excel workbook with correct headers and mapping values', async () => {
-      const buffer = await service.exportCatalogue('cat-uuid-1');
+      const buffer = await service.exportCatalogue('60a8f9c0e4b0c53641b5a5b5');
       expect(buffer).toBeDefined();
 
       const workbook = new ExcelJS.Workbook();
@@ -142,7 +192,6 @@ describe('CatalogueService', () => {
       expect(headers).toContain('SKU');
       expect(headers).toContain('Product Name');
       expect(headers).toContain('Product Image');
-      expect(headers).toContain('Product Picture url');
       expect(headers).toContain('Product Price');
       expect(headers).toContain('Discounted price');
       expect(headers).toContain('Tax "type"');
@@ -176,9 +225,6 @@ describe('CatalogueService', () => {
       expect(firstRow.getCell(headers.indexOf('Product Image')).value).toBe(
         mockProduct.productImage,
       );
-      expect(
-        firstRow.getCell(headers.indexOf('Product Picture url')).value,
-      ).toBe(mockProduct.productPictureUrl);
       expect(firstRow.getCell(headers.indexOf('Product Price')).value).toBe(
         mockProduct.productPrice,
       );
@@ -306,12 +352,21 @@ describe('CatalogueService', () => {
       const buffer = await workbook.xlsx.writeBuffer();
 
       // Mock DB behavior:
-      // ProductImage: image not found initially, meaning smart image sync will be triggered
+      mockPrismaService.product.findMany.mockResolvedValue([
+        {
+          id: 'prod-uuid-1',
+          sku: 'NEW-SKU-1',
+          barcodeUrl: null,
+          catalogueIds: ['60a8f9c0e4b0c53641b5a5b5'],
+        },
+      ]);
+      // Mock that no images exist initially so both are treated as new
+      mockPrismaService.productImage.findMany.mockResolvedValue([]);
       mockPrismaService.productImage.findFirst.mockResolvedValue(null);
 
       // Run import
       const result = await service.importCatalogue(
-        'cat-uuid-1',
+        '60a8f9c0e4b0c53641b5a5b5',
         buffer as any,
         'user-uuid-1',
       );
@@ -363,13 +418,15 @@ describe('CatalogueService', () => {
           createdBy: 'user-uuid-1',
         },
       });
-      expect(mockPrismaService.productImage.create).toHaveBeenCalledWith({
-        data: {
-          productId: 'prod-uuid-1',
-          originalUrl: 'https://new-cdn.com/product1_pic_new.jpg',
-          isPrimary: true,
-          createdBy: 'user-uuid-1',
-        },
+      expect(mockPrismaService.productImage.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            productId: 'prod-uuid-1',
+            originalUrl: 'https://new-cdn.com/product1_pic_new.jpg',
+            isPrimary: false,
+            createdBy: 'user-uuid-1',
+          },
+        ],
       });
     });
 
@@ -386,7 +443,7 @@ describe('CatalogueService', () => {
       const buffer = await workbook.xlsx.writeBuffer();
 
       await expect(
-        service.importCatalogue('cat-uuid-1', buffer as any, 'user-uuid-1'),
+        service.importCatalogue('60a8f9c0e4b0c53641b5a5b5', buffer as any, 'user-uuid-1'),
       ).rejects.toThrow(BadRequestException);
     });
   });

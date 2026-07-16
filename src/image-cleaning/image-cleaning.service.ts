@@ -89,7 +89,7 @@ export class ImageCleaningService {
   ) {
     const images = await this.prisma.productImage.findMany({
       where: {
-        product: { catalogueId },
+        product: { catalogueIds: { has: catalogueId } },
         cleaningStatus: { in: ['NOT_REQUIRED', 'FAILED'] },
       },
     });

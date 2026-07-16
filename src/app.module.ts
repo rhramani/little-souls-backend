@@ -11,7 +11,6 @@ import { OrderModule } from './order/order.module';
 import { BillingModule } from './billing/billing.module';
 import { ImportModule } from './import/import.module';
 import { StaffModule } from './staff/staff.module';
-import { PurchaseOrderModule } from './purchase-order/purchase-order.module';
 import { SupportModule } from './support/support.module';
 import { ConfigModule } from '@nestjs/config';
 import { UploadModule } from './upload/upload.module';
@@ -43,7 +42,6 @@ import { BannerModule } from './banner/banner.module';
     BillingModule,
     ImportModule,
     StaffModule,
-    PurchaseOrderModule,
     SupportModule,
     UploadModule,
     CustomerModule,

@@ -582,11 +582,6 @@ export class CustomerService {
             data: { createdBy: null },
           });
 
-          await tx.purchaseOrder.updateMany({
-            where: { createdBy: { in: userIds } },
-            data: { createdBy: null },
-          });
-
           await tx.stockMovement.updateMany({
             where: { createdBy: { in: userIds } },
             data: { createdBy: null },

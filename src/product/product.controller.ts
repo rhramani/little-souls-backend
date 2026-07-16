@@ -14,6 +14,7 @@ import {
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { BulkDeleteProductsDto } from './dto/bulk-delete-products.dto';
 import { QueryProductDto } from './dto/query-product.dto';
 import { AddProductVideoDto } from './dto/add-product-video.dto';
 import { AddProductCatalogDto } from './dto/add-product-catalog.dto';
@@ -82,6 +83,15 @@ export class ProductController {
   async remove(@Param('id') id: string) {
     return this.productService.remove(id);
   }
+
+  @Post('bulk-delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async bulkDelete(@Body() dto: BulkDeleteProductsDto) {
+    return this.productService.bulkDelete(dto.ids);
+  }
+
 
   @Post(':id/video')
   @UseGuards(JwtAuthGuard, RolesGuard)

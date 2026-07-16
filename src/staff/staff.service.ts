@@ -586,10 +586,6 @@ export class StaffService {
             where: { createdBy: user.id },
             data: { createdBy: null },
           });
-          await tx.purchaseOrder.updateMany({
-            where: { createdBy: user.id },
-            data: { createdBy: null },
-          });
           await tx.stockMovement.updateMany({
             where: { createdBy: user.id },
             data: { createdBy: null },

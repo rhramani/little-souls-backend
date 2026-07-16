@@ -26,7 +26,7 @@ export class CartService {
                 images: {
                   orderBy: { sortOrder: 'asc' },
                 },
-                catalogue: true,
+                catalogues: true,
               },
             },
           },
@@ -49,7 +49,7 @@ export class CartService {
                   images: {
                     orderBy: { sortOrder: 'asc' },
                   },
-                  catalogue: true,
+                  catalogues: true,
                 },
               },
             },
@@ -108,14 +108,18 @@ export class CartService {
     // 1. Verify Product exists and is active
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
-      include: { catalogue: true },
+      include: { catalogues: true },
     });
 
     if (!product || !product.isActive) {
       throw new NotFoundException('Product is inactive or does not exist.');
     }
 
-    if (product.catalogueId && !product.catalogue?.isPublished) {
+    if (
+      product.catalogueIds &&
+      product.catalogueIds.length > 0 &&
+      !product.catalogues.some((c) => c.isPublished)
+    ) {
       throw new BadRequestException(
         `Product '${product.name}' belongs to a catalogue that is no longer published.`,
       );
@@ -192,7 +196,11 @@ export class CartService {
 
     const product = cartItem.product;
 
-    if (product.catalogueId && !product.catalogue?.isPublished) {
+    if (
+      product.catalogueIds &&
+      product.catalogueIds.length > 0 &&
+      !product.catalogues.some((c) => c.isPublished)
+    ) {
       throw new BadRequestException(
         `Product '${product.name}' belongs to a catalogue that is no longer published.`,
       );

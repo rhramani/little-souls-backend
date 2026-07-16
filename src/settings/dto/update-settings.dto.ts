@@ -49,10 +49,6 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsString()
-  purchaseOrderPrefix?: string;
-
-  @IsOptional()
-  @IsString()
   currency?: string;
 
   @IsOptional()

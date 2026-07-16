@@ -12,7 +12,41 @@ import { randomBytes } from 'crypto';
 import axios from 'axios';
 import * as bwipjs from 'bwip-js';
 import { UploadService } from '../upload/upload.service';
-import pLimit from 'p-limit';
+function pLimit(concurrency: number) {
+  const queue: (() => void)[] = [];
+  let activeCount = 0;
+
+  const next = () => {
+    activeCount--;
+    if (queue.length > 0) {
+      const run = queue.shift()!;
+      run();
+    }
+  };
+
+  return <T>(fn: () => Promise<T>): Promise<T> => {
+    return new Promise<T>((resolve, reject) => {
+      const run = async () => {
+        activeCount++;
+        try {
+          const res = await fn();
+          resolve(res);
+        } catch (err) {
+          reject(err);
+        } finally {
+          next();
+        }
+      };
+
+      if (activeCount < concurrency) {
+        run();
+      } else {
+        queue.push(run);
+      }
+    });
+  };
+}
+
 import { ImageCleaningService } from '../image-cleaning/image-cleaning.service';
 
 @Injectable()
@@ -123,7 +157,8 @@ export class CatalogueService {
             name: data.baseName,
             slug: data.tempSlug,
             categoryId: category.id,
-            catalogueId: catalogue.id,
+            catalogueIds: [catalogue.id],
+            barcode: data.tempSku,
             moq: 1,
             stockQuantity: 0,
             stockStatus: 'OUT_OF_STOCK',
@@ -143,14 +178,20 @@ export class CatalogueService {
         });
       }
 
-      return tx.catalogue.findUnique({
+      const cat = await tx.catalogue.findUnique({
         where: { id: catalogue.id },
-        include: {
-          products: {
-            include: { images: true },
-          },
-        },
       });
+      if (!cat) {
+        throw new NotFoundException(`Catalogue with ID '${catalogue.id}' not created.`);
+      }
+      const products = await tx.product.findMany({
+        where: { catalogueIds: { has: catalogue.id } },
+        include: { images: true },
+      });
+      return {
+        ...cat,
+        products,
+      };
     });
 
     this.logger.log(
@@ -176,42 +217,46 @@ export class CatalogueService {
     }
     const catalogues = await this.prisma.catalogue.findMany({
       where,
-      include: {
-        _count: {
-          select: { products: true },
-        },
-        products: {
-          take: 4,
-          select: {
-            productImage: true,
-            images: {
-              take: 1,
-              orderBy: { sortOrder: 'asc' },
-              select: { originalUrl: true },
-            },
-          },
-        },
-      },
       orderBy: { createdAt: 'desc' },
     });
 
-    return catalogues.map((c) => {
-      const previewImages = c.products
-        .map((p) => p.images?.[0]?.originalUrl || p.productImage)
-        .filter((url) => !!url);
+    return Promise.all(
+      catalogues.map(async (c) => {
+        const [productsCount, previewProducts] = await Promise.all([
+          this.prisma.product.count({
+            where: { catalogueIds: { has: c.id } },
+          }),
+          this.prisma.product.findMany({
+            where: { catalogueIds: { has: c.id } },
+            take: 4,
+            select: {
+              productImage: true,
+              images: {
+                take: 1,
+                orderBy: { sortOrder: 'asc' },
+                select: { originalUrl: true },
+              },
+            },
+          }),
+        ]);
 
-      return {
-        id: c.id,
-        name: c.name,
-        description: c.description,
-        imageUrl: c.imageUrl,
-        isPublished: c.isPublished,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-        productsCount: c._count.products,
-        previewImages,
-      };
-    });
+        const previewImages = previewProducts
+          .map((p) => p.images?.[0]?.originalUrl || p.productImage)
+          .filter((url): url is string => !!url);
+
+        return {
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          imageUrl: c.imageUrl,
+          isPublished: c.isPublished,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+          productsCount,
+          previewImages,
+        };
+      }),
+    );
   }
 
   async findOne(
@@ -241,25 +286,26 @@ export class CatalogueService {
     const validLimit =
       typeof limit === 'number' && limit > 0 ? limit : undefined;
 
-    const [catalogue, totalProductsCount] = await Promise.all([
+    const [catalogue, products, totalProductsCount] = await Promise.all([
       this.prisma.catalogue.findUnique({
         where: { id },
-        include: {
-          products: {
-            where: productWhere,
-            include: {
-              images: { orderBy: { sortOrder: 'asc' } },
-              pricing: { include: { pricingGroup: true } },
-            },
-            orderBy: { createdAt: 'asc' },
-            skip: validLimit ? (validPage - 1) * validLimit : undefined,
-            take: validLimit,
-          },
+      }),
+      this.prisma.product.findMany({
+        where: {
+          catalogueIds: { has: id },
+          ...productWhere,
         },
+        include: {
+          images: { orderBy: { sortOrder: 'asc' } },
+          pricing: { include: { pricingGroup: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+        skip: validLimit ? (validPage - 1) * validLimit : undefined,
+        take: validLimit,
       }),
       this.prisma.product.count({
         where: {
-          catalogueId: id,
+          catalogueIds: { has: id },
           ...productWhere,
         },
       }),
@@ -271,6 +317,7 @@ export class CatalogueService {
 
     return {
       ...catalogue,
+      products,
       productsMeta: {
         total: totalProductsCount,
         page: validPage,
@@ -309,15 +356,12 @@ export class CatalogueService {
     await this.prisma.$transaction(async (tx) => {
       // Find all products associated with this catalogue
       const products = await tx.product.findMany({
-        where: { catalogueId: id },
+        where: { catalogueIds: { has: id } },
       });
 
       for (const product of products) {
-        // Check for references in OrderItem, PurchaseOrderItem, and BackorderApproval
+        // Check for references in OrderItem and BackorderApproval
         const orderItemCount = await tx.orderItem.count({
-          where: { productId: product.id },
-        });
-        const purchaseOrderItemCount = await tx.purchaseOrderItem.count({
           where: { productId: product.id },
         });
         const backorderApprovalCount = await tx.backorderApproval.count({
@@ -326,16 +370,21 @@ export class CatalogueService {
 
         const isReferenced =
           orderItemCount > 0 ||
-          purchaseOrderItemCount > 0 ||
           backorderApprovalCount > 0;
 
-        if (isReferenced) {
-          // Dissociate product from catalogue and deactivate it so it's not visible
+        const belongsToOtherCatalogues = product.catalogueIds.some(
+          (cid) => cid !== id,
+        );
+
+        if (isReferenced || belongsToOtherCatalogues) {
+          // Dissociate product from catalogue and deactivate it only if it doesn't belong to other catalogues
           await tx.product.update({
             where: { id: product.id },
             data: {
-              catalogueId: null,
-              isActive: false,
+              catalogueIds: {
+                set: product.catalogueIds.filter((cid) => cid !== id),
+              },
+              isActive: belongsToOtherCatalogues ? product.isActive : false,
             },
           });
         } else {
@@ -381,9 +430,34 @@ export class CatalogueService {
     };
   }
 
-  async exportCatalogue(catalogueId: string): Promise<Buffer> {
+  async exportCatalogue(catalogueId: string, productIds?: string): Promise<Buffer> {
     const start = Date.now();
-    const catalogue = await this.findOne(catalogueId);
+    const catalogue = await this.prisma.catalogue.findUnique({
+      where: { id: catalogueId },
+    });
+    if (!catalogue) {
+      throw new NotFoundException(`Catalogue with ID '${catalogueId}' not found.`);
+    }
+
+    const productWhere: any = {
+      catalogueIds: { has: catalogueId },
+    };
+
+    if (productIds) {
+      const ids = productIds.split(',').map((id) => id.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        productWhere.id = { in: ids };
+      }
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: productWhere,
+      include: {
+        images: { orderBy: { sortOrder: 'asc' } },
+        pricing: { include: { pricingGroup: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
 
     const ExcelJS = require('exceljs');
     const workbook = new ExcelJS.Workbook();
@@ -403,7 +477,6 @@ export class CatalogueService {
       { header: 'SKU', key: 'sku', width: 20 },
       { header: 'Product Name', key: 'name', width: 40 },
       { header: 'Product Description', key: 'description', width: 50 },
-      { header: 'Product Picture url', key: 'productPictureUrl', width: 30 },
       { header: 'Product Price', key: 'productPrice', width: 15 },
       { header: 'Discounted price', key: 'discountedPrice', width: 18 },
       { header: 'Available quantity', key: 'stockQuantity', width: 18 },
@@ -460,63 +533,56 @@ export class CatalogueService {
     headerRow.height = 30;
     headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
+    const sharp = require('sharp');
     const barcodeColIdx = columns.findIndex((c) => c.key === 'barcodeImage');
 
-    // --- OPTIMIZATION: Download product images + generate barcodes in-memory (no R2 download)
-    //     Concurrency capped at 10 to avoid overwhelming the network ---
+    // Concurrency limit = 10 to fetch/resize images and barcodes concurrently
     const limit = pLimit(10);
     this.logger.log(
-      `Preparing ${catalogue.products.length} product images & barcodes in parallel (concurrency=10)...`,
+      `Preparing ${products.length} product images & barcodes in parallel (concurrency=10)...`,
     );
 
-    const imageDownloadResults = await Promise.all(
-      catalogue.products.map((p) =>
+    const imageResults = await Promise.all(
+      products.map((p) =>
         limit(async () => {
           const primaryImageUrl = p.images[0]?.originalUrl || '';
           const imageUrl = p.productImage || primaryImageUrl;
           const result: {
             productId: string;
             productImageBuffer: Buffer | null;
-            productImageExtension: 'png' | 'jpeg' | 'gif';
             barcodeBuffer: Buffer | null;
           } = {
             productId: p.id,
             productImageBuffer: null,
-            productImageExtension: 'jpeg',
             barcodeBuffer: null,
           };
 
-          // Download product image and generate barcode in-memory — both in parallel
-          const [imgResult, barcodeResult] = await Promise.allSettled([
+          const [imgRes, barcodeRes] = await Promise.allSettled([
             imageUrl
               ? axios.get(imageUrl, {
                   responseType: 'arraybuffer',
                   timeout: 5000,
                 })
               : Promise.resolve(null),
-            // Generate barcode directly in memory instead of downloading from R2
             this.generateBarcodeBuffer(p.sku),
           ]);
 
-          if (imgResult.status === 'fulfilled' && imgResult.value) {
-            result.productImageBuffer = Buffer.from(imgResult.value.data);
-            const ct = String(imgResult.value.headers['content-type'] || '');
-            if (ct.includes('png')) result.productImageExtension = 'png';
-            else if (ct.includes('gif')) result.productImageExtension = 'gif';
-            else if (imageUrl.toLowerCase().endsWith('.png'))
-              result.productImageExtension = 'png';
-          } else if (imgResult.status === 'rejected') {
-            this.logger.warn(
-              `Failed to download image for product ${p.id}: ${imgResult.reason?.message}`,
-            );
+          if (imgRes.status === 'fulfilled' && imgRes.value) {
+            try {
+              const originalBuffer = Buffer.from(imgRes.value.data);
+              result.productImageBuffer = await sharp(originalBuffer)
+                .resize(80, 80, { fit: 'inside' })
+                .jpeg({ quality: 60 })
+                .toBuffer();
+            } catch (err) {
+              this.logger.warn(
+                `Failed to resize image for product ${p.id}: ${err.message}`,
+              );
+            }
           }
 
-          if (barcodeResult.status === 'fulfilled' && barcodeResult.value) {
-            result.barcodeBuffer = barcodeResult.value;
-          } else if (barcodeResult.status === 'rejected') {
-            this.logger.warn(
-              `Failed to generate barcode for SKU ${p.sku}: ${barcodeResult.reason?.message}`,
-            );
+          if (barcodeRes.status === 'fulfilled' && barcodeRes.value) {
+            result.barcodeBuffer = barcodeRes.value;
           }
 
           return result;
@@ -524,12 +590,11 @@ export class CatalogueService {
       ),
     );
 
-    // Build a lookup map for fast access
-    const imageMap = new Map(imageDownloadResults.map((r) => [r.productId, r]));
+    const imageMap = new Map(imageResults.map((r) => [r.productId, r]));
 
     // Populate rows
     let rowIndex = 1; // Header is row 1
-    for (const p of catalogue.products) {
+    for (const p of products) {
       rowIndex++;
       const primaryImageUrl = p.images[0]?.originalUrl || '';
       const imageUrl = p.productImage || primaryImageUrl;
@@ -541,7 +606,6 @@ export class CatalogueService {
         sku: p.sku,
         name: p.name,
         description: p.description || '',
-        productPictureUrl: p.productPictureUrl || primaryImageUrl,
         productPrice: p.productPrice ? p.productPrice.toString() : '',
         discountedPrice: p.discountedPrice ? p.discountedPrice.toString() : '',
         stockQuantity: p.stockQuantity,
@@ -604,17 +668,17 @@ export class CatalogueService {
       row.height = 80;
       row.alignment = { vertical: 'middle' };
 
-      // Use pre-downloaded buffers
+      // Use pre-downloaded and resized buffers
       const imgData = imageMap.get(p.id);
       if (imgData?.productImageBuffer) {
         const imageId = workbook.addImage({
           buffer: imgData.productImageBuffer,
-          extension: imgData.productImageExtension,
+          extension: 'jpeg',
         });
         sheet.addImage(imageId, {
           tl: { col: 0, row: rowIndex - 1 },
           br: { col: 1, row: rowIndex },
-          editAs: 'oneCell',
+          editAs: 'twoCell',
         });
       }
 
@@ -626,14 +690,14 @@ export class CatalogueService {
         sheet.addImage(imageId, {
           tl: { col: barcodeColIdx, row: rowIndex - 1 },
           br: { col: barcodeColIdx + 1, row: rowIndex },
-          editAs: 'oneCell',
+          editAs: 'twoCell',
         });
       }
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
     this.logger.log(
-      `Export completed for ${catalogue.products.length} products in ${Date.now() - start}ms`,
+      `Export completed for ${products.length} products in ${Date.now() - start}ms`,
     );
     return buffer as Buffer;
   }
@@ -830,31 +894,46 @@ export class CatalogueService {
       if (rowNumber === 1) return;
 
       const getValString = (headerKey: string | undefined) => {
-        if (!headerKey) return null;
+        if (!headerKey) return undefined;
         const idx = headers.indexOf(headerKey);
-        if (idx === -1) return null;
+        if (idx === -1) return undefined;
         const val = getCellValueString(row.getCell(idx));
         return val ? val.trim() : null;
       };
 
       const getValNumber = (headerKey: string | undefined) => {
-        if (!headerKey) return null;
+        if (!headerKey) return undefined;
         const idx = headers.indexOf(headerKey);
-        if (idx === -1) return null;
+        if (idx === -1) return undefined;
         return getCellValueNumber(row.getCell(idx));
       };
 
-      const id = getValString(idHeaderKey);
-      if (!id) return;
+      const roundVal = (
+        v: number | null | undefined,
+        defaultValue: any = null,
+      ) => {
+        if (v === undefined) return undefined;
+        if (v === null) return defaultValue;
+        return Math.round(v);
+      };
 
+      const id = getValString(idHeaderKey);
       const sku = getValString(skuHeaderKey);
       const name = getValString(nameHeaderKey);
+
+      // Skip the row if it has neither SKU nor Name (likely empty row)
+      if (!sku && !name) return;
+
       const isActiveStr = getValString(activeHeaderKey);
-      let isActive = false;
-      if (isActiveStr) {
-        const cleanVal = isActiveStr.trim().toUpperCase();
-        isActive =
-          cleanVal === 'YES' || cleanVal === 'TRUE' || cleanVal === '1';
+      let isActive: boolean | undefined = undefined;
+      if (activeHeaderKey) {
+        if (isActiveStr !== undefined && isActiveStr !== null) {
+          const cleanVal = isActiveStr.trim().toUpperCase();
+          isActive =
+            cleanVal === 'YES' || cleanVal === 'TRUE' || cleanVal === '1';
+        } else {
+          isActive = false;
+        }
       }
 
       const pricingData: {
@@ -868,7 +947,7 @@ export class CatalogueService {
         const colIdx = parseInt(colIdxStr);
         const mapInfo = pricingHeaderMap[colIdx];
         const cellVal = getCellValueNumber(row.getCell(colIdx));
-        if (cellVal !== null) {
+        if (cellVal !== null && cellVal !== undefined) {
           if (!pricingData[mapInfo.groupCode])
             pricingData[mapInfo.groupCode] = {};
           if (mapInfo.type === 'price')
@@ -892,7 +971,7 @@ export class CatalogueService {
 
       parsedRows.push({
         rowNumber,
-        id,
+        id: id || null,
         sku: sku ? sku.trim() : null,
         name: name ? name.trim() : null,
         description: getValString(descHeaderKey)?.trim() ?? null,
@@ -900,8 +979,8 @@ export class CatalogueService {
         productPictureUrl: getValString(productPictureUrlHeaderKey),
         productPrice: getValNumber(productPriceHeaderKey),
         discountedPrice: getValNumber(discountedPriceHeaderKey),
-        stockQuantity: stockQuantity !== null ? Math.round(stockQuantity) : 0,
-        moq: moq !== null ? Math.round(moq) : 1,
+        stockQuantity: roundVal(stockQuantity, 0),
+        moq: roundVal(moq, 1),
         brand: getValString(brandHeaderKey),
         size: getValString(sizeHeaderKey),
         color: getValString(colorHeaderKey),
@@ -913,22 +992,19 @@ export class CatalogueService {
         parentProductId: getValString(parentProductIdHeaderKey),
         privateNotes: getValString(privateNotesHeaderKey),
         setName: getValString(setNameHeaderKey),
-        setQuantity: setQuantity !== null ? Math.round(setQuantity) : null,
+        setQuantity: roundVal(setQuantity, null),
         setType: getValString(setTypeHeaderKey),
         sizes: getValString(sizesHeaderKey),
-        sizesSetQuantity:
-          sizesSetQuantity !== null ? Math.round(sizesSetQuantity) : null,
+        sizesSetQuantity: roundVal(sizesSetQuantity, null),
         colors: getValString(colorsHeaderKey),
-        colorsSetQuantity:
-          colorsSetQuantity !== null ? Math.round(colorsSetQuantity) : null,
+        colorsSetQuantity: roundVal(colorsSetQuantity, null),
         nt11_48: getValString(nt11_48HeaderKey),
-        nt11_48SetQuantity:
-          nt11_48SetQuantity !== null ? Math.round(nt11_48SetQuantity) : null,
+        nt11_48SetQuantity: roundVal(nt11_48SetQuantity, null),
         sixToTwelveMonths: getValString(sixToTwelveMonthsHeaderKey),
-        sixToTwelveMonthsSetQuantity:
-          sixToTwelveMonthsSetQuantity !== null
-            ? Math.round(sixToTwelveMonthsSetQuantity)
-            : null,
+        sixToTwelveMonthsSetQuantity: roundVal(
+          sixToTwelveMonthsSetQuantity,
+          null,
+        ),
         isActive,
         pricingData,
       });
@@ -953,7 +1029,7 @@ export class CatalogueService {
           { id: { in: validObjectIdsInFile } },
         ],
       },
-      select: { id: true, sku: true, barcodeUrl: true },
+      select: { id: true, sku: true, barcodeUrl: true, catalogueIds: true },
     });
 
     const skuToDbProductMap = new Map(
@@ -961,27 +1037,36 @@ export class CatalogueService {
     );
     const idToDbProductMap = new Map(dbProducts.map((p) => [p.id, p]));
 
-    for (const row of parsedRows) {
-      const upperSku = row.sku ? row.sku.toUpperCase() : '';
-      let dbProduct = skuToDbProductMap.get(upperSku);
-      if (!dbProduct && isValidObjectId(row.id)) {
-        dbProduct = idToDbProductMap.get(row.id);
-      }
+    const barcodeLimit = pLimit(10);
+    await Promise.all(
+      parsedRows.map((row) =>
+        barcodeLimit(async () => {
+          if (!row.sku) {
+            row.barcodeUrl = null;
+            return;
+          }
+          const upperSku = row.sku.toUpperCase();
+          let dbProduct = skuToDbProductMap.get(upperSku);
+          if (!dbProduct && isValidObjectId(row.id)) {
+            dbProduct = idToDbProductMap.get(row.id);
+          }
 
-      if (dbProduct) {
-        row.id = dbProduct.id;
-        row.isNew = false;
-        if (upperSku === dbProduct.sku.toUpperCase()) {
-          row.barcodeUrl = dbProduct.barcodeUrl;
-        } else {
-          row.barcodeUrl = null;
-        }
-      } else {
-        row.isNew = true;
-        row.id = randomBytes(12).toString('hex');
-        row.barcodeUrl = null;
-      }
-    }
+          if (dbProduct) {
+            row.id = dbProduct.id;
+            row.isNew = false;
+            if (upperSku === dbProduct.sku.toUpperCase() && dbProduct.barcodeUrl) {
+              row.barcodeUrl = dbProduct.barcodeUrl;
+            } else {
+              row.barcodeUrl = await this.generateAndUploadBarcode(row.sku);
+            }
+          } else {
+            row.isNew = true;
+            row.id = randomBytes(12).toString('hex');
+            row.barcodeUrl = await this.generateAndUploadBarcode(row.sku);
+          }
+        }),
+      ),
+    );
 
     // ─── SKU uniqueness check ───
     const skuSet = new Set<string>();
@@ -1000,22 +1085,6 @@ export class CatalogueService {
         );
       skuSet.add(upperSku);
     }
-
-    // --- OPTIMIZATION: Generate & upload barcodes in parallel (concurrency=8) for changed/new SKUs only ---
-    const barcodeLimit = pLimit(8);
-
-    this.logger.log(
-      `Generating barcodes in parallel (concurrency=8) for import...`,
-    );
-    await Promise.all(
-      parsedRows.map((row) =>
-        barcodeLimit(async () => {
-          if (!row.barcodeUrl) {
-            row.barcodeUrl = await this.generateAndUploadBarcode(row.sku);
-          }
-        }),
-      ),
-    );
 
     // --- OPTIMIZATION: Pre-fetch ALL existing product images in ONE query, build in-memory lookup ---
     const allProductIds = parsedRows.map((r) => r.id);
@@ -1081,202 +1150,298 @@ export class CatalogueService {
           }
         }
 
-        // 2. Delete catalogue products omitted from Excel (only for rows that WERE in the catalogue)
+        // 2. Dissociate or delete catalogue products omitted from Excel
         const uploadedExistingIds = new Set(
           parsedRows.filter((r) => !r.isNew).map((r) => r.id),
         );
-        const toDeleteIds = catalogue.products
-          .map((p) => p.id)
-          .filter((id) => !uploadedExistingIds.has(id));
-        if (toDeleteIds.length > 0) {
-          await tx.product.deleteMany({ where: { id: { in: toDeleteIds } } });
+        const omittedProducts = catalogue.products.filter(
+          (p) => !uploadedExistingIds.has(p.id),
+        );
+
+        for (const product of omittedProducts) {
+          const belongsToOtherCatalogues = product.catalogueIds.some(
+            (cid) => cid !== catalogueId,
+          );
+          // Check for references
+          const orderItemCount = await tx.orderItem.count({
+            where: { productId: product.id },
+          });
+          const backorderApprovalCount = await tx.backorderApproval.count({
+            where: { productId: product.id },
+          });
+          const isReferenced =
+            orderItemCount > 0 ||
+            backorderApprovalCount > 0;
+
+          if (isReferenced || belongsToOtherCatalogues) {
+            // Just dissociate from this catalogue
+            await tx.product.update({
+              where: { id: product.id },
+              data: {
+                catalogueIds: {
+                  set: product.catalogueIds.filter(
+                    (cid) => cid !== catalogueId,
+                  ),
+                },
+                isActive: belongsToOtherCatalogues ? product.isActive : false,
+              },
+            });
+          } else {
+            // Cascade delete product relations and product itself
+            await tx.imageCleaningTask.deleteMany({
+              where: { productId: product.id },
+            });
+            await tx.productImage.deleteMany({
+              where: { productId: product.id },
+            });
+            await tx.productPricing.deleteMany({
+              where: { productId: product.id },
+            });
+            await tx.productCatalogFile.deleteMany({
+              where: { productId: product.id },
+            });
+            await tx.productVideo.deleteMany({
+              where: { productId: product.id },
+            });
+            await tx.cartItem.deleteMany({ where: { productId: product.id } });
+            await tx.stockMovement.deleteMany({
+              where: { productId: product.id },
+            });
+            await tx.backorderApproval.deleteMany({
+              where: { productId: product.id },
+            });
+            await tx.product.delete({
+              where: { id: product.id },
+            });
+          }
         }
 
-        // 3. Process all rows: UPDATE existing, CREATE new
-        await Promise.all(
-          parsedRows.map(async (row) => {
-            const slug = `${this.slugify(row.name)}-${row.sku.toLowerCase()}`;
+        // 3. Process all rows: CREATE new rows in bulk, UPDATE existing rows in concurrency-limited batches
+        const newRows = parsedRows.filter((r) => r.isNew);
+        const existingRows = parsedRows.filter((r) => !r.isNew);
 
-            if (row.isNew) {
-              // ── CREATE new product ──
-              await tx.product.create({
-                data: {
-                  id: row.id,
-                  sku: row.sku,
-                  name: row.name,
-                  slug,
-                  description: row.description,
-                  productImage: row.productImage,
-                  productPictureUrl: row.productPictureUrl,
-                  productPrice: row.productPrice,
-                  discountedPrice: row.discountedPrice,
-                  stockQuantity: row.stockQuantity,
-                  moq: row.moq,
-                  brand: row.brand,
-                  size: row.size,
-                  color: row.color,
-                  unit: row.unit || 'PCS',
-                  taxType: row.taxType,
-                  taxPercent: row.taxPercent,
-                  weight: row.weight,
-                  parentProductSku: row.parentProductSku,
-                  parentProductId: row.parentProductId,
-                  privateNotes: row.privateNotes,
-                  setName: row.setName,
-                  setQuantity: row.setQuantity,
-                  setType: row.setType,
-                  sizes: row.sizes,
-                  sizesSetQuantity: row.sizesSetQuantity,
-                  colors: row.colors,
-                  colorsSetQuantity: row.colorsSetQuantity,
-                  nt11_48: row.nt11_48,
-                  nt11_48SetQuantity: row.nt11_48SetQuantity,
-                  sixToTwelveMonths: row.sixToTwelveMonths,
-                  sixToTwelveMonthsSetQuantity:
-                    row.sixToTwelveMonthsSetQuantity,
-                  isActive: row.isActive,
-                  barcodeUrl: row.barcodeUrl,
-                  stockStatus:
-                    row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
-                  categoryId: category.id,
-                  catalogueId: catalogueId,
-                  createdBy: userId,
-                },
+        // Bulk Create New Products
+        if (newRows.length > 0) {
+          await tx.product.createMany({
+            data: newRows.map((row) => {
+              const slug = `${this.slugify(row.name)}-${row.sku.toLowerCase()}`;
+              return {
+                id: row.id,
+                sku: row.sku,
+                name: row.name,
+                slug,
+                description: row.description,
+                productImage: row.productImage,
+                productPictureUrl: row.productPictureUrl,
+                productPrice: row.productPrice,
+                discountedPrice: row.discountedPrice,
+                stockQuantity: row.stockQuantity,
+                moq: row.moq,
+                brand: row.brand,
+                size: row.size,
+                color: row.color,
+                unit: row.unit || 'PCS',
+                taxType: row.taxType,
+                taxPercent: row.taxPercent,
+                weight: row.weight,
+                parentProductSku: row.parentProductSku,
+                parentProductId: row.parentProductId,
+                privateNotes: row.privateNotes,
+                setName: row.setName,
+                setQuantity: row.setQuantity,
+                setType: row.setType,
+                sizes: row.sizes,
+                sizesSetQuantity: row.sizesSetQuantity,
+                colors: row.colors,
+                colorsSetQuantity: row.colorsSetQuantity,
+                nt11_48: row.nt11_48,
+                nt11_48SetQuantity: row.nt11_48SetQuantity,
+                sixToTwelveMonths: row.sixToTwelveMonths,
+                sixToTwelveMonthsSetQuantity: row.sixToTwelveMonthsSetQuantity,
+                isActive: row.isActive,
+                barcode: row.sku,
+                barcodeUrl: row.barcodeUrl,
+                stockStatus: row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+                categoryId: category.id,
+                catalogueIds: [catalogueId],
+                createdBy: userId,
+              };
+            }),
+          });
+
+          // Product Image createMany for new products
+          const newProductImagesData: any[] = [];
+          for (const row of newRows) {
+            if (row.productImage || row.productPictureUrl) {
+              const primaryUrl = row.productImage || row.productPictureUrl;
+              newProductImagesData.push({
+                productId: row.id,
+                originalUrl: primaryUrl,
+                isPrimary: true,
+                createdBy: userId,
               });
-
-              // Create product image if URL provided
-              if (row.productImage || row.productPictureUrl) {
-                const primaryUrl = row.productImage || row.productPictureUrl;
-                await tx.productImage.create({
-                  data: {
-                    productId: row.id,
-                    originalUrl: primaryUrl,
-                    isPrimary: true,
-                    createdBy: userId,
-                  },
-                });
-              }
-            } else {
-              // ── UPDATE existing product ──
-              await tx.product.update({
-                where: { id: row.id },
-                data: {
-                  sku: row.sku,
-                  name: row.name,
-                  slug,
-                  description: row.description,
-                  productImage: row.productImage,
-                  productPictureUrl: row.productPictureUrl,
-                  productPrice: row.productPrice,
-                  discountedPrice: row.discountedPrice,
-                  stockQuantity: row.stockQuantity,
-                  moq: row.moq,
-                  brand: row.brand,
-                  size: row.size,
-                  color: row.color,
-                  unit: row.unit,
-                  taxType: row.taxType,
-                  taxPercent: row.taxPercent,
-                  weight: row.weight,
-                  parentProductSku: row.parentProductSku,
-                  parentProductId: row.parentProductId,
-                  privateNotes: row.privateNotes,
-                  setName: row.setName,
-                  setQuantity: row.setQuantity,
-                  setType: row.setType,
-                  sizes: row.sizes,
-                  sizesSetQuantity: row.sizesSetQuantity,
-                  colors: row.colors,
-                  colorsSetQuantity: row.colorsSetQuantity,
-                  nt11_48: row.nt11_48,
-                  nt11_48SetQuantity: row.nt11_48SetQuantity,
-                  sixToTwelveMonths: row.sixToTwelveMonths,
-                  sixToTwelveMonthsSetQuantity:
-                    row.sixToTwelveMonthsSetQuantity,
-                  isActive: row.isActive,
-                  barcodeUrl: row.barcodeUrl,
-                  stockStatus:
-                    row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
-                  catalogueId: catalogueId,
-                  updatedBy: userId,
-                },
-              });
-
-              // Smart Image Sync — use pre-fetched image map (no findFirst per URL)
-              const urlsToSync = [
-                row.productImage,
-                row.productPictureUrl,
-              ].filter((url): url is string => !!url && url.trim().length > 0);
-              const knownUrls =
-                existingImageMap.get(row.id) ?? new Set<string>();
-              const newUrls = urlsToSync
-                .map((u) => u.trim())
-                .filter((u) => !knownUrls.has(u));
-
-              if (newUrls.length > 0) {
-                await tx.productImage.updateMany({
-                  where: { productId: row.id, isPrimary: true },
-                  data: { isPrimary: false },
-                });
-                await tx.productImage.create({
-                  data: {
-                    productId: row.id,
-                    originalUrl: newUrls[0],
-                    isPrimary: true,
-                    createdBy: userId,
-                  },
-                });
-                if (newUrls.length > 1) {
-                  await tx.productImage.createMany({
-                    data: newUrls.slice(1).map((u) => ({
-                      productId: row.id,
-                      originalUrl: u,
-                      isPrimary: false,
-                      createdBy: userId,
-                    })),
-                  });
-                }
-              }
             }
+          }
+          if (newProductImagesData.length > 0) {
+            await tx.productImage.createMany({
+              data: newProductImagesData,
+            });
+          }
 
-            // Pricing upserts — same for both create and update
-            await Promise.all(
-              Object.keys(row.pricingData).map(async (groupCode) => {
-                const groupPricing = row.pricingData[groupCode];
-                if (
-                  groupPricing.price === undefined ||
-                  groupPricing.price === null
-                )
-                  return;
-
+          // Product Pricing createMany for new products
+          const newProductPricingData: any[] = [];
+          for (const row of newRows) {
+            Object.keys(row.pricingData).forEach((groupCode) => {
+              const groupPricing = row.pricingData[groupCode];
+              if (groupPricing.price !== undefined && groupPricing.price !== null) {
                 const pricingGroup = pricingGroupMap.get(groupCode)!;
+                newProductPricingData.push({
+                  productId: row.id,
+                  pricingGroupId: pricingGroup.id,
+                  price: groupPricing.price,
+                  mrp: groupPricing.mrp,
+                  discountPercent: groupPricing.discountPercent,
+                  createdBy: userId,
+                });
+              }
+            });
+          }
+          if (newProductPricingData.length > 0) {
+            await tx.productPricing.createMany({
+              data: newProductPricingData,
+            });
+          }
+        }
 
-                await tx.productPricing.upsert({
-                  where: {
-                    productId_pricingGroupId: {
-                      productId: row.id,
-                      pricingGroupId: pricingGroup.id,
+        // Concurrency-limited Updates for Existing Products
+        if (existingRows.length > 0) {
+          const updateLimit = pLimit(15);
+          await Promise.all(
+            existingRows.map((row) =>
+              updateLimit(async () => {
+                const slug = `${this.slugify(row.name)}-${row.sku.toLowerCase()}`;
+                const existingProduct =
+                  idToDbProductMap.get(row.id) ||
+                  skuToDbProductMap.get(row.sku.toUpperCase());
+                const currentIds = existingProduct?.catalogueIds || [];
+                const nextIds = Array.from(new Set([...currentIds, catalogueId]));
+
+                await tx.product.update({
+                  where: { id: row.id },
+                  data: {
+                    sku: row.sku,
+                    name: row.name,
+                    slug,
+                    description: row.description,
+                    productImage: row.productImage,
+                    productPictureUrl: row.productPictureUrl,
+                    productPrice: row.productPrice,
+                    discountedPrice: row.discountedPrice,
+                    stockQuantity: row.stockQuantity,
+                    moq: row.moq,
+                    brand: row.brand,
+                    size: row.size,
+                    color: row.color,
+                    unit: row.unit,
+                    taxType: row.taxType,
+                    taxPercent: row.taxPercent,
+                    weight: row.weight,
+                    parentProductSku: row.parentProductSku,
+                    parentProductId: row.parentProductId,
+                    privateNotes: row.privateNotes,
+                    setName: row.setName,
+                    setQuantity: row.setQuantity,
+                    setType: row.setType,
+                    sizes: row.sizes,
+                    sizesSetQuantity: row.sizesSetQuantity,
+                    colors: row.colors,
+                    colorsSetQuantity: row.colorsSetQuantity,
+                    nt11_48: row.nt11_48,
+                    nt11_48SetQuantity: row.nt11_48SetQuantity,
+                    sixToTwelveMonths: row.sixToTwelveMonths,
+                    sixToTwelveMonthsSetQuantity: row.sixToTwelveMonthsSetQuantity,
+                    isActive: row.isActive,
+                    barcode: row.sku,
+                    barcodeUrl: row.barcodeUrl,
+                    stockStatus: row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+                    catalogueIds: {
+                      set: nextIds,
                     },
-                  },
-                  update: {
-                    price: groupPricing.price,
-                    mrp: groupPricing.mrp,
-                    discountPercent: groupPricing.discountPercent,
                     updatedBy: userId,
                   },
-                  create: {
-                    productId: row.id,
-                    pricingGroupId: pricingGroup.id,
-                    price: groupPricing.price,
-                    mrp: groupPricing.mrp,
-                    discountPercent: groupPricing.discountPercent,
-                    createdBy: userId,
-                  },
                 });
-              }),
-            );
-          }),
-        );
+
+                // Smart Image Sync
+                const urlsToSync = [
+                  row.productImage,
+                  row.productPictureUrl,
+                ].filter((url): url is string => !!url && url.trim().length > 0);
+                const knownUrls = existingImageMap.get(row.id) ?? new Set<string>();
+                const newUrls = urlsToSync
+                  .map((u) => u.trim())
+                  .filter((u) => !knownUrls.has(u));
+
+                if (newUrls.length > 0) {
+                  await tx.productImage.updateMany({
+                    where: { productId: row.id, isPrimary: true },
+                    data: { isPrimary: false },
+                  });
+                  await tx.productImage.create({
+                    data: {
+                      productId: row.id,
+                      originalUrl: newUrls[0],
+                      isPrimary: true,
+                      createdBy: userId,
+                    },
+                  });
+                  if (newUrls.length > 1) {
+                    await tx.productImage.createMany({
+                      data: newUrls.slice(1).map((u) => ({
+                        productId: row.id,
+                        originalUrl: u,
+                        isPrimary: false,
+                        createdBy: userId,
+                      })),
+                    });
+                  }
+                }
+
+                // Pricing upserts
+                await Promise.all(
+                  Object.keys(row.pricingData).map(async (groupCode) => {
+                    const groupPricing = row.pricingData[groupCode];
+                    if (groupPricing.price === undefined || groupPricing.price === null)
+                      return;
+
+                    const pricingGroup = pricingGroupMap.get(groupCode)!;
+                    await tx.productPricing.upsert({
+                      where: {
+                        productId_pricingGroupId: {
+                          productId: row.id,
+                          pricingGroupId: pricingGroup.id,
+                        },
+                      },
+                      update: {
+                        price: groupPricing.price,
+                        mrp: groupPricing.mrp,
+                        discountPercent: groupPricing.discountPercent,
+                        updatedBy: userId,
+                      },
+                      create: {
+                        productId: row.id,
+                        pricingGroupId: pricingGroup.id,
+                        price: groupPricing.price,
+                        mrp: groupPricing.mrp,
+                        discountPercent: groupPricing.discountPercent,
+                        createdBy: userId,
+                      },
+                    });
+                  })
+                );
+              })
+            )
+          );
+        }
       },
       { timeout: 60000 },
     ); // Extended timeout for large catalogues
@@ -1290,5 +1455,245 @@ export class CatalogueService {
       .catch(() => {});
 
     return { message: 'Catalogue products successfully updated and replaced.' };
+  }
+
+  async bulkAddProducts(
+    catalogueId: string,
+    files: Express.Multer.File[],
+    userId: string,
+  ) {
+    const start = Date.now();
+    const catalogue = await this.prisma.catalogue.findUnique({
+      where: { id: catalogueId },
+    });
+    if (!catalogue) {
+      throw new NotFoundException(`Catalogue with ID '${catalogueId}' not found.`);
+    }
+
+    // 1. Resolve or create default "Uncategorized" category
+    let category = await this.prisma.category.findUnique({
+      where: { slug: 'uncategorized' },
+    });
+    if (!category) {
+      category = await this.prisma.category.create({
+        data: {
+          name: 'Uncategorized',
+          slug: 'uncategorized',
+          isActive: true,
+          createdBy: userId,
+        },
+      });
+    }
+
+    // 2. Upload files in parallel batches to R2
+    const limit = pLimit(10);
+    const uploadPromises = files.map((file) =>
+      limit(async () => {
+        const result = await this.uploadService.uploadDirectFile(file);
+        return {
+          url: result.fileUrl,
+          filename: file.originalname,
+        };
+      }),
+    );
+    const uploadedImages = await Promise.all(uploadPromises);
+
+    // 3. Extract SKUs from filenames
+    const uploadedSkus = uploadedImages.map((img) => {
+      const originalFilename = img.filename;
+      const extensionIdx = originalFilename.lastIndexOf('.');
+      const nameWithoutExtension =
+        extensionIdx > 0
+          ? originalFilename.slice(0, extensionIdx)
+          : originalFilename;
+      return nameWithoutExtension.trim();
+    });
+
+    // Fetch all existing products with the matching SKUs to update or skip
+    const existingProducts = await this.prisma.product.findMany({
+      where: {
+        sku: { in: uploadedSkus },
+      },
+      include: {
+        images: true,
+      },
+    });
+    const existingProductsMap = new Map(
+      existingProducts.map((p) => [p.sku.toUpperCase(), p]),
+    );
+
+    // Identify which SKUs need barcode generated/uploaded
+    const barcodeMap = new Map<string, string | null>();
+    const barcodeLimit = pLimit(10);
+    await Promise.all(
+      uploadedSkus.map((sku) =>
+        barcodeLimit(async () => {
+          const upperSku = sku.toUpperCase();
+          const existing = existingProductsMap.get(upperSku);
+          if (existing && existing.barcodeUrl) {
+            barcodeMap.set(upperSku, existing.barcodeUrl);
+          } else {
+            const url = await this.generateAndUploadBarcode(sku);
+            barcodeMap.set(upperSku, url);
+          }
+        }),
+      ),
+    );
+
+    const newProductsData: any[] = [];
+    const newProductImagesData: any[] = [];
+    const productsToUpdate: { id: string; catalogueIds: string[]; productImage: string; barcode: string; barcodeUrl: string | null }[] = [];
+    const newImagesForExistingProducts: { productId: string; originalUrl: string; isPrimary: boolean; createdBy: string }[] = [];
+
+    for (const img of uploadedImages) {
+      if (!img.url) continue;
+      const originalFilename = img.filename;
+      const extensionIdx = originalFilename.lastIndexOf('.');
+      const nameWithoutExtension =
+        extensionIdx > 0
+          ? originalFilename.slice(0, extensionIdx)
+          : originalFilename;
+
+      const sku = nameWithoutExtension.trim();
+      const name = nameWithoutExtension.trim();
+
+      const existingProduct = existingProductsMap.get(sku.toUpperCase());
+      if (existingProduct) {
+        // Product already exists: add it to this catalogue and update product image
+        const updatedCatalogueIds = Array.from(
+          new Set([...existingProduct.catalogueIds, catalogueId]),
+        );
+        productsToUpdate.push({
+          id: existingProduct.id,
+          catalogueIds: updatedCatalogueIds,
+          productImage: img.url,
+          barcode: sku,
+          barcodeUrl: barcodeMap.get(sku.toUpperCase()) || null,
+        });
+
+        const hasPrimaryImage = existingProduct.images.some((i) => i.isPrimary);
+        if (!hasPrimaryImage) {
+          newImagesForExistingProducts.push({
+            productId: existingProduct.id,
+            originalUrl: img.url,
+            isPrimary: true,
+            createdBy: userId,
+          });
+        }
+      } else {
+        const productId = randomBytes(12).toString('hex');
+        const slug = this.slugify(sku);
+
+        newProductsData.push({
+          id: productId,
+          sku: sku,
+          name: name,
+          slug: slug,
+          categoryId: category.id,
+          catalogueIds: [catalogueId],
+          moq: 1,
+          stockQuantity: 0,
+          stockStatus: 'OUT_OF_STOCK',
+          isActive: true,
+          createdBy: userId,
+          productImage: img.url,
+          barcode: sku,
+          barcodeUrl: barcodeMap.get(sku.toUpperCase()) || null,
+        });
+
+        newProductImagesData.push({
+          productId: productId,
+          originalUrl: img.url,
+          isPrimary: true,
+          createdBy: userId,
+        });
+      }
+    }
+
+    // Transaction for reliability and database integrity
+    await this.prisma.$transaction(
+      async (tx) => {
+        // 1. Create new products
+        if (newProductsData.length > 0) {
+          await tx.product.createMany({
+            data: newProductsData,
+          });
+
+          await tx.productImage.createMany({
+            data: newProductImagesData,
+          });
+        }
+
+        // 2. Update existing products
+        for (const prod of productsToUpdate) {
+          await tx.product.update({
+            where: { id: prod.id },
+            data: {
+              catalogueIds: prod.catalogueIds,
+              productImage: prod.productImage,
+              barcode: prod.barcode,
+              barcodeUrl: prod.barcodeUrl,
+            },
+          });
+        }
+
+        // 3. Create images for existing products if needed
+        if (newImagesForExistingProducts.length > 0) {
+          await tx.productImage.createMany({
+            data: newImagesForExistingProducts,
+          });
+        }
+      },
+      { timeout: 60000 },
+    );
+
+    this.logger.log(
+      `Bulk added ${newProductsData.length} new and updated ${productsToUpdate.length} existing products in catalogue ${catalogueId} in ${Date.now() - start}ms`,
+    );
+
+    // Trigger background cleaning (if required)
+    this.imageCleaningService
+      .triggerBackgroundCleaningForCatalogue(catalogueId, userId)
+      .catch(() => {});
+
+    return {
+      message: `${newProductsData.length} new products created and ${productsToUpdate.length} existing products updated.`,
+      addedCount: newProductsData.length,
+      updatedCount: productsToUpdate.length,
+    };
+  }
+
+  async addProductsToCatalogue(catalogueId: string, productIds: string[]) {
+    const catalogue = await this.prisma.catalogue.findUnique({
+      where: { id: catalogueId },
+    });
+    if (!catalogue) {
+      throw new NotFoundException(`Catalogue with ID '${catalogueId}' not found.`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Update Catalogue's productIds (union of current productIds and new productIds)
+      const updatedProductIds = Array.from(new Set([...catalogue.productIds, ...productIds]));
+      await tx.catalogue.update({
+        where: { id: catalogueId },
+        data: { productIds: updatedProductIds },
+      });
+
+      // 2. For each product, add catalogueId to its catalogueIds array
+      for (const productId of productIds) {
+        const product = await tx.product.findUnique({
+          where: { id: productId },
+        });
+        if (product) {
+          const updatedCatalogueIds = Array.from(new Set([...product.catalogueIds, catalogueId]));
+          await tx.product.update({
+            where: { id: productId },
+            data: { catalogueIds: updatedCatalogueIds },
+          });
+        }
+      }
+
+      return { success: true };
+    });
   }
 }

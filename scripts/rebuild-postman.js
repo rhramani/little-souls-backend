@@ -466,13 +466,6 @@ function updatePayloadsAndPreRequests(item) {
     }, null, 2);
   }
 
-  if (item.name === 'Update Supplier') {
-    item.request.body.raw = JSON.stringify({
-      name: "Updated Supplier Name",
-      mobile: "9876500001"
-    }, null, 2);
-  }
-
   if (item.name.includes('Record Payment')) {
     item.event = item.event || [];
     item.event = item.event.filter(e => e.listen !== 'prerequest');
@@ -522,7 +515,7 @@ collection.item.forEach((folder) => {
   folder.event = folder.event || [];
   folder.event = folder.event.filter(e => e.listen !== 'prerequest');
 
-  if (['02. Category', '03. Product', '04. Pricing', '07. Billing', '08. Import', '09. Staff', '10. Purchase Order', '13. Customer Approvals', '14. Reports', '15. Image Cleaning'].some(p => name.startsWith(p))) {
+  if (['02. Category', '03. Product', '04. Pricing', '07. Billing', '08. Import', '09. Staff', '13. Customer Approvals', '14. Reports', '15. Image Cleaning'].some(p => name.startsWith(p))) {
     folder.event.push(makeEvent('prerequest', [
       `pm.environment.set("token", pm.environment.get("staffToken"));`
     ]));
@@ -663,18 +656,6 @@ function generateTests(name, method) {
     if (name === 'Start Import') {
       lines.push(`    if (jsonData.id) {`);
       lines.push(`        pm.environment.set("importId", jsonData.id);`);
-      lines.push(`    }`);
-    }
-    
-    if (name === 'Create Supplier') {
-      lines.push(`    if (jsonData.id) {`);
-      lines.push(`        pm.environment.set("supplierId", jsonData.id);`);
-      lines.push(`    }`);
-    }
-    
-    if (name === 'Create Purchase Order') {
-      lines.push(`    if (jsonData.id) {`);
-      lines.push(`        pm.environment.set("poId", jsonData.id);`);
       lines.push(`    }`);
     }
     

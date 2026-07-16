@@ -181,7 +181,7 @@ describe('ImageCleaningService', () => {
 
       expect(mockPrismaService.productImage.findMany).toHaveBeenCalledWith({
         where: {
-          product: { catalogueId: 'cat-123' },
+          product: { catalogueIds: { has: 'cat-123' } },
           cleaningStatus: { in: ['NOT_REQUIRED', 'FAILED'] },
         },
       });

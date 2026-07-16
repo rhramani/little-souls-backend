@@ -114,20 +114,7 @@ function generateTests(name, method) {
       lines.push(`    }`);
     }
     
-    // Supplier ID extraction
-    if (name === 'Create Supplier') {
-      lines.push(`    if (jsonData.id) {`);
-      lines.push(`        pm.environment.set("supplierId", jsonData.id);`);
-      lines.push(`    }`);
-    }
-    
-    // Purchase Order ID extraction
-    if (name === 'Create Purchase Order') {
-      lines.push(`    if (jsonData.id) {`);
-      lines.push(`        pm.environment.set("poId", jsonData.id);`);
-      lines.push(`    }`);
-    }
-    
+
     // Support Ticket ID extraction
     if (name === 'Create Ticket') {
       lines.push(`    if (jsonData.id) {`);
