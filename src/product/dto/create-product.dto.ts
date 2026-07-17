@@ -82,8 +82,12 @@ export class CreateProductDto {
   description?: string;
 
   @IsMongoId()
-  @IsNotEmpty()
-  categoryId: string;
+  @IsOptional()
+  categoryId?: string;
+
+  @IsMongoId()
+  @IsOptional()
+  catalogueId?: string;
 
   @IsInt()
   @IsOptional()

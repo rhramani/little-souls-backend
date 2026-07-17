@@ -88,6 +88,10 @@ export class UpdateProductDto {
   @IsOptional()
   categoryId?: string;
 
+  @IsMongoId()
+  @IsOptional()
+  catalogueId?: string;
+
   @IsInt()
   @IsOptional()
   moq?: number;

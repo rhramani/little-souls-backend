@@ -51,14 +51,32 @@ export class ProductService {
       );
     }
 
-    // 3. Verify Category exists
-    const category = await this.prisma.category.findUnique({
-      where: { id: dto.categoryId },
-    });
-    if (!category) {
-      throw new NotFoundException(
-        `Category with ID '${dto.categoryId}' not found.`,
-      );
+    // 3. Verify Category exists or fallback to Uncategorized
+    let categoryId = dto.categoryId;
+    if (!categoryId) {
+      let defaultCategory = await this.prisma.category.findUnique({
+        where: { slug: 'uncategorized' },
+      });
+      if (!defaultCategory) {
+        defaultCategory = await this.prisma.category.create({
+          data: {
+            name: 'Uncategorized',
+            slug: 'uncategorized',
+            isActive: true,
+            createdBy: userId,
+          },
+        });
+      }
+      categoryId = defaultCategory.id;
+    } else {
+      const category = await this.prisma.category.findUnique({
+        where: { id: categoryId },
+      });
+      if (!category) {
+        throw new NotFoundException(
+          `Category with ID '${categoryId}' not found.`,
+        );
+      }
     }
 
     // 4. Create Product with relations inside Transaction
@@ -70,7 +88,8 @@ export class ProductService {
           slug,
           shortDescription: dto.shortDescription,
           description: dto.description,
-          categoryId: dto.categoryId,
+          categoryId: categoryId,
+          catalogueIds: dto.catalogueId ? [dto.catalogueId] : [],
           moq: dto.moq || 1,
           barcode: dto.barcode || dto.sku,
           brand: dto.brand,
@@ -118,6 +137,20 @@ export class ProductService {
           createdBy: userId,
         },
       });
+
+      if (dto.catalogueId) {
+        const catalogue = await tx.catalogue.findUnique({
+          where: { id: dto.catalogueId },
+        });
+        if (!catalogue) {
+          throw new NotFoundException(`Catalogue with ID '${dto.catalogueId}' not found.`);
+        }
+        const updatedProductIds = Array.from(new Set([...catalogue.productIds, product.id]));
+        await tx.catalogue.update({
+          where: { id: dto.catalogueId },
+          data: { productIds: updatedProductIds },
+        });
+      }
 
       // Create Images if provided
       if (dto.images && dto.images.length > 0) {

@@ -145,6 +145,7 @@ export class CatalogueService {
           name: dto.name,
           description: dto.description,
           imageUrl: dto.imageUrl,
+          isPublished: dto.isPublished,
         },
       });
 

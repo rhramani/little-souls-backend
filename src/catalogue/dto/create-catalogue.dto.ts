@@ -4,6 +4,7 @@ import {
   IsArray,
   ValidateNested,
   IsOptional,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -29,6 +30,10 @@ export class CreateCatalogueDto {
   @IsString()
   @IsOptional()
   imageUrl?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isPublished?: boolean;
 
   @IsArray()
   @ValidateNested({ each: true })
