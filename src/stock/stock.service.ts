@@ -114,7 +114,7 @@ export class StockService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    const [movements, total] = await this.prisma.$transaction([
+    const [movements, total] = await Promise.all([
       this.prisma.stockMovement.findMany({
         where,
         skip,

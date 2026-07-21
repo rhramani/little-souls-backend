@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -127,6 +129,41 @@ export class BillingController {
   @HttpCode(HttpStatus.OK)
   async rejectPayment(@Param('id') id: string, @GetUser('id') userId: string) {
     return this.billingService.rejectPayment(id, userId);
+  }
+
+  @Patch('ledger/:id')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async updateLedgerEntry(@Param('id') id: string, @Body() body: any) {
+    return this.billingService.updateLedgerEntry(id, body);
+  }
+
+  @Delete('ledger/:id')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async deleteLedgerEntry(@Param('id') id: string) {
+    return this.billingService.deleteLedgerEntry(id);
+  }
+
+  @Patch('payment/:id')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async updatePayment(@Param('id') id: string, @Body() body: any) {
+    return this.billingService.updatePayment(id, body);
+  }
+
+  @Delete('payment/:id')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async deletePayment(@Param('id') id: string) {
+    return this.billingService.deletePayment(id);
+  }
+
+  @Delete('clear-all')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async clearAllAccountsData() {
+    return this.billingService.clearAllAccountsData();
   }
 
   @Get('ledger')

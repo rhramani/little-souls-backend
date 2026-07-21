@@ -148,7 +148,7 @@ export class SupportService {
       where.priority = priority;
     }
 
-    const [tickets, total] = await this.prisma.$transaction([
+    const [tickets, total] = await Promise.all([
       this.prisma.supportTicket.findMany({
         where,
         skip,

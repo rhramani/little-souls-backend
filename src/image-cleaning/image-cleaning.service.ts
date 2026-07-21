@@ -245,7 +245,7 @@ export class ImageCleaningService {
     }
 
     if (dto.status === 'COMPLETED' && dto.cleanedUrl) {
-      await this.prisma.$transaction([
+      await Promise.all([
         this.prisma.imageCleaningTask.update({
           where: { id: dto.taskId },
           data: { status: 'COMPLETED', cleanedUrl: dto.cleanedUrl },
@@ -259,7 +259,7 @@ export class ImageCleaningService {
         }),
       ]);
     } else {
-      await this.prisma.$transaction([
+      await Promise.all([
         this.prisma.imageCleaningTask.update({
           where: { id: dto.taskId },
           data: { status: 'FAILED', errorMessage: dto.errorMessage },

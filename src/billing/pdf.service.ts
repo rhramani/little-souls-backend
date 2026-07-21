@@ -1,145 +1,327 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import axios from 'axios';
 import PDFDocument = require('pdfkit');
 
 @Injectable()
 export class PdfService {
+  private readonly logger = new Logger(PdfService.name);
+
+  /**
+   * Fetch an image URL and return it as a Buffer.
+   * Returns null if the image cannot be fetched (silently fails so PDF still generates).
+   */
+  private async fetchImageBuffer(url: string): Promise<Buffer | null> {
+    try {
+      const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        timeout: 5000,
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      return Buffer.from(response.data);
+    } catch (err) {
+      this.logger.warn(`Could not fetch product image from ${url}: ${err}`);
+      return null;
+    }
+  }
+
   async generateInvoicePdf(invoice: any): Promise<Buffer> {
+    // Pre-fetch all product images before starting PDF (async, outside promise)
+    const itemsWithImages = await Promise.all(
+      (invoice.items || []).map(async (item: any) => {
+        const imageUrl = item.productImageUrl || null;
+        const imageBuffer = imageUrl
+          ? await this.fetchImageBuffer(imageUrl)
+          : null;
+        return { ...item, imageBuffer };
+      }),
+    );
+
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50 });
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
       const buffers: Buffer[] = [];
 
       doc.on('data', buffers.push.bind(buffers));
-      doc.on('end', () => {
-        resolve(Buffer.concat(buffers));
-      });
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
-      // Header
+      // ─── HEADER ───────────────────────────────────────────────────────────────
       doc
-        .fontSize(20)
+        .fontSize(22)
         .font('Helvetica-Bold')
+        .fillColor('#9c5e43')
         .text('INVOICE', { align: 'right' });
-      doc
-        .fontSize(10)
-        .font('Helvetica')
-        .text(`Invoice Number: ${invoice.invoiceNumber}`, { align: 'right' })
-        .text(`Date: ${invoice.invoiceDate.toLocaleDateString()}`, {
-          align: 'right',
-        })
-        .text(`Due Date: ${invoice.dueDate.toLocaleDateString()}`, {
-          align: 'right',
-        })
-        .text(`Status: ${invoice.paymentStatus}`, { align: 'right' });
 
-      // Company Info (Hardcoded for Little Souls)
-      doc.fontSize(16).font('Helvetica-Bold').text('Little Souls B2B', 50, 50);
       doc
-        .fontSize(10)
+        .fontSize(9)
         .font('Helvetica')
-        .text('123 Wholesale Street', 50, 70)
-        .text('Mumbai, India 400001', 50, 85)
-        .text('GSTIN: 27AABCU9603R1ZM', 50, 100);
+        .fillColor('#555555')
+        .text(`Invoice No: ${invoice.invoiceNumber}`, { align: 'right' })
+        .text(
+          `Date:       ${new Date(invoice.invoiceDate).toLocaleDateString('en-IN')}`,
+          { align: 'right' },
+        )
+        .text(
+          `Due Date:   ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}`,
+          { align: 'right' },
+        )
+        .text(`Status:     ${invoice.paymentStatus}`, { align: 'right' });
 
+      // ─── COMPANY INFO ─────────────────────────────────────────────────────────
+      doc
+        .fontSize(15)
+        .font('Helvetica-Bold')
+        .fillColor('#9c5e43')
+        .text('Little Souls B2B', 50, 50);
+
+      doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor('#555555')
+        .text('123 Wholesale Street, Lower Parel', 50, 70)
+        .text('Mumbai, Maharashtra 400001', 50, 82)
+        .text('GSTIN: 27AABCU9603R1ZM', 50, 94);
+
+      // Separator line
       doc.moveDown(3);
+      const sepY = doc.y;
+      doc
+        .moveTo(50, sepY)
+        .lineTo(550, sepY)
+        .strokeColor('#dddddd')
+        .lineWidth(0.5)
+        .stroke();
+      doc.moveDown(1);
 
-      // Bill To
-      doc.font('Helvetica-Bold').text('Bill To:');
-      doc.font('Helvetica').text(invoice.customer.businessName);
+      // ─── BILL TO / SHIP TO ────────────────────────────────────────────────────
+      const addrY = doc.y;
+
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .fillColor('#888888')
+        .text('BILL TO', 50, addrY);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(10)
+        .fillColor('#404040')
+        .text(
+          invoice.customer?.businessName || 'Customer',
+          50,
+          addrY + 12,
+        );
+      doc.font('Helvetica').fontSize(9).fillColor('#555555');
       if (invoice.gstin) {
-        doc.text(`GSTIN: ${invoice.gstin}`);
+        doc.text(`GSTIN: ${invoice.gstin}`, 50, doc.y);
       }
       if (invoice.billingAddress) {
-        doc.text(invoice.billingAddress);
+        doc.text(invoice.billingAddress, 50, doc.y, { width: 220 });
       }
 
-      // Ship To
-      doc.moveDown();
-      doc.font('Helvetica-Bold').text('Ship To:');
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .fillColor('#888888')
+        .text('SHIP TO', 300, addrY);
       doc
         .font('Helvetica')
-        .text(invoice.shippingAddress || invoice.billingAddress || 'N/A');
+        .fontSize(9)
+        .fillColor('#555555')
+        .text(
+          invoice.shippingAddress || invoice.billingAddress || 'Same as billing',
+          300,
+          addrY + 12,
+          { width: 220 },
+        );
 
-      doc.moveDown(3);
+      // ─── TABLE ────────────────────────────────────────────────────────────────
+      const tableStartY = Math.max(doc.y, addrY + 80) + 15;
+      const ROW_HEIGHT = 44;
+      const IMG_SIZE = 36;
+      const COL = {
+        img: 50,
+        sku: 100,
+        name: 185,
+        qty: 355,
+        price: 405,
+        total: 475,
+      };
 
-      // Table Header
-      const tableTop = doc.y;
-      doc.font('Helvetica-Bold');
-      doc.text('SKU', 50, tableTop);
-      doc.text('Product Name', 120, tableTop);
-      doc.text('Qty', 350, tableTop);
-      doc.text('Price', 400, tableTop);
-      doc.text('Total', 480, tableTop, { align: 'right' });
+      // Table header background
+      doc.rect(50, tableStartY, 500, 18).fill('#9c5e43');
 
-      doc
-        .moveTo(50, tableTop + 15)
-        .lineTo(550, tableTop + 15)
-        .stroke();
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+      doc.text('Img', COL.img, tableStartY + 5, { width: 45 });
+      doc.text('SKU', COL.sku, tableStartY + 5, { width: 80 });
+      doc.text('Product', COL.name, tableStartY + 5, { width: 165 });
+      doc.text('Qty', COL.qty, tableStartY + 5, {
+        width: 45,
+        align: 'right',
+      });
+      doc.text('Price', COL.price, tableStartY + 5, {
+        width: 45,
+        align: 'right',
+      });
+      doc.text('Total', COL.total, tableStartY + 5, {
+        width: 65,
+        align: 'right',
+      });
 
-      // Table Rows
-      let currentY = tableTop + 25;
-      doc.font('Helvetica');
+      // Table rows
+      let currentY = tableStartY + 20;
 
-      invoice.items.forEach((item: any) => {
-        doc.text(item.sku, 50, currentY);
-        // Trim name if too long
+      itemsWithImages.forEach((item: any, idx: number) => {
+        // Zebra striping
+        if (idx % 2 === 0) {
+          doc.rect(50, currentY, 500, ROW_HEIGHT).fill('#fdf6f2');
+        }
+
+        // Product image
+        if (item.imageBuffer) {
+          try {
+            doc.image(item.imageBuffer, COL.img + 1, currentY + 4, {
+              width: IMG_SIZE,
+              height: IMG_SIZE,
+            });
+          } catch (e) {
+            this.logger.warn(
+              `Could not embed image for item ${item.sku}: ${e}`,
+            );
+            // Draw grey placeholder
+            doc
+              .rect(COL.img + 1, currentY + 4, IMG_SIZE, IMG_SIZE)
+              .fill('#eeeeee');
+          }
+        } else {
+          // Grey placeholder box
+          doc
+            .rect(COL.img + 1, currentY + 4, IMG_SIZE, IMG_SIZE)
+            .fill('#eeeeee');
+        }
+
+        // Trim name
         const name =
-          item.productName.length > 30
-            ? item.productName.substring(0, 30) + '...'
-            : item.productName;
-        doc.text(name, 120, currentY);
-        doc.text(item.quantity.toString(), 350, currentY);
-        doc.text(item.price.toFixed(2), 400, currentY);
-        doc.text(item.lineTotal.toFixed(2), 480, currentY, { align: 'right' });
-        currentY += 20;
+          item.productName && item.productName.length > 35
+            ? item.productName.substring(0, 35) + '...'
+            : item.productName || 'Unknown';
 
-        // Add a new page if we run out of space
+        doc
+          .font('Helvetica')
+          .fontSize(8)
+          .fillColor('#404040')
+          .text(item.sku || '-', COL.sku, currentY + 14, { width: 80 })
+          .text(name, COL.name, currentY + 14, { width: 165 })
+          .text(String(item.quantity), COL.qty, currentY + 14, {
+            width: 45,
+            align: 'right',
+          })
+          .text(
+            `Rs. ${Number(item.price).toFixed(2)}`,
+            COL.price,
+            currentY + 14,
+            { width: 45, align: 'right' },
+          )
+          .text(
+            `Rs. ${Number(item.lineTotal).toFixed(2)}`,
+            COL.total,
+            currentY + 14,
+            { width: 65, align: 'right' },
+          );
+
+        // Row separator
+        doc
+          .moveTo(50, currentY + ROW_HEIGHT)
+          .lineTo(550, currentY + ROW_HEIGHT)
+          .strokeColor('#e8e0db')
+          .lineWidth(0.3)
+          .stroke();
+
+        currentY += ROW_HEIGHT;
+
+        // New page if needed
         if (currentY > 700) {
           doc.addPage();
           currentY = 50;
         }
       });
 
-      doc.moveTo(50, currentY).lineTo(550, currentY).stroke();
-      currentY += 15;
-
-      // Totals
-      doc.font('Helvetica-Bold');
-      doc.text('Subtotal:', 400, currentY);
-      doc.text(invoice.subTotal.toFixed(2), 480, currentY, { align: 'right' });
-      currentY += 20;
-
-      if (invoice.discountTotal > 0) {
-        doc.text('Discount:', 400, currentY);
-        doc.text(`-${invoice.discountTotal.toFixed(2)}`, 480, currentY, {
-          align: 'right',
-        });
-        currentY += 20;
-      }
-
-      doc.text('Tax (GST):', 400, currentY);
-      doc.text(invoice.taxTotal.toFixed(2), 480, currentY, { align: 'right' });
-      currentY += 20;
-
-      doc.text('Shipping:', 400, currentY);
-      doc.text(invoice.shippingCharge.toFixed(2), 480, currentY, {
-        align: 'right',
-      });
-      currentY += 20;
-
-      doc.moveTo(400, currentY).lineTo(550, currentY).stroke();
+      // ─── TOTALS ───────────────────────────────────────────────────────────────
       currentY += 10;
 
-      doc.fontSize(12);
-      doc.text('Grand Total:', 380, currentY);
-      doc.text(`Rs. ${invoice.grandTotal.toFixed(2)}`, 480, currentY, {
+      doc.font('Helvetica').fontSize(9).fillColor('#555555');
+
+      const totalsX = 370;
+      const valX = 480;
+
+      doc.text('Subtotal:', totalsX, currentY);
+      doc.text(`Rs. ${Number(invoice.subTotal).toFixed(2)}`, valX, currentY, {
+        width: 70,
         align: 'right',
       });
+      currentY += 16;
 
-      // Footer
+      if (Number(invoice.discountTotal) > 0) {
+        doc.text('Discount:', totalsX, currentY);
+        doc.text(
+          `- Rs. ${Number(invoice.discountTotal).toFixed(2)}`,
+          valX,
+          currentY,
+          { width: 70, align: 'right' },
+        );
+        currentY += 16;
+      }
+
+      if (Number(invoice.taxTotal) > 0) {
+        doc.text('Tax (GST):', totalsX, currentY);
+        doc.text(
+          `Rs. ${Number(invoice.taxTotal).toFixed(2)}`,
+          valX,
+          currentY,
+          { width: 70, align: 'right' },
+        );
+        currentY += 16;
+      }
+
+      if (Number(invoice.shippingCharge) > 0) {
+        doc.text('Shipping:', totalsX, currentY);
+        doc.text(
+          `Rs. ${Number(invoice.shippingCharge).toFixed(2)}`,
+          valX,
+          currentY,
+          { width: 70, align: 'right' },
+        );
+        currentY += 16;
+      }
+
       doc
-        .fontSize(10)
+        .moveTo(totalsX, currentY)
+        .lineTo(550, currentY)
+        .strokeColor('#9c5e43')
+        .lineWidth(0.7)
+        .stroke();
+      currentY += 8;
+
+      doc
+        .fontSize(11)
+        .font('Helvetica-Bold')
+        .fillColor('#9c5e43')
+        .text('Grand Total:', totalsX, currentY)
+        .text(`Rs. ${Number(invoice.grandTotal).toFixed(2)}`, valX, currentY, {
+          width: 70,
+          align: 'right',
+        });
+
+      // ─── FOOTER ───────────────────────────────────────────────────────────────
+      doc
+        .fontSize(8)
         .font('Helvetica-Oblique')
-        .text('Thank you for your business!', 50, 750, {
+        .fillColor('#aaaaaa')
+        .text(
+          'This is a computer-generated document. No signature is required.',
+          50,
+          750,
+          { align: 'center', width: 500 },
+        )
+        .text('Thank you for your business!', 50, 762, {
           align: 'center',
           width: 500,
         });

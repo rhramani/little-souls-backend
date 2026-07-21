@@ -223,9 +223,12 @@ export class CatalogueService {
 
     return Promise.all(
       catalogues.map(async (c) => {
-        const [productsCount, previewProducts] = await Promise.all([
+        const [productsCount, categoriesCount, previewProducts] = await Promise.all([
           this.prisma.product.count({
             where: { catalogueIds: { has: c.id } },
+          }),
+          this.prisma.category.count({
+            where: { catalogueId: c.id },
           }),
           this.prisma.product.findMany({
             where: { catalogueIds: { has: c.id } },
@@ -254,6 +257,7 @@ export class CatalogueService {
           createdAt: c.createdAt,
           updatedAt: c.updatedAt,
           productsCount,
+          categoriesCount,
           previewImages,
         };
       }),
@@ -266,22 +270,24 @@ export class CatalogueService {
     page?: number,
     limit?: number,
     publishedOnly = false,
+    categoryId?: string,
   ) {
     const objectIdRegex = /^[0-9a-fA-F]{24}$/;
     if (!objectIdRegex.test(id)) {
       throw new BadRequestException(`Invalid catalogue ID format: ${id}`);
     }
 
-    const productWhere =
-      typeof search === 'string' && search.trim()
-        ? {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' as const } },
-              { sku: { contains: search, mode: 'insensitive' as const } },
-              { barcode: { contains: search, mode: 'insensitive' as const } },
-            ],
-          }
-        : {};
+    const productWhere: any = {};
+    if (typeof search === 'string' && search.trim()) {
+      productWhere.OR = [
+        { name: { contains: search, mode: 'insensitive' as const } },
+        { sku: { contains: search, mode: 'insensitive' as const } },
+        { barcode: { contains: search, mode: 'insensitive' as const } },
+      ];
+    }
+    if (categoryId) {
+      productWhere.categoryId = categoryId;
+    }
 
     const validPage = typeof page === 'number' && page > 0 ? page : 1;
     const validLimit =
@@ -297,6 +303,7 @@ export class CatalogueService {
           ...productWhere,
         },
         include: {
+          category: { select: { id: true, name: true, slug: true } },
           images: { orderBy: { sortOrder: 'asc' } },
           pricing: { include: { pricingGroup: true } },
         },
@@ -431,7 +438,11 @@ export class CatalogueService {
     };
   }
 
-  async exportCatalogue(catalogueId: string, productIds?: string): Promise<Buffer> {
+  async exportCatalogue(
+    catalogueId: string,
+    productIds?: string,
+    categoryId?: string,
+  ): Promise<Buffer> {
     const start = Date.now();
     const catalogue = await this.prisma.catalogue.findUnique({
       where: { id: catalogueId },
@@ -443,6 +454,10 @@ export class CatalogueService {
     const productWhere: any = {
       catalogueIds: { has: catalogueId },
     };
+
+    if (categoryId) {
+      productWhere.categoryId = categoryId;
+    }
 
     if (productIds) {
       const ids = productIds.split(',').map((id) => id.trim()).filter(Boolean);
@@ -707,6 +722,7 @@ export class CatalogueService {
     catalogueId: string,
     fileBuffer: Buffer,
     userId: string,
+    targetCategoryId?: string,
   ) {
     const start = Date.now();
     const catalogue = await this.findOne(catalogueId);
@@ -1113,19 +1129,27 @@ export class CatalogueService {
     // Execute updates inside Transaction
     await this.prisma.$transaction(
       async (tx) => {
-        // 1. Resolve or create default "Uncategorized" category for new products
-        let category = await tx.category.findUnique({
-          where: { slug: 'uncategorized' },
-        });
-        if (!category) {
-          category = await tx.category.create({
-            data: {
-              name: 'Uncategorized',
-              slug: 'uncategorized',
-              isActive: true,
-              createdBy: userId,
-            },
+        // 1. Resolve target category or default "Uncategorized" category for new products
+        let category: any = null;
+        if (targetCategoryId) {
+          category = await tx.category.findUnique({
+            where: { id: targetCategoryId },
           });
+        }
+        if (!category) {
+          category = await tx.category.findUnique({
+            where: { slug: 'uncategorized' },
+          });
+          if (!category) {
+            category = await tx.category.create({
+              data: {
+                name: 'Uncategorized',
+                slug: 'uncategorized',
+                isActive: true,
+                createdBy: userId,
+              },
+            });
+          }
         }
 
         // 1b. Resolve or create all missing pricing groups sequentially to avoid race conditions
@@ -1462,6 +1486,7 @@ export class CatalogueService {
     catalogueId: string,
     files: Express.Multer.File[],
     userId: string,
+    targetCategoryId?: string,
   ) {
     const start = Date.now();
     const catalogue = await this.prisma.catalogue.findUnique({
@@ -1471,10 +1496,18 @@ export class CatalogueService {
       throw new NotFoundException(`Catalogue with ID '${catalogueId}' not found.`);
     }
 
-    // 1. Resolve or create default "Uncategorized" category
-    let category = await this.prisma.category.findUnique({
-      where: { slug: 'uncategorized' },
-    });
+    // 1. Resolve category: check targetCategoryId first, fallback to "Uncategorized"
+    let category: any = null;
+    if (targetCategoryId) {
+      category = await this.prisma.category.findUnique({
+        where: { id: targetCategoryId },
+      });
+    }
+    if (!category) {
+      category = await this.prisma.category.findUnique({
+        where: { slug: 'uncategorized' },
+      });
+    }
     if (!category) {
       category = await this.prisma.category.create({
         data: {

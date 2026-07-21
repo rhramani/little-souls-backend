@@ -39,6 +39,10 @@ export class CreateCategoryDto {
   @IsOptional()
   isActive?: boolean;
 
+  @IsMongoId({ message: 'Catalogue ID must be a valid Mongo ID' })
+  @IsOptional()
+  catalogueId?: string;
+
   @IsInt()
   @IsOptional()
   sortOrder?: number;

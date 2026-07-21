@@ -351,7 +351,7 @@ export class ProductService {
     }
 
     // Execute queries
-    const [products, total] = await this.prisma.$transaction([
+    const [products, total] = await Promise.all([
       this.prisma.product.findMany({
         where,
         skip,

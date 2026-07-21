@@ -34,4 +34,9 @@ export class RecordPaymentDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentStatus?: string; // "VERIFIED" | "PENDING" | "REJECTED"
 }
+

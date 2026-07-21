@@ -158,7 +158,6 @@ export class SettingsService {
       'savedReport',
       'setting',
       'auditLog',
-      'eventLog',
       'catalogue',
     ];
 
@@ -276,7 +275,6 @@ export class SettingsService {
       'savedReport',
       'setting',
       'auditLog',
-      'eventLog',
       'catalogue',
     ];
 

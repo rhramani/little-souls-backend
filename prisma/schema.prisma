@@ -301,7 +301,7 @@ model CustomerContact {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user     User?
 
   // Back-relations
@@ -330,6 +330,8 @@ model Category {
   childCategories Category[] @relation("CategoryHierarchy")
   createdByUser   User?      @relation("CategoryCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedByUser   User?      @relation("CategoryUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  catalogueId      String?   @map("catalogue_id") @db.ObjectId
+  catalogue        Catalogue? @relation(fields: [catalogueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   products        Product[]
 
   @@map("categories")
@@ -572,7 +574,7 @@ model Cart {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer        Customer?        @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   customerContact CustomerContact? @relation(fields: [customerContactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   items           CartItem[]
 
@@ -622,7 +624,7 @@ model Order {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer        Customer?        @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   customerContact CustomerContact? @relation(fields: [customerContactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   cancelledByUser User?            @relation("OrderCancelledBy", fields: [cancelledBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   approvedByUser  User?            @relation("OrderApprovedBy", fields: [approvedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -776,7 +778,7 @@ model Invoice {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   order         Order         @relation(fields: [orderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdByUser User?         @relation("InvoiceCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   items         InvoiceItem[]
 
@@ -821,7 +823,7 @@ model Payment {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  customer       Customer @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer       Customer? @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   verifiedByUser User?    @relation("PaymentVerifiedBy", fields: [verifiedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   receivedByUser User?    @relation("PaymentReceivedBy", fields: [receivedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -839,11 +841,12 @@ model LedgerEntry {
   credit            Float
   balanceAfterEntry Float  @map("balance_after_entry")
   description       String?
+  transactionStatus String?  @default("COMPLETED") @map("transaction_status") // "COMPLETED", "PENDING", "CANCELLED", "VOIDED", "REVERSED"
   createdBy         String?  @map("created_by") @db.ObjectId
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  customer      Customer @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer      Customer? @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdByUser User?    @relation("LedgerEntryCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("ledger_entries")
@@ -854,7 +857,11 @@ model CreditDebitNote {
   customerId    String   @map("customer_id") @db.ObjectId
   noteNumber    String   @unique @map("note_number")
   noteType      String   @map("note_type") // "CREDIT_NOTE", "DEBIT_NOTE"
+  chargeType    String?  @map("charge_type") // "DISCOUNT", "PACKING", "OTHER", "CUSTOM"
   amount        Float
+  discountAmount Float?   @default(0) @map("discount_amount")
+  packingCharges Float?   @default(0) @map("packing_charges")
+  otherCharges  Float?   @default(0) @map("other_charges")
   reason        String?
   referenceType String   @map("reference_type") // "ORDER", "INVOICE", "PAYMENT", "MANUAL"
   referenceId   String?  @map("reference_id") @db.ObjectId
@@ -862,7 +869,7 @@ model CreditDebitNote {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  customer      Customer @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer      Customer? @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdByUser User?    @relation("CreditDebitNoteCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("credit_debit_notes")
@@ -1042,17 +1049,7 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-model EventLog {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  eventName   String   @map("event_name") // "CUSTOMER_APPROVED", "PRODUCT_CREATED", "PRICE_UPDATED", "ORDER_CREATED", "PAYMENT_RECEIVED", "STOCK_CHANGED"
-  module      String
-  referenceId String?  @map("reference_id") @db.ObjectId
-  payload     String?
-  processed   Boolean  @default(false)
-  createdAt   DateTime @default(now()) @map("created_at")
 
-  @@map("event_logs")
-}
 
 model Catalogue {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
@@ -1064,6 +1061,7 @@ model Catalogue {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   productIds  String[]  @map("product_ids") @db.ObjectId
   products    Product[] @relation(fields: [productIds], references: [id])
+  categories  Category[]
 
   @@map("catalogues")
 }

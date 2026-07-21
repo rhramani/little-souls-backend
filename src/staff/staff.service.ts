@@ -229,7 +229,7 @@ export class StaffService {
   async findAllStaff(page = 1, limit = 20) {
     const skip = (page - 1) * limit;
     const [staff, total, activeCount, disabledCount] =
-      await this.prisma.$transaction([
+      await Promise.all([
         this.prisma.staffProfile.findMany({
           where: {
             users: {
@@ -351,6 +351,11 @@ export class StaffService {
       }
     }
 
+    // Normalize mobile: strip leading + to keep format consistent with stored values
+    if (dto.mobile) {
+      dto.mobile = dto.mobile.startsWith('+') ? dto.mobile.slice(1) : dto.mobile;
+    }
+
     let resolvedDesignation = dto.designation;
 
     // Check role validity and update userRoles
@@ -428,6 +433,11 @@ export class StaffService {
 
   async deactivateStaff(staffId: string) {
     await this.findOneStaff(staffId);
+    // Deactivate StaffProfile
+    await this.prisma.staffProfile.update({
+      where: { id: staffId },
+      data: { isActive: false },
+    });
     // Deactivate linked user accounts
     await this.prisma.user.updateMany({
       where: { staffId },
@@ -440,6 +450,12 @@ export class StaffService {
 
   async activateStaff(staffId: string) {
     await this.findOneStaff(staffId);
+    // Activate StaffProfile
+    await this.prisma.staffProfile.update({
+      where: { id: staffId },
+      data: { isActive: true },
+    });
+    // Activate linked user accounts
     await this.prisma.user.updateMany({
       where: { staffId },
       data: { isActive: true },
@@ -798,7 +814,7 @@ export class StaffService {
     }
 
     if (updates.length > 0) {
-      await this.prisma.$transaction(updates);
+      await Promise.all(updates);
     }
   }
 
@@ -821,7 +837,7 @@ export class StaffService {
       if (endDate) where.attendanceDate.lte = new Date(endDate);
     }
 
-    const [records, total] = await this.prisma.$transaction([
+    const [records, total] = await Promise.all([
       this.prisma.attendanceRecord.findMany({
         where,
         skip,
@@ -1007,7 +1023,7 @@ export class StaffService {
       if (user?.staffId) where.staffId = user.staffId;
     }
 
-    const [requests, total] = await this.prisma.$transaction([
+    const [requests, total] = await Promise.all([
       this.prisma.leaveRequest.findMany({
         where,
         skip,
@@ -1069,7 +1085,7 @@ export class StaffService {
     if (month) where.salaryMonth = month;
     if (year) where.salaryYear = year;
 
-    const [payrolls, total] = await this.prisma.$transaction([
+    const [payrolls, total] = await Promise.all([
       this.prisma.payroll.findMany({
         where,
         skip,

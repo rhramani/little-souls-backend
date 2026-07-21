@@ -34,6 +34,10 @@ export class PosCheckoutDto {
   @IsOptional()
   walkInMobile?: string;
 
+  @IsString()
+  @IsOptional()
+  walkInGstin?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PosOrderItemDto)
@@ -50,4 +54,7 @@ export class PosCheckoutDto {
   @IsNumber()
   @IsOptional()
   taxPercent?: number;
+
+  @IsOptional()
+  withGst?: boolean;
 }

@@ -317,7 +317,7 @@ export class OrderService {
       };
     }
 
-    const [orders, total] = await this.prisma.$transaction([
+    const [orders, total] = await Promise.all([
       this.prisma.order.findMany({
         where,
         skip,
@@ -1136,6 +1136,8 @@ export class OrderService {
             data: {
               businessName: dto.walkInName || 'Walk-in Store Customer',
               mainContactNumber: walkInMobile,
+              gstin: dto.walkInGstin || null,
+              customerSource: 'Walk-in Customer',
               isActive: true,
               approvalStatus: 'APPROVED',
               approvedBy: userId,
@@ -1191,11 +1193,15 @@ export class OrderService {
         const price = Number(itemInput.price);
 
         const taxPercent =
-          dto.taxPercent !== undefined
-            ? Number(dto.taxPercent)
-            : product.taxPercent
-              ? Number(product.taxPercent)
-              : 0;
+          dto.withGst === false
+            ? 0
+            : dto.taxPercent !== undefined
+              ? Number(dto.taxPercent)
+              : product.taxPercent && Number(product.taxPercent) > 0
+                ? Number(product.taxPercent)
+                : product.taxType === 'GST' || !product.taxType
+                  ? 12
+                  : 0;
 
         const lineSubTotal = price * quantity;
         subTotal = subTotal + lineSubTotal;
@@ -1226,7 +1232,7 @@ export class OrderService {
 
         const diff = lineSubTotal - lineDiscountTotal;
         const taxableLineValue = diff > 0 ? diff : 0;
-        const lineTaxTotal = taxableLineValue * (taxPercent / 100);
+        const lineTaxTotal = (taxableLineValue * taxPercent) / 100;
         taxTotal = taxTotal + lineTaxTotal;
 
         const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
@@ -1277,7 +1283,7 @@ export class OrderService {
         });
       }
 
-      const grandTotal = subTotal + taxTotal - orderDiscountTotal;
+      const grandTotal = Math.max(0, subTotal + taxTotal - orderDiscountTotal);
 
       // 4. Create Order
       const order = await tx.order.create({

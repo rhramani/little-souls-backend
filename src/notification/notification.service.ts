@@ -12,7 +12,7 @@ export class NotificationService {
   async getUserNotifications(userId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
 
-    const [notifications, total, unreadCount] = await this.prisma.$transaction([
+    const [notifications, total, unreadCount] = await Promise.all([
       this.prisma.notification.findMany({
         where: { userId },
         skip,

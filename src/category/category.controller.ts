@@ -37,8 +37,12 @@ export class CategoryController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  async findAll(@Query('onlyActive') onlyActive?: boolean) {
-    return this.categoryService.findAll(onlyActive);
+  async findAll(
+    @Query('onlyActive') onlyActive?: string,
+    @Query('catalogueId') catalogueId?: string,
+  ) {
+    const activeOnly = onlyActive === 'true';
+    return this.categoryService.findAll(activeOnly, catalogueId);
   }
 
   @Get('tree')

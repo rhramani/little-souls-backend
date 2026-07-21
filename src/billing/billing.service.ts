@@ -60,12 +60,12 @@ export class BillingService {
     const customer = order.customer;
     const billingAddress =
       [
-        customer.billingAddressLine1,
-        customer.billingAddressLine2,
-        customer.billingCity,
-        customer.billingState,
-        customer.billingPincode,
-        customer.billingCountry,
+        customer?.billingAddressLine1,
+        customer?.billingAddressLine2,
+        customer?.billingCity,
+        customer?.billingState,
+        customer?.billingPincode,
+        customer?.billingCountry,
       ]
         .filter(Boolean)
         .join(', ') || null;
@@ -73,12 +73,12 @@ export class BillingService {
     const shippingAddress =
       order.deliveryAddress ||
       [
-        customer.shippingAddressLine1,
-        customer.shippingAddressLine2,
-        customer.shippingCity,
-        customer.shippingState,
-        customer.shippingPincode,
-        customer.shippingCountry,
+        customer?.shippingAddressLine1,
+        customer?.shippingAddressLine2,
+        customer?.shippingCity,
+        customer?.shippingState,
+        customer?.shippingPincode,
+        customer?.shippingCountry,
       ]
         .filter(Boolean)
         .join(', ') ||
@@ -103,7 +103,7 @@ export class BillingService {
           status: 'GENERATED',
           billingAddress,
           shippingAddress,
-          gstin: customer.gstin,
+          gstin: customer?.gstin || null,
           taxableAmount: order.subTotal,
           createdBy: userId,
         },
@@ -182,10 +182,11 @@ export class BillingService {
     }
 
     const paymentNumber = `PAY-${Date.now().toString().slice(-8)}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const transactionDate = new Date(dto.transactionDate);
+    const transactionDate = dto.transactionDate ? new Date(dto.transactionDate) : new Date();
     const amountDec = Number(dto.amount);
+    const statusToUse = dto.paymentStatus || (isVerified ? 'VERIFIED' : 'PENDING');
 
-    if (isVerified) {
+    if (isVerified || dto.paymentStatus === 'VERIFIED') {
       // Direct transactional staff payment recording
       return this.prisma.$transaction(async (tx) => {
         const payment = await tx.payment.create({
@@ -198,7 +199,7 @@ export class BillingService {
             referenceNumber: dto.referenceNumber,
             attachmentUrl: dto.attachmentUrl,
             notes: dto.notes,
-            paymentStatus: 'VERIFIED',
+            paymentStatus: statusToUse,
             verifiedBy: userId,
             verifiedAt: new Date(),
             receivedBy: userId,
@@ -352,7 +353,7 @@ export class BillingService {
       where.customerId = filterCustId;
     }
 
-    const [invoices, total] = await this.prisma.$transaction([
+    const [invoices, total] = await Promise.all([
       this.prisma.invoice.findMany({
         where,
         skip,
@@ -362,16 +363,28 @@ export class BillingService {
           order: {
             select: { orderNumber: true },
           },
-          customer: {
-            select: { businessName: true, customerCode: true },
-          },
         },
       }),
       this.prisma.invoice.count({ where }),
     ]);
 
+    // Safe manual join — avoids crash when customerId references a deleted customer
+    const customerIds = [...new Set(invoices.map((i) => i.customerId).filter(Boolean))];
+    const customers = customerIds.length
+      ? await this.prisma.customer.findMany({
+          where: { id: { in: customerIds } },
+          select: { id: true, businessName: true, customerCode: true },
+        })
+      : [];
+    const customerMap = new Map(customers.map((c) => [c.id, c]));
+
+    const invoicesWithCustomer = invoices.map((i) => ({
+      ...i,
+      customer: customerMap.get(i.customerId) ?? null,
+    }));
+
     return {
-      invoices,
+      invoices: invoicesWithCustomer,
       meta: {
         total,
         page,
@@ -415,23 +428,33 @@ export class BillingService {
       where.customerId = filterCustId;
     }
 
-    const [payments, total] = await this.prisma.$transaction([
+    const [payments, total] = await Promise.all([
       this.prisma.payment.findMany({
         where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
-          customer: {
-            select: { businessName: true, customerCode: true },
-          },
-        },
       }),
       this.prisma.payment.count({ where }),
     ]);
 
+    // Safe manual join — avoids crash when customerId references a deleted customer
+    const customerIds = [...new Set(payments.map((p) => p.customerId).filter(Boolean))];
+    const customers = customerIds.length
+      ? await this.prisma.customer.findMany({
+          where: { id: { in: customerIds } },
+          select: { id: true, businessName: true, customerCode: true },
+        })
+      : [];
+    const customerMap = new Map(customers.map((c) => [c.id, c]));
+
+    const paymentsWithCustomer = payments.map((p) => ({
+      ...p,
+      customer: customerMap.get(p.customerId) ?? null,
+    }));
+
     return {
-      payments,
+      payments: paymentsWithCustomer,
       meta: {
         total,
         page,
@@ -460,21 +483,10 @@ export class BillingService {
 
     if (search && search.trim()) {
       const searchTrimmed = search.trim();
+      // MongoDB supports regex-based search; 'contains' with mode:'insensitive' is not supported
       where.OR = [
-        { referenceId: { contains: searchTrimmed, mode: 'insensitive' } },
-        { description: { contains: searchTrimmed, mode: 'insensitive' } },
-        {
-          customer: {
-            OR: [
-              {
-                businessName: { contains: searchTrimmed, mode: 'insensitive' },
-              },
-              {
-                customerCode: { contains: searchTrimmed, mode: 'insensitive' },
-              },
-            ],
-          },
-        },
+        { description: { contains: searchTrimmed } },
+        { entryType: { contains: searchTrimmed } },
       ];
     }
 
@@ -486,23 +498,33 @@ export class BillingService {
       }
     }
 
-    const [ledgerEntries, total] = await this.prisma.$transaction([
+    const [ledgerEntries, total] = await Promise.all([
       this.prisma.ledgerEntry.findMany({
         where,
         skip,
         take: limit,
         orderBy: { entryDate: 'desc' },
-        include: {
-          customer: {
-            select: { businessName: true, customerCode: true },
-          },
-        },
       }),
       this.prisma.ledgerEntry.count({ where }),
     ]);
 
+    // Safe manual join — avoids crash when customerId references a deleted customer
+    const customerIds = [...new Set(ledgerEntries.map((e) => e.customerId).filter(Boolean))];
+    const customers = customerIds.length
+      ? await this.prisma.customer.findMany({
+          where: { id: { in: customerIds } },
+          select: { id: true, businessName: true, customerCode: true },
+        })
+      : [];
+    const customerMap = new Map(customers.map((c) => [c.id, c]));
+
+    const ledgerEntriesWithCustomer = ledgerEntries.map((e) => ({
+      ...e,
+      customer: customerMap.get(e.customerId) ?? null,
+    }));
+
     return {
-      ledgerEntries,
+      ledgerEntries: ledgerEntriesWithCustomer,
       meta: {
         total,
         page,
@@ -542,18 +564,58 @@ export class BillingService {
       if (!customer) throw new NotFoundException('Customer not found');
 
       const noteNumber = `CN-${Date.now().toString().slice(-8)}`;
-      const amount = Number(dto.amount);
+      const discountVal = Number(dto.discountAmount || 0);
+      const packingVal = Number(dto.packingCharges || 0);
+      const otherVal = Number(dto.otherCharges || 0);
+      const amount = dto.amount ? Number(dto.amount) : (discountVal + packingVal + otherVal);
+
+      const chargeLabel =
+        dto.chargeType === 'DISCOUNT'
+          ? 'Discount'
+          : dto.chargeType === 'PACKING'
+          ? 'Packing Charges'
+          : dto.chargeType === 'OTHER'
+          ? 'Other Charges'
+          : 'Credit Note Adjustment';
+
+      let refType = 'MANUAL';
+      let refId: string | undefined = undefined;
+      let payTag = '';
+
+      if (dto.paymentId) {
+        refType = 'PAYMENT';
+        payTag = ` [Payment: ${dto.paymentId}]`;
+        const targetPayment = await tx.payment.findFirst({
+          where: {
+            OR: [
+              ...(dto.paymentId.length === 24 ? [{ id: dto.paymentId }] : []),
+              { referenceNumber: dto.paymentId },
+              { paymentNumber: dto.paymentId },
+            ],
+          },
+        });
+        if (targetPayment) {
+          refId = targetPayment.id;
+        }
+      }
+
+      const noteData: any = {
+        customerId: dto.customerId,
+        noteNumber,
+        noteType: 'CREDIT_NOTE',
+        chargeType: dto.chargeType || 'CUSTOM',
+        amount,
+        discountAmount: discountVal,
+        packingCharges: packingVal,
+        otherCharges: otherVal,
+        reason: dto.reason ? `${dto.reason}${payTag}` : payTag,
+        referenceType: refType,
+        ...(refId && { referenceId: refId }),
+        createdBy: userId,
+      };
 
       const note = await tx.creditDebitNote.create({
-        data: {
-          customerId: dto.customerId,
-          noteNumber,
-          noteType: 'CREDIT_NOTE',
-          amount,
-          reason: dto.reason,
-          referenceType: 'MANUAL',
-          createdBy: userId,
-        },
+        data: noteData,
       });
 
       const newBalance = (customer.currentBalance || 0) - amount;
@@ -563,17 +625,24 @@ export class BillingService {
         data: { currentBalance: newBalance },
       });
 
+      const breakdownParts: string[] = [];
+      if (discountVal > 0) breakdownParts.push(`Discount: ₹${discountVal}`);
+      if (packingVal > 0) breakdownParts.push(`Packing: ₹${packingVal}`);
+      if (otherVal > 0) breakdownParts.push(`Other: ₹${otherVal}`);
+
+      const descText = `${chargeLabel} — ${noteNumber}${payTag}${breakdownParts.length ? ` (${breakdownParts.join(', ')})` : ''}: ${dto.reason || ''}`;
+
       await tx.ledgerEntry.create({
         data: {
           customerId: dto.customerId,
           entryDate: new Date(),
           entryType: 'CREDIT_NOTE',
-          referenceType: 'MANUAL',
+          referenceType: refType,
           referenceId: note.id,
           debit: 0,
           credit: amount,
           balanceAfterEntry: newBalance,
-          description: `Credit Note ${noteNumber} issued: ${dto.reason}`,
+          description: descText,
           createdBy: userId,
         },
       });
@@ -591,18 +660,58 @@ export class BillingService {
       if (!customer) throw new NotFoundException('Customer not found');
 
       const noteNumber = `DN-${Date.now().toString().slice(-8)}`;
-      const amount = Number(dto.amount);
+      const discountVal = Number(dto.discountAmount || 0);
+      const packingVal = Number(dto.packingCharges || 0);
+      const otherVal = Number(dto.otherCharges || 0);
+      const amount = dto.amount ? Number(dto.amount) : (discountVal + packingVal + otherVal);
+
+      const chargeLabel =
+        dto.chargeType === 'PACKING'
+          ? 'Packing Charges'
+          : dto.chargeType === 'OTHER'
+          ? 'Other Charges'
+          : dto.chargeType === 'DISCOUNT'
+          ? 'Discount'
+          : 'Debit Note Adjustment';
+
+      let refType = 'MANUAL';
+      let refId: string | undefined = undefined;
+      let payTag = '';
+
+      if (dto.paymentId) {
+        refType = 'PAYMENT';
+        payTag = ` [Payment: ${dto.paymentId}]`;
+        const targetPayment = await tx.payment.findFirst({
+          where: {
+            OR: [
+              ...(dto.paymentId.length === 24 ? [{ id: dto.paymentId }] : []),
+              { referenceNumber: dto.paymentId },
+              { paymentNumber: dto.paymentId },
+            ],
+          },
+        });
+        if (targetPayment) {
+          refId = targetPayment.id;
+        }
+      }
+
+      const noteData: any = {
+        customerId: dto.customerId,
+        noteNumber,
+        noteType: 'DEBIT_NOTE',
+        chargeType: dto.chargeType || 'CUSTOM',
+        amount,
+        discountAmount: discountVal,
+        packingCharges: packingVal,
+        otherCharges: otherVal,
+        reason: dto.reason ? `${dto.reason}${payTag}` : payTag,
+        referenceType: refType,
+        ...(refId && { referenceId: refId }),
+        createdBy: userId,
+      };
 
       const note = await tx.creditDebitNote.create({
-        data: {
-          customerId: dto.customerId,
-          noteNumber,
-          noteType: 'DEBIT_NOTE',
-          amount,
-          reason: dto.reason,
-          referenceType: 'MANUAL',
-          createdBy: userId,
-        },
+        data: noteData,
       });
 
       const newBalance = (customer.currentBalance || 0) + amount;
@@ -612,17 +721,24 @@ export class BillingService {
         data: { currentBalance: newBalance },
       });
 
+      const breakdownParts: string[] = [];
+      if (discountVal > 0) breakdownParts.push(`Discount: ₹${discountVal}`);
+      if (packingVal > 0) breakdownParts.push(`Packing: ₹${packingVal}`);
+      if (otherVal > 0) breakdownParts.push(`Other: ₹${otherVal}`);
+
+      const descText = `${chargeLabel} — ${noteNumber}${payTag}${breakdownParts.length ? ` (${breakdownParts.join(', ')})` : ''}: ${dto.reason || ''}`;
+
       await tx.ledgerEntry.create({
         data: {
           customerId: dto.customerId,
           entryDate: new Date(),
           entryType: 'DEBIT_NOTE',
-          referenceType: 'MANUAL',
+          referenceType: refType,
           referenceId: note.id,
           debit: amount,
           credit: 0,
           balanceAfterEntry: newBalance,
-          description: `Debit Note ${noteNumber} issued: ${dto.reason}`,
+          description: descText,
           createdBy: userId,
         },
       });
@@ -678,5 +794,84 @@ export class BillingService {
     });
 
     return workbook.xlsx.writeBuffer() as Promise<Buffer>;
+  }
+
+  async updateLedgerEntry(id: string, data: { amount?: number; referenceNumber?: string; notes?: string; transactionStatus?: string }) {
+    const entry = await this.prisma.ledgerEntry.findUnique({ where: { id } });
+    if (!entry) throw new NotFoundException(`Ledger entry with ID '${id}' not found.`);
+
+    const VALID_STATUSES = ['COMPLETED', 'PENDING', 'CANCELLED', 'VOIDED', 'REVERSED'];
+
+    return this.prisma.ledgerEntry.update({
+      where: { id },
+      data: {
+        ...(data.amount !== undefined && {
+          debit: entry.debit > 0 ? data.amount : 0,
+          credit: entry.credit > 0 ? data.amount : 0,
+        }),
+        ...(data.notes !== undefined && { description: data.notes }),
+        ...(data.transactionStatus !== undefined &&
+          VALID_STATUSES.includes(data.transactionStatus) && {
+            transactionStatus: data.transactionStatus,
+          }),
+      },
+    });
+  }
+
+  async deleteLedgerEntry(id: string) {
+    const entry = await this.prisma.ledgerEntry.findUnique({ where: { id } });
+    if (!entry) throw new NotFoundException(`Ledger entry with ID '${id}' not found.`);
+
+    // Reverse the balance effect on the customer
+    await this.prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.findUnique({
+        where: { id: entry.customerId },
+        select: { currentBalance: true },
+      });
+
+      const balanceAdjustment = entry.debit - entry.credit;
+      const newBalance = (customer?.currentBalance || 0) - balanceAdjustment;
+
+      await tx.customer.update({
+        where: { id: entry.customerId },
+        data: { currentBalance: newBalance },
+      });
+
+      await tx.ledgerEntry.delete({ where: { id } });
+    });
+
+    return { message: 'Ledger entry voided successfully.' };
+  }
+
+  async updatePayment(id: string, data: { amount?: number; referenceNumber?: string; notes?: string }) {
+    const payment = await this.prisma.payment.findUnique({ where: { id } });
+    if (!payment) throw new NotFoundException(`Payment with ID '${id}' not found.`);
+
+    return this.prisma.payment.update({
+      where: { id },
+      data: {
+        ...(data.amount !== undefined && { amount: data.amount }),
+        ...(data.referenceNumber !== undefined && { referenceNumber: data.referenceNumber }),
+        ...(data.notes !== undefined && { notes: data.notes }),
+      },
+    });
+  }
+
+  async deletePayment(id: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id } });
+    if (!payment) throw new NotFoundException(`Payment with ID '${id}' not found.`);
+
+    await this.prisma.payment.delete({ where: { id } });
+    return { message: 'Payment deleted successfully.' };
+  }
+
+  async clearAllAccountsData() {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.creditDebitNote.deleteMany({});
+      await tx.payment.deleteMany({});
+      await tx.ledgerEntry.deleteMany({});
+      await tx.customer.updateMany({ data: { currentBalance: 0 } });
+    });
+    return { message: 'All accounts and ledger data removed successfully.' };
   }
 }

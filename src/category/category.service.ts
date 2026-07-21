@@ -23,19 +23,17 @@ export class CategoryService {
   }
 
   async create(dto: CreateCategoryDto, userId: string) {
-    const slug = dto.slug ? this.slugify(dto.slug) : this.slugify(dto.name);
+    let slug = dto.slug ? this.slugify(dto.slug) : this.slugify(dto.name);
 
-    // 1. Check if slug exists
+    // Check if slug exists, append timestamp if duplicate
     const existing = await this.prisma.category.findUnique({
       where: { slug },
     });
     if (existing) {
-      throw new ConflictException(
-        `Category with slug '${slug}' already exists.`,
-      );
+      slug = `${slug}-${Date.now()}`;
     }
 
-    // 2. If parent category exists, verify it
+    // Verify parent category if provided
     if (dto.parentCategoryId) {
       const parent = await this.prisma.category.findUnique({
         where: { id: dto.parentCategoryId },
@@ -47,13 +45,14 @@ export class CategoryService {
       }
     }
 
-    // 3. Create the Category
+    // Create the Category
     return this.prisma.category.create({
       data: {
         name: dto.name,
         slug,
         description: dto.description,
         parentCategoryId: dto.parentCategoryId || null,
+        catalogueId: dto.catalogueId || null,
         imageUrl: dto.imageUrl,
         bannerUrl: dto.bannerUrl,
         isActive: dto.isActive !== undefined ? dto.isActive : true,
@@ -63,10 +62,18 @@ export class CategoryService {
     });
   }
 
-  async findAll(onlyActive: boolean = false) {
+  async findAll(onlyActive: boolean = false, catalogueId?: string) {
+    const where: any = {};
+    if (onlyActive) {
+      where.isActive = true;
+    }
+    if (catalogueId) {
+      where.catalogueId = catalogueId;
+    }
+
     const categories = await this.prisma.category.findMany({
-      where: onlyActive ? { isActive: true } : {},
-      orderBy: { sortOrder: 'asc' },
+      where,
+      orderBy: { createdAt: 'desc' },
       include: {
         _count: {
           select: { products: true },

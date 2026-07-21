@@ -480,7 +480,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.newPassword, 10);
 
-    await this.prisma.$transaction([
+    await Promise.all([
       this.prisma.user.update({
         where: { id: resetRecord.userId },
         data: { passwordHash },

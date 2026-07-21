@@ -61,6 +61,7 @@ export class CatalogueController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('publishedOnly') publishedOnly?: string,
+    @Query('categoryId') categoryId?: string,
   ) {
     const pubOnly = publishedOnly === 'true';
     return this.catalogueService.findOne(
@@ -69,6 +70,7 @@ export class CatalogueController {
       page ? parseInt(page, 10) : undefined,
       limit ? parseInt(limit, 10) : undefined,
       pubOnly,
+      categoryId,
     );
   }
 
@@ -93,9 +95,10 @@ export class CatalogueController {
   async exportCatalogue(
     @Param('id') id: string,
     @Query('productIds') productIds: string | undefined,
+    @Query('categoryId') categoryId: string | undefined,
     @Res() res: Response,
   ) {
-    const buffer = await this.catalogueService.exportCatalogue(id, productIds);
+    const buffer = await this.catalogueService.exportCatalogue(id, productIds, categoryId);
 
     res.set({
       'Content-Type':
@@ -116,6 +119,7 @@ export class CatalogueController {
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
     @GetUser('id') userId: string,
+    @Query('categoryId') categoryId?: string,
   ) {
     if (!file) {
       if (process.env.NODE_ENV !== 'production') {
@@ -133,7 +137,7 @@ export class CatalogueController {
       );
     }
 
-    return this.catalogueService.importCatalogue(id, file.buffer, userId);
+    return this.catalogueService.importCatalogue(id, file.buffer, userId, categoryId);
   }
 
   @Post(':id/share-images-meta')
@@ -173,11 +177,14 @@ export class CatalogueController {
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
     @GetUser('id') userId: string,
+    @Body('categoryId') categoryId?: string,
+    @Query('categoryId') queryCategoryId?: string,
   ) {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files uploaded.');
     }
-    return this.catalogueService.bulkAddProducts(id, files, userId);
+    const targetCategory = categoryId || queryCategoryId;
+    return this.catalogueService.bulkAddProducts(id, files, userId, targetCategory);
   }
 
   @Post(':id/products')

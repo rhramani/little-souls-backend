@@ -208,7 +208,7 @@ export class CustomerService {
       where.approvalStatus = status;
     }
 
-    const [customers, total] = await this.prisma.$transaction([
+    const [customers, total] = await Promise.all([
       this.prisma.customer.findMany({
         where,
         skip,

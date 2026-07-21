@@ -46,7 +46,7 @@ export class DashboardService {
           grandTotal: true,
           orderStatus: true,
           createdAt: true,
-          customer: { select: { businessName: true, customerCode: true } },
+          customerId: true,
         },
       }),
       this.prisma.order.groupBy({
@@ -84,13 +84,21 @@ export class DashboardService {
     const totalRevenue = Number(revenueAgg._sum.grandTotal || 0);
     const thisMonthRevenue = Number(thisMonthRevenueAgg._sum.grandTotal || 0);
 
+    // Batch-fetch customers for recentOrders to avoid null-relation crash on orphaned data
+    const recentCustomerIds = [...new Set(recentOrders.map((o) => o.customerId))];
+    const recentCustomers = await this.prisma.customer.findMany({
+      where: { id: { in: recentCustomerIds } },
+      select: { id: true, businessName: true, customerCode: true },
+    });
+    const customerMap = new Map(recentCustomers.map((c) => [c.id, c]));
+
     const formattedRecentOrders = recentOrders.map((order) => ({
       id: order.id,
       orderNumber: order.orderNumber,
       amount: Number(order.grandTotal),
       status: order.orderStatus,
       date: order.createdAt,
-      customerName: order.customer?.businessName || 'Unknown Customer',
+      customerName: customerMap.get(order.customerId)?.businessName || 'Unknown Customer',
     }));
 
     const orderStatusBreakdown = {
