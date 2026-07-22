@@ -68,7 +68,7 @@ export class CustomerActivityService {
         {
           action: 'LOGIN',
           section: 'Portal',
-          details: 'Customer logged into the portal',
+          details: 'Logged into customer portal',
           timestamp: now.toISOString(),
         },
       ],
@@ -135,7 +135,7 @@ export class CustomerActivityService {
     session.activities.push({
       action: 'LOGOUT',
       section: 'Portal',
-      details: 'Customer logged out of the portal',
+      details: 'Logged out of customer portal',
       timestamp: logoutTime.toISOString(),
     });
 
@@ -176,11 +176,46 @@ export class CustomerActivityService {
       if (cust) targetCustomerId = cust.id;
     }
 
-    // Format summary string
+    // Format summary string dynamically
     const formattedDuration = this.formatDuration(totalDurationSeconds);
     const formattedSections = Object.entries(session.sectionDurations)
       .map(([sec, dur]) => `${sec}: ${this.formatDuration(dur)}`)
       .join(', ');
+
+    // Build 100% dynamic key highlights summary from real customer actions
+    const keyActions: string[] = [];
+    const searches = session.activities.filter((a) => a.action === 'SEARCH');
+    if (searches.length > 0) {
+      const searchTerms = Array.from(new Set(searches.map((s) => s.details).filter(Boolean))).join(', ');
+      keyActions.push(`Searches: ${searchTerms}`);
+    }
+
+    const productViews = session.activities.filter((a) => a.action === 'VIEW_PRODUCT_DETAILS');
+    if (productViews.length > 0) {
+      keyActions.push(`Viewed ${productViews.length} product(s)`);
+    }
+
+    const cartAdds = session.activities.filter((a) => a.action === 'ADD_TO_CART');
+    if (cartAdds.length > 0) {
+      keyActions.push(`Added ${cartAdds.length} item(s) to cart`);
+    }
+
+    const orderPlaces = session.activities.filter((a) => a.action === 'PLACE_ORDER');
+    if (orderPlaces.length > 0) {
+      keyActions.push(`Placed Order`);
+    }
+
+    const keyHighlightsStr = keyActions.length > 0 ? keyActions.join(' | ') : '';
+
+    // Itemized activity list formatting
+    const activitySummaryLines = session.activities.map((a) => {
+      const timeStr = new Date(a.timestamp).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+      return `${timeStr} - [${a.section}] ${a.details || a.action}`;
+    });
 
     // 1. Save Customer Activity Session to Database
     let savedSession: any = null;
@@ -216,7 +251,10 @@ export class CustomerActivityService {
       select: { id: true },
     });
 
-    const notificationMessage = `Customer ${customerInfo.businessName || customerInfo.name} (${customerInfo.customerCode || 'N/A'}) logged out. Total duration: ${formattedDuration}. Sections visited: ${formattedSections || 'Home'}.`;
+    const displayCustName = customerInfo.businessName || customerInfo.name || 'Customer';
+    const displayCustCode = customerInfo.customerCode ? ` (${customerInfo.customerCode})` : '';
+
+    const notificationMessage = `Customer ${displayCustName}${displayCustCode} (Phone: ${customerInfo.mobile || 'N/A'}) logged out after ${formattedDuration}. Visited: ${formattedSections || 'Home'}.${keyHighlightsStr ? ' Highlights: ' + keyHighlightsStr + '.' : ''} Total actions logged: ${session.activities.length}.`;
 
     try {
       await Promise.all(
@@ -224,7 +262,7 @@ export class CustomerActivityService {
           this.prisma.notification.create({
             data: {
               userId: admin.id,
-              title: `Customer Session Summary: ${customerInfo.businessName || customerInfo.name}`,
+              title: `Customer Session Summary: ${displayCustName}${displayCustCode}`,
               message: notificationMessage,
               notificationType: 'SYSTEM',
               isRead: false,
@@ -249,13 +287,15 @@ export class CustomerActivityService {
       formattedDuration,
       sectionDurations: session.sectionDurations,
       formattedSections,
+      keyHighlights: keyHighlightsStr,
       activities: session.activities,
+      activitySummaryLines,
       summaryMessage: notificationMessage,
     };
 
     if (gatewayServer) {
       gatewayServer.to('room:super_admin').emit('customer.session_summary', payload);
-      this.logger.log(`Emitted customer.session_summary for customer ${customerInfo.name}`);
+      this.logger.log(`Emitted customer.session_summary for customer ${customerInfo.name} (${session.activities.length} activities logged)`);
     }
 
     return payload;

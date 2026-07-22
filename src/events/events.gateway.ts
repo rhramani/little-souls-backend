@@ -84,7 +84,7 @@ export class EventsGateway
     @MessageBody()
     data: {
       userId: string;
-      customerId: string;
+      customerId?: string;
       customerCode?: string;
       businessName?: string;
       customerName?: string;
@@ -92,19 +92,23 @@ export class EventsGateway
       customerMobile?: string;
     },
   ) {
-    if (!data.userId || !data.customerId) return;
+    if (!data || !data.userId) return;
     const sessionKey = data.userId;
     this.socketSessionMap.set(client.id, sessionKey);
 
     const session = this.activityService.startSession({
       userId: data.userId,
-      customerId: data.customerId,
+      customerId: data.customerId || '',
       customerCode: data.customerCode,
       businessName: data.businessName,
       customerName: data.customerName,
       customerEmail: data.customerEmail,
       customerMobile: data.customerMobile,
     });
+
+    this.logger.log(
+      `Customer session started: ${data.customerName || data.userId} (socket ${client.id})`,
+    );
 
     return { status: 'started', sessionId: session.sessionId };
   }
