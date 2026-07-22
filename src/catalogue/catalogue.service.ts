@@ -427,6 +427,12 @@ export class CatalogueService {
         }
       }
 
+      // Unlink any categories associated with this catalogue
+      await tx.category.updateMany({
+        where: { catalogueId: id },
+        data: { catalogueId: null },
+      });
+
       // Finally delete the catalogue itself
       await tx.catalogue.delete({
         where: { id },

@@ -153,6 +153,7 @@ export class BillingService {
           credit: 0,
           balanceAfterEntry: newBalance,
           description: `Invoice ${invoiceNumber} generated for Order ${order.orderNumber}`,
+          transactionStatus: 'PENDING',
           createdBy: userId,
         },
       });
@@ -398,8 +399,28 @@ export class BillingService {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: {
-        items: true,
-        order: true,
+        items: {
+          include: {
+            product: {
+              include: {
+                images: true,
+              },
+            },
+          },
+        },
+        order: {
+          include: {
+            items: {
+              include: {
+                product: {
+                  include: {
+                    images: true,
+                  },
+                },
+              },
+            },
+          },
+        },
         customer: true,
       },
     });
@@ -556,7 +577,7 @@ export class BillingService {
   }
 
   async createCreditNote(dto: any, userId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const res = await this.prisma.$transaction(async (tx) => {
       const customer = await tx.customer.findUnique({
         where: { id: dto.customerId },
       });
@@ -643,16 +664,20 @@ export class BillingService {
           credit: amount,
           balanceAfterEntry: newBalance,
           description: descText,
+          transactionStatus: dto.status || dto.transactionStatus || 'COMPLETED',
           createdBy: userId,
         },
       });
 
       return note;
     });
+
+    await this.recalculateCustomerBalance(dto.customerId);
+    return res;
   }
 
   async createDebitNote(dto: any, userId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const res = await this.prisma.$transaction(async (tx) => {
       const customer = await tx.customer.findUnique({
         where: { id: dto.customerId },
       });
@@ -739,12 +764,16 @@ export class BillingService {
           credit: 0,
           balanceAfterEntry: newBalance,
           description: descText,
+          transactionStatus: dto.status || dto.transactionStatus || 'COMPLETED',
           createdBy: userId,
         },
       });
 
       return note;
     });
+
+    await this.recalculateCustomerBalance(dto.customerId);
+    return res;
   }
 
   async exportLedger(customerId?: string): Promise<Buffer> {
@@ -800,9 +829,9 @@ export class BillingService {
     const entry = await this.prisma.ledgerEntry.findUnique({ where: { id } });
     if (!entry) throw new NotFoundException(`Ledger entry with ID '${id}' not found.`);
 
-    const VALID_STATUSES = ['COMPLETED', 'PENDING', 'CANCELLED', 'VOIDED', 'REVERSED'];
+    const VALID_STATUSES = ['COMPLETED', 'PENDING', 'CANCELLED', 'ADVANCE'];
 
-    return this.prisma.ledgerEntry.update({
+    const updatedEntry = await this.prisma.ledgerEntry.update({
       where: { id },
       data: {
         ...(data.amount !== undefined && {
@@ -816,38 +845,87 @@ export class BillingService {
           }),
       },
     });
+
+    await this.recalculateCustomerBalance(entry.customerId);
+
+    return updatedEntry;
   }
 
   async deleteLedgerEntry(id: string) {
     const entry = await this.prisma.ledgerEntry.findUnique({ where: { id } });
     if (!entry) throw new NotFoundException(`Ledger entry with ID '${id}' not found.`);
 
-    // Reverse the balance effect on the customer
-    await this.prisma.$transaction(async (tx) => {
-      const customer = await tx.customer.findUnique({
-        where: { id: entry.customerId },
-        select: { currentBalance: true },
+    const customerId = entry.customerId;
+
+    // 1. If this entry is a PAYMENT entry or linked to a Payment, also delete the Payment
+    if (entry.referenceType === 'PAYMENT' && entry.referenceId) {
+      const linkedPayment = await this.prisma.payment.findFirst({
+        where: {
+          OR: [
+            ...(entry.referenceId.length === 24 ? [{ id: entry.referenceId }] : []),
+            { paymentNumber: entry.referenceId },
+            { referenceNumber: entry.referenceId },
+          ],
+        },
       });
+      if (linkedPayment) {
+        return this.deletePayment(linkedPayment.id);
+      }
+    }
 
-      const balanceAdjustment = entry.debit - entry.credit;
-      const newBalance = (customer?.currentBalance || 0) - balanceAdjustment;
-
-      await tx.customer.update({
-        where: { id: entry.customerId },
-        data: { currentBalance: newBalance },
-      });
-
-      await tx.ledgerEntry.delete({ where: { id } });
+    // 2. Find any linked CreditDebitNote records where referenceId matches entry.id or entry.referenceId
+    const candidateRefIds = [entry.id, entry.referenceId].filter((x): x is string => Boolean(x));
+    const linkedNotes = await this.prisma.creditDebitNote.findMany({
+      where: {
+        customerId,
+        OR: [
+          { referenceId: { in: candidateRefIds } },
+          ...(entry.entryType === 'CREDIT_NOTE' || entry.entryType === 'DEBIT_NOTE'
+            ? [{ id: entry.referenceId || entry.id }]
+            : []),
+        ],
+      },
+      select: { id: true },
     });
 
-    return { message: 'Ledger entry voided successfully.' };
+    const noteIds = linkedNotes.map((n) => n.id);
+    if ((entry.entryType === 'CREDIT_NOTE' || entry.entryType === 'DEBIT_NOTE') && entry.referenceId) {
+      noteIds.push(entry.referenceId);
+    }
+
+    // 3. Delete ledger entries for linked notes
+    if (noteIds.length > 0) {
+      await this.prisma.ledgerEntry.deleteMany({
+        where: {
+          customerId,
+          OR: [
+            { referenceId: { in: noteIds } },
+            { id: { in: noteIds } },
+          ],
+        },
+      });
+      // Delete credit/debit note records
+      await this.prisma.creditDebitNote.deleteMany({
+        where: { id: { in: noteIds } },
+      });
+    }
+
+    // 4. Delete the target ledger entry
+    await this.prisma.ledgerEntry.deleteMany({
+      where: { id },
+    });
+
+    // 5. Recalculate customer balance
+    await this.recalculateCustomerBalance(customerId);
+
+    return { message: 'Ledger entry and associated notes deleted successfully.' };
   }
 
   async updatePayment(id: string, data: { amount?: number; referenceNumber?: string; notes?: string }) {
     const payment = await this.prisma.payment.findUnique({ where: { id } });
     if (!payment) throw new NotFoundException(`Payment with ID '${id}' not found.`);
 
-    return this.prisma.payment.update({
+    const updatedPayment = await this.prisma.payment.update({
       where: { id },
       data: {
         ...(data.amount !== undefined && { amount: data.amount }),
@@ -855,14 +933,200 @@ export class BillingService {
         ...(data.notes !== undefined && { notes: data.notes }),
       },
     });
+
+    await this.recalculateCustomerBalance(payment.customerId);
+
+    return updatedPayment;
   }
 
   async deletePayment(id: string) {
     const payment = await this.prisma.payment.findUnique({ where: { id } });
     if (!payment) throw new NotFoundException(`Payment with ID '${id}' not found.`);
 
+    const customerId = payment.customerId;
+    const refVariants = [
+      payment.id,
+      payment.paymentNumber,
+      payment.referenceNumber,
+    ].filter((x): x is string => Boolean(x));
+
+    // 1. Find all linked CreditDebitNotes for this payment
+    const linkedNotes = await this.prisma.creditDebitNote.findMany({
+      where: {
+        customerId,
+        OR: [
+          { referenceId: { in: refVariants } },
+          { reason: { contains: payment.id } },
+          { reason: { contains: payment.paymentNumber } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    const noteIds = linkedNotes.map((n) => n.id);
+
+    // 2. Delete ledger entries for linked notes
+    if (noteIds.length > 0) {
+      await this.prisma.ledgerEntry.deleteMany({
+        where: {
+          customerId,
+          OR: [
+            { referenceId: { in: noteIds } },
+            { id: { in: noteIds } },
+          ],
+        },
+      });
+
+      // Delete credit/debit notes
+      await this.prisma.creditDebitNote.deleteMany({
+        where: { id: { in: noteIds } },
+      });
+    }
+
+    // 3. Delete ledger entries for the payment itself
+    await this.prisma.ledgerEntry.deleteMany({
+      where: {
+        customerId,
+        OR: [
+          { referenceId: { in: refVariants } },
+          { id: payment.id },
+        ],
+      },
+    });
+
+    // 4. Delete the payment record
     await this.prisma.payment.delete({ where: { id } });
-    return { message: 'Payment deleted successfully.' };
+
+    // 5. Recalculate customer balance
+    await this.recalculateCustomerBalance(customerId);
+
+    return { message: 'Payment and associated credit/debit notes deleted successfully.' };
+  }
+
+  async recalculateCustomerBalance(customerId: string) {
+    // 1. Find valid payment reference identifiers
+    const payments = await this.prisma.payment.findMany({
+      where: { customerId },
+      select: { id: true, paymentNumber: true, referenceNumber: true },
+    });
+
+    const validPaymentRefIds = new Set([
+      ...payments.map((p) => p.id),
+      ...payments.map((p) => p.paymentNumber).filter(Boolean),
+      ...payments.map((p) => p.referenceNumber).filter(Boolean),
+    ]);
+
+    // Find valid invoices
+    const invoices = await this.prisma.invoice.findMany({
+      where: { customerId },
+      select: { id: true, invoiceNumber: true, orderId: true },
+    });
+    const validInvoiceRefIds = new Set([
+      ...invoices.map((i) => i.id),
+      ...invoices.map((i) => i.invoiceNumber).filter(Boolean),
+      ...invoices.map((i) => i.orderId).filter(Boolean),
+    ]);
+
+    // 2. Find orphan CreditDebitNotes where referenceType is PAYMENT or INVOICE but referenceId is no longer valid
+    const orphanNotes = await this.prisma.creditDebitNote.findMany({
+      where: { customerId },
+      select: { id: true, referenceType: true, referenceId: true },
+    });
+
+    const orphanNoteIds = orphanNotes
+      .filter((n) => {
+        if (!n.referenceId) return false;
+        if (n.referenceType === 'PAYMENT' && !validPaymentRefIds.has(n.referenceId)) return true;
+        if (n.referenceType === 'INVOICE' && !validInvoiceRefIds.has(n.referenceId)) return true;
+        return false;
+      })
+      .map((n) => n.id);
+
+    if (orphanNoteIds.length > 0) {
+      await this.prisma.ledgerEntry.deleteMany({
+        where: {
+          customerId,
+          OR: [
+            { referenceId: { in: orphanNoteIds } },
+            { id: { in: orphanNoteIds } },
+          ],
+        },
+      });
+      await this.prisma.creditDebitNote.deleteMany({
+        where: { id: { in: orphanNoteIds } },
+      });
+    }
+
+    // 3. Find orphan LedgerEntries for PAYMENT where referenceId does not exist in Payment table
+    const orphanPaymentLedgers = await this.prisma.ledgerEntry.findMany({
+      where: {
+        customerId,
+        entryType: 'PAYMENT',
+        referenceType: 'PAYMENT',
+      },
+      select: { id: true, referenceId: true },
+    });
+
+    const orphanPaymentLedgerIds = orphanPaymentLedgers
+      .filter((l) => l.referenceId && !validPaymentRefIds.has(l.referenceId))
+      .map((l) => l.id);
+
+    if (orphanPaymentLedgerIds.length > 0) {
+      await this.prisma.ledgerEntry.deleteMany({
+        where: { id: { in: orphanPaymentLedgerIds } },
+      });
+    }
+
+    // 4. Aggregate clean ledger entries
+    const ledgerSums = await this.prisma.ledgerEntry.aggregate({
+      where: {
+        customerId,
+        transactionStatus: { notIn: ['CANCELLED', 'VOIDED'] },
+      },
+      _sum: {
+        debit: true,
+        credit: true,
+      },
+    });
+
+    const pendingDebitEntry = await this.prisma.ledgerEntry.findFirst({
+      where: {
+        customerId,
+        debit: { gt: 0 },
+        transactionStatus: 'PENDING',
+      },
+    });
+
+    const totalDebit = ledgerSums._sum.debit || 0;
+    const totalCredit = ledgerSums._sum.credit || 0;
+    const pendingAmount = pendingDebitEntry ? Math.max(0, totalDebit - totalCredit) : 0;
+
+    // 5. Update invoice payment status dynamically
+    if (totalDebit > 0) {
+      if (pendingAmount <= 0) {
+        await this.prisma.invoice.updateMany({
+          where: { customerId },
+          data: { paymentStatus: 'PAID' },
+        });
+      } else if (totalCredit > 0) {
+        await this.prisma.invoice.updateMany({
+          where: { customerId },
+          data: { paymentStatus: 'PARTIAL' },
+        });
+      } else {
+        await this.prisma.invoice.updateMany({
+          where: { customerId },
+          data: { paymentStatus: 'UNPAID' },
+        });
+      }
+    }
+
+    await this.prisma.customer.update({
+      where: { id: customerId },
+      data: { currentBalance: pendingAmount },
+    });
+
+    return { totalDebit, totalCredit, pendingAmount };
   }
 
   async clearAllAccountsData() {
@@ -873,5 +1137,116 @@ export class BillingService {
       await tx.customer.updateMany({ data: { currentBalance: 0 } });
     });
     return { message: 'All accounts and ledger data removed successfully.' };
+  }
+
+  private async findNoteByAnyIdentifier(id: string) {
+    let note = await this.prisma.creditDebitNote.findFirst({
+      where: {
+        OR: [
+          { id },
+          { noteNumber: id },
+          { referenceId: id },
+        ],
+      },
+    });
+
+    if (!note) {
+      const ledger = await this.prisma.ledgerEntry.findUnique({ where: { id } });
+      if (ledger) {
+        const refIds = [ledger.referenceId, ledger.id].filter((x): x is string => Boolean(x));
+        const noteMatch = ledger.description?.match(/\b(CN|DN)-[a-zA-Z0-9-]+\b/i)?.[0];
+        if (noteMatch) refIds.push(noteMatch);
+
+        note = await this.prisma.creditDebitNote.findFirst({
+          where: {
+            OR: [
+              { id: { in: refIds } },
+              { noteNumber: { in: refIds } },
+              { referenceId: { in: refIds } },
+            ],
+          },
+        });
+      }
+    }
+
+    return note;
+  }
+
+  async updateCreditDebitNote(
+    id: string,
+    data: { amount?: number; reason?: string; chargeType?: string },
+  ) {
+    const note = await this.findNoteByAnyIdentifier(id);
+    if (!note) throw new NotFoundException(`Credit/Debit note with ID '${id}' not found.`);
+
+    const newAmount = data.amount !== undefined ? data.amount : note.amount;
+    const newReason = data.reason !== undefined ? data.reason : note.reason;
+
+    const updatedNote = await this.prisma.creditDebitNote.update({
+      where: { id: note.id },
+      data: {
+        amount: newAmount,
+        reason: newReason,
+        ...(data.chargeType && { chargeType: data.chargeType as any }),
+      },
+    });
+
+    const isCN = note.noteType === 'CREDIT_NOTE';
+    const noteNumber = note.noteNumber;
+
+    await this.prisma.ledgerEntry.updateMany({
+      where: {
+        customerId: note.customerId,
+        OR: [
+          { referenceId: note.id },
+          { id: note.id },
+          { id },
+          { description: { contains: noteNumber } },
+        ],
+      },
+      data: {
+        debit: isCN ? 0 : newAmount,
+        credit: isCN ? newAmount : 0,
+        description: `${data.chargeType || note.chargeType || (isCN ? 'Credit Note' : 'Debit Note')} - ${noteNumber}: ${newReason}`,
+      },
+    });
+
+    await this.recalculateCustomerBalance(note.customerId);
+
+    return updatedNote;
+  }
+
+  async deleteCreditDebitNote(id: string) {
+    const note = await this.findNoteByAnyIdentifier(id);
+    if (!note) {
+      const ledger = await this.prisma.ledgerEntry.findUnique({ where: { id } });
+      if (ledger) {
+        await this.prisma.ledgerEntry.delete({ where: { id } });
+        await this.recalculateCustomerBalance(ledger.customerId);
+        return { message: 'Ledger entry deleted successfully.' };
+      }
+      throw new NotFoundException(`Credit/Debit note with ID '${id}' not found.`);
+    }
+
+    const customerId = note.customerId;
+    const noteNumber = note.noteNumber;
+
+    await this.prisma.ledgerEntry.deleteMany({
+      where: {
+        customerId,
+        OR: [
+          { referenceId: note.id },
+          { id: note.id },
+          { id },
+          { description: { contains: noteNumber } },
+        ],
+      },
+    });
+
+    await this.prisma.creditDebitNote.delete({ where: { id: note.id } });
+
+    await this.recalculateCustomerBalance(customerId);
+
+    return { message: 'Credit/Debit note deleted successfully.' };
   }
 }

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDecimal } from 'class-validator';
+import { IsString, IsOptional } from 'class-validator';
 
 export class UpdateCustomerDto {
   @IsOptional()
@@ -98,7 +98,7 @@ export class UpdateCustomerDto {
   whatsapp?: string;
 
   @IsOptional()
-  creditLimit?: any;
+  creditLimit?: string | number | null;
 
   @IsString()
   @IsOptional()

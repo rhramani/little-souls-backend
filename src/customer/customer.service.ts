@@ -36,7 +36,7 @@ export class CustomerService {
         OR: [
           { mobile: dto.mobile },
           dto.email ? { email: dto.email } : undefined,
-        ].filter(Boolean) as any,
+        ].filter((x): x is NonNullable<typeof x> => x !== undefined),
       },
     });
 
@@ -195,7 +195,7 @@ export class CustomerService {
     const { page = 1, limit = 10, search, status } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.CustomerWhereInput = {};
     if (search) {
       where.OR = [
         { businessName: { contains: search, mode: 'insensitive' } },
@@ -232,8 +232,109 @@ export class CustomerService {
       this.prisma.customer.count({ where }),
     ]);
 
+    const customerIds = customers.map((c) => c.id);
+
+    const [ledgerGrouped, ordersGrouped, paymentsGrouped, notesGrouped, pendingDebitsGrouped] = customerIds.length > 0
+      ? await Promise.all([
+          this.prisma.ledgerEntry.groupBy({
+            by: ['customerId'],
+            where: {
+              customerId: { in: customerIds },
+              transactionStatus: { notIn: ['CANCELLED', 'VOIDED'] },
+            },
+            _sum: { debit: true, credit: true },
+          }),
+          this.prisma.order.groupBy({
+            by: ['customerId'],
+            where: {
+              customerId: { in: customerIds },
+              orderStatus: { in: ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'] },
+            },
+            _sum: { grandTotal: true },
+          }),
+          this.prisma.payment.groupBy({
+            by: ['customerId'],
+            where: {
+              customerId: { in: customerIds },
+              paymentStatus: 'VERIFIED',
+            },
+            _sum: { amount: true },
+          }),
+          this.prisma.ledgerEntry.groupBy({
+            by: ['customerId', 'entryType'],
+            where: {
+              customerId: { in: customerIds },
+              entryType: { in: ['CREDIT_NOTE', 'DEBIT_NOTE'] },
+              transactionStatus: { in: ['COMPLETED', 'DONE', 'ACTIVE'] },
+            },
+            _sum: { debit: true, credit: true },
+          }),
+          this.prisma.ledgerEntry.groupBy({
+            by: ['customerId'],
+            where: {
+              customerId: { in: customerIds },
+              entryType: { in: ['INVOICE', 'OPENING_BALANCE'] },
+              debit: { gt: 0 },
+              transactionStatus: 'PENDING',
+            },
+            _sum: { debit: true },
+          }),
+        ])
+      : [[], [], [], [], []];
+
+    const ledgerMap = new Map(ledgerGrouped.map((g) => [g.customerId, { debit: g._sum.debit || 0, credit: g._sum.credit || 0 }]));
+    const ordersMap = new Map(ordersGrouped.map((g) => [g.customerId, g._sum.grandTotal || 0]));
+    const paymentsMap = new Map(paymentsGrouped.map((g) => [g.customerId, g._sum.amount || 0]));
+    const pendingInvoicesMap = new Map(pendingDebitsGrouped.map((g) => [g.customerId, g._sum.debit || 0]));
+
+    const creditNotesMap = new Map<string, number>();
+    const debitNotesMap = new Map<string, number>();
+    notesGrouped.forEach((g) => {
+      if (g.entryType === 'CREDIT_NOTE') {
+        creditNotesMap.set(g.customerId, (creditNotesMap.get(g.customerId) || 0) + (g._sum.credit || 0));
+      } else if (g.entryType === 'DEBIT_NOTE') {
+        debitNotesMap.set(g.customerId, (debitNotesMap.get(g.customerId) || 0) + (g._sum.debit || 0));
+      }
+    });
+
+    const customersWithMetrics = customers.map((c) => {
+      const l = ledgerMap.get(c.id) || { debit: 0, credit: 0 };
+      const approvedOrdersTotal = ordersMap.get(c.id) || 0;
+      const verifiedPaymentsTotal = paymentsMap.get(c.id) || 0;
+      const creditNotesTotal = creditNotesMap.get(c.id) || 0;
+      const debitNotesTotal = debitNotesMap.get(c.id) || 0;
+      const pendingInvoiceAmt = pendingInvoicesMap.get(c.id) || 0;
+      const openBal = c.openingBalance || 0;
+
+      // 1. Total Amount = Approved Orders + COMPLETED/DONE Debit Notes + Opening Balance
+      const totalAmount = approvedOrdersTotal + debitNotesTotal + openBal;
+
+      // 2. Net Billed Amount = Total Amount - COMPLETED/DONE Credit Notes
+      const netBilledAmount = Math.max(0, totalAmount - creditNotesTotal);
+
+      let pendingAmount = 0;
+      let amountReceived = 0;
+
+      if (pendingInvoiceAmt > 0) {
+        // Customer has pending invoice(s)
+        pendingAmount = Math.max(0, netBilledAmount - verifiedPaymentsTotal);
+        amountReceived = verifiedPaymentsTotal + creditNotesTotal;
+      } else {
+        // All main invoices are COMPLETED or paid
+        pendingAmount = 0;
+        amountReceived = totalAmount > 0 ? (verifiedPaymentsTotal > 0 ? verifiedPaymentsTotal + creditNotesTotal : netBilledAmount) : 0;
+      }
+
+      return {
+        ...c,
+        totalAmount,
+        amountReceived,
+        pendingAmount,
+      };
+    });
+
     return {
-      customers,
+      customers: customersWithMetrics,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -305,7 +406,7 @@ export class CustomerService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const updatePayload: any = { ...customerData };
+      const updatePayload: Record<string, unknown> = { ...customerData };
       if (parsedCreditLimit !== undefined) {
         updatePayload.creditLimit = parsedCreditLimit;
       }
@@ -374,7 +475,7 @@ export class CustomerService {
     const plainPassword = crypto.randomBytes(6).toString('hex');
     const passwordHash = await bcrypt.hash(plainPassword, 10);
 
-    const updatedCustomer = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       // Auto-generate customerCode if not present
       let codeToAssign = customer.customerCode;
       if (!codeToAssign) {
@@ -396,7 +497,7 @@ export class CustomerService {
       }
 
       // 1. Approve customer
-      const updated = await tx.customer.update({
+      await tx.customer.update({
         where: { id },
         data: {
           approvalStatus: ApprovalStatus.APPROVED,
@@ -480,7 +581,7 @@ export class CustomerService {
   }
 
   async remove(id: string) {
-    const customer = await this.findOne(id);
+    await this.findOne(id); // guard: throws NotFoundException if not found
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -673,12 +774,10 @@ export class CustomerService {
         // 7. Finally, delete the customer record
         return tx.customer.delete({ where: { id } });
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (
-        error.code === 'P2003' ||
-        error.code === 'P2014' ||
-        (error instanceof Prisma.PrismaClientKnownRequestError &&
-          (error.code === 'P2003' || error.code === 'P2014'))
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === 'P2003' || error.code === 'P2014')
       ) {
         throw new BadRequestException(
           'Cannot delete customer because they have related transaction records (e.g., orders, invoices, payments) in the system. Please delete or reassign those records first.',

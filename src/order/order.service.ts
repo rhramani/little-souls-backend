@@ -48,7 +48,9 @@ export class OrderService {
             product: {
               include: {
                 images: { orderBy: { sortOrder: 'asc' } },
-                catalogues: true,
+                // NOTE: Do NOT include catalogues here — Prisma MongoDB m2m include
+                // queries the wrong collection (products instead of catalogues).
+                // We check catalogue published status via a direct query below.
               },
             },
           },
@@ -121,14 +123,24 @@ export class OrderService {
           );
         }
 
+        // Check catalogue published status via direct query
+        // (Prisma MongoDB m2m include: { catalogues: true } is broken — queries wrong collection)
         if (
-          product.catalogueIds &&
-          product.catalogueIds.length > 0 &&
-          !product.catalogues.some((c) => c.isPublished)
+          Array.isArray(product.catalogueIds) &&
+          product.catalogueIds.length > 0
         ) {
-          throw new BadRequestException(
-            `Product '${product.name}' belongs to a catalogue that is no longer published.`,
-          );
+          const publishedCatalogues = await tx.catalogue.findMany({
+            where: {
+              id: { in: product.catalogueIds },
+              isPublished: true,
+            },
+            select: { id: true },
+          });
+          if (publishedCatalogues.length === 0) {
+            throw new BadRequestException(
+              `Product '${product.name}' belongs to a catalogue that is no longer published.`,
+            );
+          }
         }
 
         const quantity = item.quantity;
@@ -423,8 +435,9 @@ export class OrderService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      // 1. If transitioning from SUBMITTED/PENDING to APPROVED, allocate inventory stock
-      if (newStatus === 'APPROVED' && order.orderStatus === 'SUBMITTED') {
+      // 1. If transitioning from SUBMITTED to any active status (APPROVED, PACKED, SHIPPED, DELIVERED), allocate inventory stock
+      const activeStatuses = ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'];
+      if (activeStatuses.includes(newStatus) && order.orderStatus === 'SUBMITTED') {
         for (const item of order.items) {
           const product = await tx.product.findUnique({
             where: { id: item.productId },
@@ -432,13 +445,13 @@ export class OrderService {
 
           if (!product) {
             throw new NotFoundException(
-              `Product '${item.productName}' not found during order approval.`,
+              `Product '${item.productName}' not found during order status update.`,
             );
           }
 
           if (product.stockQuantity < item.quantity) {
             throw new BadRequestException(
-              `Cannot approve order: Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, Ordered: ${item.quantity}.`,
+              `Cannot update order status: Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, Ordered: ${item.quantity}.`,
             );
           }
 
@@ -468,7 +481,7 @@ export class OrderService {
               quantity: item.quantity,
               stockBefore: product.stockQuantity,
               stockAfter: newStock,
-              note: `Stock allocated for approved Order '${order.orderNumber}'`,
+              note: `Stock allocated for Order '${order.orderNumber}' (Status: ${newStatus})`,
               createdBy: userId,
             },
           });
@@ -1121,7 +1134,7 @@ export class OrderService {
       throw new BadRequestException('Cannot create POS order with no items.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const res = await this.prisma.$transaction(async (tx) => {
       // 1. Resolve Customer
       let customerId = dto.customerId;
       if (!customerId) {
@@ -1358,6 +1371,18 @@ export class OrderService {
         },
       });
     });
+
+    if (res?.id) {
+      try {
+        await this.billingService.generateInvoice(res.id, userId);
+      } catch (err) {
+        console.error(
+          `Failed to generate invoice automatically for POS order ${res.id}: ${err.message}`,
+        );
+      }
+    }
+
+    return res;
   }
 
   async remove(id: string) {

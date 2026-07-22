@@ -105,6 +105,7 @@ model User {
   auditLogs                   AuditLog[]
   assignedCustomers           Customer[]           @relation("CustomerSalesStaff")
   approvedCustomers           Customer[]           @relation("CustomerApprovedBy")
+  customerActivitySessions    CustomerActivitySession[]
 
   @@map("users")
 }
@@ -279,6 +280,7 @@ model Customer {
   ledgerEntries      LedgerEntry[]
   creditDebitNotes   CreditDebitNote[]
   supportTickets     SupportTicket[]
+  customerActivitySessions CustomerActivitySession[]
 
   @@map("customers")
 }
@@ -331,7 +333,7 @@ model Category {
   createdByUser   User?      @relation("CategoryCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedByUser   User?      @relation("CategoryUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   catalogueId      String?   @map("catalogue_id") @db.ObjectId
-  catalogue        Catalogue? @relation(fields: [catalogueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  catalogue        Catalogue? @relation(fields: [catalogueId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   products        Product[]
 
   @@map("categories")
@@ -1171,6 +1173,26 @@ model PurchaseInvoiceItem {
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("purchase_invoice_items")
+}
+
+model CustomerActivitySession {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId        String?   @map("session_id")
+  customerId       String    @map("customer_id") @db.ObjectId
+  userId           String    @map("user_id") @db.ObjectId
+  loginTime        DateTime  @map("login_time")
+  logoutTime       DateTime? @map("logout_time")
+  totalDuration    Int?      @map("total_duration_seconds")
+  status           String    @default("ACTIVE")
+  sectionDurations String?   @map("section_durations")
+  activities       String?   @map("activities")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("customer_activity_sessions")
 }
 
 

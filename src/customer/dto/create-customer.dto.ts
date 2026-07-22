@@ -101,7 +101,7 @@ export class CreateCustomerDto {
   whatsapp?: string;
 
   @IsOptional()
-  creditLimit?: any;
+  creditLimit?: string | number | null;
 
   @IsString()
   @IsOptional()

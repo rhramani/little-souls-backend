@@ -6,7 +6,6 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AddToCartDto } from './dto/add-to-cart.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
-import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class CartService {
@@ -26,7 +25,6 @@ export class CartService {
                 images: {
                   orderBy: { sortOrder: 'asc' },
                 },
-                catalogues: true,
               },
             },
           },
@@ -49,7 +47,6 @@ export class CartService {
                   images: {
                     orderBy: { sortOrder: 'asc' },
                   },
-                  catalogues: true,
                 },
               },
             },
@@ -59,6 +56,35 @@ export class CartService {
     }
 
     return cart;
+  }
+
+  /**
+   * Check if a product's linked catalogues are published.
+   * NOTE: We intentionally do NOT use `include: { catalogues: true }` on product
+   * because Prisma MongoDB has a known bug where it queries the wrong collection
+   * for many-to-many relations via include. Instead we directly query catalogues.
+   */
+  private async checkCataloguePublished(product: {
+    name: string;
+    catalogueIds: string[];
+  }): Promise<void> {
+    if (!Array.isArray(product.catalogueIds) || product.catalogueIds.length === 0) {
+      return; // No catalogue linked — allow cart add
+    }
+
+    const publishedCatalogues = await this.prisma.catalogue.findMany({
+      where: {
+        id: { in: product.catalogueIds },
+        isPublished: true,
+      },
+      select: { id: true },
+    });
+
+    if (publishedCatalogues.length === 0) {
+      throw new BadRequestException(
+        `Product '${product.name}' belongs to a catalogue that is no longer published.`,
+      );
+    }
   }
 
   async getB2BProductPrice(
@@ -106,24 +132,17 @@ export class CartService {
     const { productId, quantity } = dto;
 
     // 1. Verify Product exists and is active
+    // NOTE: Do NOT use include: { catalogues: true } — Prisma MongoDB m2m include is broken
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
-      include: { catalogues: true },
     });
 
     if (!product || !product.isActive) {
       throw new NotFoundException('Product is inactive or does not exist.');
     }
 
-    if (
-      product.catalogueIds &&
-      product.catalogueIds.length > 0 &&
-      !product.catalogues.some((c) => c.isPublished)
-    ) {
-      throw new BadRequestException(
-        `Product '${product.name}' belongs to a catalogue that is no longer published.`,
-      );
-    }
+    // 2a. Verify product's catalogue is published via direct catalogue query
+    await this.checkCataloguePublished(product);
 
     // 2b. Verify Stock Availability
     if (quantity > product.stockQuantity) {
@@ -196,15 +215,8 @@ export class CartService {
 
     const product = cartItem.product;
 
-    if (
-      product.catalogueIds &&
-      product.catalogueIds.length > 0 &&
-      !product.catalogues.some((c) => c.isPublished)
-    ) {
-      throw new BadRequestException(
-        `Product '${product.name}' belongs to a catalogue that is no longer published.`,
-      );
-    }
+    // 2a. Verify product's catalogue is still published via direct catalogue query
+    await this.checkCataloguePublished(product);
 
     // 2b. Verify Stock Availability
     if (quantity > product.stockQuantity) {

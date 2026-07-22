@@ -19,6 +19,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
 import { EventsGateway } from '../events/events.gateway';
+import { CustomerActivityService } from '../events/customer-activity.service';
 import { EmailService } from '../common/email.service';
 
 @Injectable()
@@ -27,6 +28,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly eventsGateway: EventsGateway,
+    private readonly customerActivityService: CustomerActivityService,
     private readonly emailService: EmailService,
   ) {}
 
@@ -391,6 +393,16 @@ export class AuthService {
           },
         });
       }
+    }
+
+    // Finalize customer activity tracking session if active
+    try {
+      await this.customerActivityService.endSession(
+        userId,
+        this.eventsGateway.server,
+      );
+    } catch (err) {
+      console.error('Failed to end customer activity session on logout:', err);
     }
 
     return { message: 'Logged out successfully' };

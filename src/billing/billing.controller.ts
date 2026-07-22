@@ -210,4 +210,18 @@ export class BillingController {
 
     res.end(buffer);
   }
+
+  @Patch('credit-debit-note/:id')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async updateCreditDebitNote(@Param('id') id: string, @Body() body: any) {
+    return this.billingService.updateCreditDebitNote(id, body);
+  }
+
+  @Delete('credit-debit-note/:id')
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async deleteCreditDebitNote(@Param('id') id: string) {
+    return this.billingService.deleteCreditDebitNote(id);
+  }
 }

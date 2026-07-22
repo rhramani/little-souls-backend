@@ -412,7 +412,7 @@ export class ProductService {
             pricingGroup: true,
           },
         },
-        catalogues: true,
+        // NOTE: Do NOT include catalogues — Prisma MongoDB m2m include queries wrong collection.
       },
     });
 
@@ -420,12 +420,14 @@ export class ProductService {
       throw new NotFoundException(`Product with ID '${id}' not found.`);
     }
 
-    if (
-      userPricingGroupId &&
-      product.catalogueIds.length > 0 &&
-      !product.catalogues.some((c) => c.isPublished)
-    ) {
-      throw new NotFoundException(`Product with ID '${id}' not found.`);
+    if (userPricingGroupId && product.catalogueIds.length > 0) {
+      const publishedCatalogues = await this.prisma.catalogue.findMany({
+        where: { id: { in: product.catalogueIds }, isPublished: true },
+        select: { id: true },
+      });
+      if (publishedCatalogues.length === 0) {
+        throw new NotFoundException(`Product with ID '${id}' not found.`);
+      }
     }
 
     let activePrice: any = null;
@@ -454,7 +456,7 @@ export class ProductService {
             pricingGroup: true,
           },
         },
-        catalogues: true,
+        // NOTE: Do NOT include catalogues — Prisma MongoDB m2m include queries wrong collection.
       },
     });
 
@@ -462,12 +464,14 @@ export class ProductService {
       throw new NotFoundException(`Product with slug '${slug}' not found.`);
     }
 
-    if (
-      userPricingGroupId &&
-      product.catalogueIds.length > 0 &&
-      !product.catalogues.some((c) => c.isPublished)
-    ) {
-      throw new NotFoundException(`Product with slug '${slug}' not found.`);
+    if (userPricingGroupId && product.catalogueIds.length > 0) {
+      const publishedCatalogues = await this.prisma.catalogue.findMany({
+        where: { id: { in: product.catalogueIds }, isPublished: true },
+        select: { id: true },
+      });
+      if (publishedCatalogues.length === 0) {
+        throw new NotFoundException(`Product with slug '${slug}' not found.`);
+      }
     }
 
     let activePrice: any = null;
