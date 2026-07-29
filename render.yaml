@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: little-souls-backend
+    env: node
+    region: singapore
+    plan: starter
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
