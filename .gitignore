@@ -1,58 +1,40 @@
-# compiled output
-/dist
-/node_modules
-/build
+# Dependencies
+node_modules/
 
-# Logs
-logs
+# Build Output
+dist/
+build/
+
+# Temporary / Log files
+logs/
 *.log
+newman_run.log
 npm-debug.log*
-pnpm-debug.log*
 yarn-debug.log*
-yarn-error.log*
+pnpm-debug.log*
 lerna-debug.log*
 
-# OS
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+
+# Prisma Generated Output
+/generated/prisma/
+
+# IDEs & System Files
 .DS_Store
-
-# Tests
-/coverage
-/.nyc_output
-
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-
-# IDE - VSCode
+Thumbs.db
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+.idea/
+*.swp
+*.swo
 
-# dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
-
-# temp directory
-.temp
-.tmp
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Diagnostic reports (https://nodejs.org/api/report.html)
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-
-/generated/prisma
