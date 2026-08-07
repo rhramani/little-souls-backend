@@ -106,4 +106,8 @@ export class CreateCustomerDto {
   @IsString()
   @IsOptional()
   customerCode?: string;
+
+  @IsString()
+  @IsOptional()
+  mainContactNumber?: string;
 }

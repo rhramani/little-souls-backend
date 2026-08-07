@@ -109,7 +109,7 @@ export class CustomerService {
           shippingCountry: dto.shippingCountry,
           storePhotoUrl: dto.storePhotoUrl,
           customerSource: dto.customerSource,
-          mainContactNumber: dto.mobile,
+          mainContactNumber: dto.mainContactNumber || dto.mobile,
           pricingGroupId: dto.pricingGroupId,
           approvalStatus: ApprovalStatus.APPROVED,
           approvedBy: adminId,
