@@ -83,14 +83,27 @@ export class CatalogueService {
 
   /** Generate barcode buffer in-memory (no R2 upload) — used for Excel export */
   private async generateBarcodeBuffer(sku: string): Promise<Buffer | null> {
+    if (!sku) return null;
+    let barcodeText = sku.trim();
+    if (
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i.test(barcodeText) ||
+      barcodeText.endsWith('_full') ||
+      barcodeText.includes('-')
+    ) {
+      barcodeText = barcodeText.split('-')[0].toUpperCase();
+    } else {
+      barcodeText = barcodeText.toUpperCase();
+    }
+
     try {
       return await bwipjs.toBuffer({
         bcid: 'code128',
-        text: sku,
-        scale: 3,
-        height: 10,
+        text: barcodeText,
+        scale: 4,
+        height: 14,
         includetext: true,
         textxalign: 'center',
+        textsize: 12,
       });
     } catch (error) {
       this.logger.warn(`Failed to generate in-memory barcode for SKU ${sku}`);
@@ -493,8 +506,8 @@ export class CatalogueService {
 
     // Define main columns
     const columns = [
-      { header: 'Product Image', key: 'productImage', width: 18 },
-      { header: 'Barcode Image', key: 'barcodeImage', width: 25 },
+      { header: 'Product Image', key: 'productImage', width: 22 },
+      { header: 'Barcode Image', key: 'barcodeImage', width: 30 },
       { header: 'Product ID (System ID - Do Not Edit)', key: 'id', width: 36 },
       { header: 'SKU', key: 'sku', width: 20 },
       { header: 'Product Name', key: 'name', width: 40 },
@@ -593,8 +606,8 @@ export class CatalogueService {
             try {
               const originalBuffer = Buffer.from(imgRes.value.data);
               result.productImageBuffer = await sharp(originalBuffer)
-                .resize(80, 80, { fit: 'inside' })
-                .jpeg({ quality: 60 })
+                .resize(300, 300, { fit: 'inside' })
+                .jpeg({ quality: 90 })
                 .toBuffer();
             } catch (err) {
               this.logger.warn(
@@ -622,7 +635,7 @@ export class CatalogueService {
       const imageUrl = p.productImage || primaryImageUrl;
 
       const rowData: any = {
-        productImage: imageUrl,
+        productImage: '',
         barcodeImage: '',
         id: p.id,
         sku: p.sku,
@@ -687,7 +700,7 @@ export class CatalogueService {
 
       sheet.addRow(rowData);
       const row = sheet.getRow(rowIndex);
-      row.height = 80;
+      row.height = 95;
       row.alignment = { vertical: 'middle' };
 
       // Use pre-downloaded and resized buffers
@@ -698,9 +711,9 @@ export class CatalogueService {
           extension: 'jpeg',
         });
         sheet.addImage(imageId, {
-          tl: { col: 0, row: rowIndex - 1 },
-          br: { col: 1, row: rowIndex },
-          editAs: 'twoCell',
+          tl: { col: 0.05, row: rowIndex - 1 + 0.05 },
+          ext: { width: 120, height: 110 },
+          editAs: 'oneCell',
         });
       }
 
@@ -710,9 +723,9 @@ export class CatalogueService {
           extension: 'png',
         });
         sheet.addImage(imageId, {
-          tl: { col: barcodeColIdx, row: rowIndex - 1 },
-          br: { col: barcodeColIdx + 1, row: rowIndex },
-          editAs: 'twoCell',
+          tl: { col: barcodeColIdx + 0.05, row: rowIndex - 1 + 0.08 },
+          ext: { width: 200, height: 100 },
+          editAs: 'oneCell',
         });
       }
     }

@@ -146,8 +146,8 @@ export class OrderService {
         const quantity = item.quantity;
         totalQuantity += quantity;
 
-        // Resolve tax percent
-        const taxPercent = product.taxPercent ? Number(product.taxPercent) : 0;
+        // Resolve tax percent (default 0 — tax is applied at invoice generation time)
+        const taxPercent = 0;
 
         // Fetch B2B product custom pricing group definition
         const customer = await tx.customer.findUnique({
@@ -937,9 +937,7 @@ export class OrderService {
         const taxPercent =
           dto.taxPercent !== undefined
             ? Number(dto.taxPercent)
-            : product.taxPercent
-              ? Number(product.taxPercent)
-              : 0;
+            : 0;
 
         const price = Number(itemInput.price);
 
@@ -1206,15 +1204,9 @@ export class OrderService {
         const price = Number(itemInput.price);
 
         const taxPercent =
-          dto.withGst === false
-            ? 0
-            : dto.taxPercent !== undefined
-              ? Number(dto.taxPercent)
-              : product.taxPercent && Number(product.taxPercent) > 0
-                ? Number(product.taxPercent)
-                : product.taxType === 'GST' || !product.taxType
-                  ? 12
-                  : 0;
+          dto.withGst === true && dto.taxPercent !== undefined
+            ? Number(dto.taxPercent)
+            : 0;
 
         const lineSubTotal = price * quantity;
         subTotal = subTotal + lineSubTotal;

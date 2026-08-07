@@ -204,29 +204,48 @@ export class CategoryService {
   }
 
   async remove(id: string) {
-    const category = await this.findOne(id);
+    await this.findOne(id);
 
-    // 1. Check if it has child categories
-    const childrenCount = await this.prisma.category.count({
+    // Find products in this category
+    const products = await this.prisma.product.findMany({
+      where: { categoryId: id },
+      select: { id: true },
+    });
+    const productIds = products.map((p) => p.id);
+
+    if (productIds.length > 0) {
+      // 1. Delete image cleaning tasks for these products
+      await this.prisma.imageCleaningTask.deleteMany({
+        where: { productId: { in: productIds } },
+      });
+
+      // 2. Delete product images
+      await this.prisma.productImage.deleteMany({
+        where: { productId: { in: productIds } },
+      });
+
+      // 3. Delete product pricing tier records
+      await this.prisma.productPricing.deleteMany({
+        where: { productId: { in: productIds } },
+      });
+
+      // 4. Delete cart items
+      await this.prisma.cartItem.deleteMany({
+        where: { productId: { in: productIds } },
+      });
+
+      // 5. Delete products
+      await this.prisma.product.deleteMany({
+        where: { categoryId: id },
+      });
+    }
+
+    // 6. Delete subcategories if any
+    await this.prisma.category.deleteMany({
       where: { parentCategoryId: id },
     });
-    if (childrenCount > 0) {
-      throw new BadRequestException(
-        'Cannot delete category with active subcategories.',
-      );
-    }
 
-    // 2. Check if it has associated products
-    const productsCount = await this.prisma.product.count({
-      where: { categoryId: id },
-    });
-    if (productsCount > 0) {
-      throw new BadRequestException(
-        'Cannot delete category that contains active products.',
-      );
-    }
-
-    // 3. Delete category
+    // 7. Delete category
     await this.prisma.category.delete({
       where: { id },
     });
