@@ -984,4 +984,18 @@ export class AuthService {
 
     return customer;
   }
+
+  async checkGstin(gstin: string) {
+    const formatted = (gstin || '').trim().toUpperCase();
+    if (!formatted) {
+      return { exists: false };
+    }
+    const existingCustomer = await this.prisma.customer.findUnique({
+      where: { gstin: formatted },
+    });
+    if (existingCustomer) {
+      return { exists: true, message: 'GSTIN is already registered' };
+    }
+    return { exists: false };
+  }
 }

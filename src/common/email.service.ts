@@ -50,6 +50,10 @@ export class EmailService {
     const contactPhone = settings?.contactPhone || '';
     const companyAddress = settings?.companyAddress || '';
 
+    const frontendUrl = (
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'
+    ).replace(/\/+$/, '');
+
     // Resolve relative logo URL to fully qualified URL
     let resolvedLogoUrl = logoUrl;
     if (logoUrl) {
@@ -59,9 +63,9 @@ export class EmailService {
         ).replace(/\/+$/, '');
         resolvedLogoUrl = basePublicUrl
           ? `${basePublicUrl}${logoUrl}`
-          : `http://localhost:8080${logoUrl}`;
+          : `${frontendUrl}${logoUrl}`;
       } else if (logoUrl.startsWith('/')) {
-        resolvedLogoUrl = `http://localhost:8080${logoUrl}`;
+        resolvedLogoUrl = `${frontendUrl}${logoUrl}`;
       }
     }
 
@@ -72,10 +76,10 @@ export class EmailService {
     const mutedTextColor = '#8C827A';
     const borderColor = '#F4EFEA';
 
-    // Logo display: if resolvedLogoUrl is present, render image; otherwise fallback to stylish text
-    const logoHtml = resolvedLogoUrl
-      ? `<img src="${resolvedLogoUrl}" alt="${businessName}" style="max-height: 48px; max-width: 200px; display: block; margin: 0 auto; object-fit: contain;" />`
-      : `<div style="font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: 2px; text-transform: uppercase; margin: 0;">${businessName.toUpperCase()}</div>`;
+    // Logo display: if resolvedLogoUrl is valid HTTP/HTTPS and not broken localhost, render image; otherwise fallback to stylish typography logo
+    const logoHtml = (resolvedLogoUrl && resolvedLogoUrl.startsWith('http') && !resolvedLogoUrl.includes('localhost'))
+      ? `<img src="${resolvedLogoUrl}" alt="${businessName}" style="max-height: 48px; max-width: 220px; display: block; margin: 0 auto; object-fit: contain;" />`
+      : `<div style="font-size: 26px; font-weight: 800; color: #ffffff; letter-spacing: 2px; text-transform: uppercase; font-family: 'Helvetica Neue', Arial, sans-serif; text-align: center; margin: 0;">${businessName}</div>`;
 
     return `
       <!DOCTYPE html>
@@ -89,12 +93,12 @@ export class EmailService {
         <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: ${secondaryColor}; padding: 40px 20px;">
           <tr>
             <td align="center">
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; background-color: #ffffff; border: 1px solid ${borderColor}; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(156, 94, 67, 0.03);">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 540px; background-color: #ffffff; border: 1px solid ${borderColor}; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(156, 94, 67, 0.03);">
                 <!-- Header Banner -->
                 <tr>
                   <td align="center" style="background-color: ${primaryColor}; padding: 32px 20px; position: relative;">
                     ${logoHtml}
-                    <div style="font-size: 10px; font-weight: 600; color: rgba(255, 255, 255, 0.75); letter-spacing: 1px; text-transform: uppercase; margin-top: 4px;">Wholesale Partner Portal</div>
+                    <div style="font-size: 10px; font-weight: 600; color: rgba(255, 255, 255, 0.85); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 6px;">Wholesale Partner Portal</div>
                   </td>
                 </tr>
                 <!-- Content Body -->
@@ -125,6 +129,12 @@ export class EmailService {
     email: string,
     name: string,
     plainPassword: string,
+    details?: {
+      businessName?: string | null;
+      gstin?: string | null;
+      mobile?: string | null;
+      customerCode?: string | null;
+    },
   ) {
     let businessName = 'Little Souls';
     try {
@@ -134,19 +144,62 @@ export class EmailService {
       }
     } catch {}
 
-    const subject = `Welcome to ${businessName} Wholesale! Your Login Credentials`;
+    const frontendUrl = (
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'
+    ).replace(/\/+$/, '');
+
+    const loginUrl = `${frontendUrl}/login`;
+    const partnerBusiness = details?.businessName || businessName;
+    const gstinStr = details?.gstin || 'Not Provided (Optional)';
+    const codeStr = details?.customerCode || 'Registered';
+
+    const subject = `Welcome to ${businessName} Wholesale! Your Account Credentials`;
     const content = `
       <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #403934; line-height: 26px;">Welcome to ${businessName} Wholesale, ${name}!</h2>
-      <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 22px; color: #403934;">Your partner account application has been <strong style="color: #9C5E43;">approved</strong> by our admin team.</p>
-      <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 22px; color: #8C827A;">You can now log in to the B2B portal to view pricing, place orders, and manage your ledger.</p>
+      <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 22px; color: #403934;">Your partner account application for <strong>${partnerBusiness}</strong> has been <strong style="color: #9C5E43;">APPROVED</strong> by our admin team.</p>
+      <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 22px; color: #8C827A;">You can now log in to the B2B portal to browse our wholesale collection, view special tier pricing, and manage your account ledger.</p>
       
-      <div style="background-color: #FAF8F6; border: 1px solid #F4EFEA; padding: 20px; border-radius: 12px; margin: 24px 0; font-size: 13px; line-height: 20px; color: #403934;">
-        <p style="margin: 0 0 10px 0;"><strong>Login URL:</strong> <a href="http://localhost:8080/login" style="color: #9C5E43; font-weight: 600; text-decoration: none;">http://localhost:8080/login</a></p>
-        <p style="margin: 0 0 10px 0;"><strong>Email Address:</strong> ${email}</p>
-        <p style="margin: 0;"><strong>Temporary Password:</strong> <code style="background: #ffffff; border: 1px solid #F4EFEA; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-size: 13px; color: #9C5E43; font-weight: 600;">${plainPassword}</code></p>
+      <div style="background-color: #FAF8F6; border: 1px solid #F4EFEA; padding: 20px 24px; border-radius: 12px; margin: 24px 0; font-size: 13px; line-height: 22px; color: #403934;">
+        <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #9C5E43; border-bottom: 1px solid #F4EFEA; padding-bottom: 8px;">Account Details & Credentials</h3>
+        
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-size: 13px; color: #403934;">
+          <tr>
+            <td style="padding: 4px 0; font-weight: 600; width: 140px;">Business Name:</td>
+            <td style="padding: 4px 0;">${partnerBusiness}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; font-weight: 600;">Customer Code:</td>
+            <td style="padding: 4px 0;"><span style="background: #EFEBE7; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; font-weight: 700; color: #403934;">${codeStr}</span></td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; font-weight: 600;">GSTIN Number:</td>
+            <td style="padding: 4px 0;">${gstinStr}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; font-weight: 600;">Email (Login ID):</td>
+            <td style="padding: 4px 0;"><a href="mailto:${email}" style="color: #9C5E43; text-decoration: none; font-weight: 600;">${email}</a></td>
+          </tr>
+          ${details?.mobile ? `
+          <tr>
+            <td style="padding: 4px 0; font-weight: 600;">Registered Mobile:</td>
+            <td style="padding: 4px 0;">${details.mobile}</td>
+          </tr>` : ''}
+          <tr>
+            <td style="padding: 6px 0 4px 0; font-weight: 600;">Temporary Password:</td>
+            <td style="padding: 6px 0 4px 0;"><code style="background: #ffffff; border: 1px solid #E2D9D2; padding: 4px 10px; border-radius: 6px; font-family: monospace; font-size: 14px; color: #9C5E43; font-weight: 700; letter-spacing: 0.5px;">${plainPassword}</code></td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0 4px 0; font-weight: 600;">Login Portal:</td>
+            <td style="padding: 6px 0 4px 0;"><a href="${loginUrl}" style="color: #9C5E43; font-weight: 600; text-decoration: underline;">${loginUrl}</a></td>
+          </tr>
+        </table>
       </div>
 
-      <p style="margin: 0 0 8px 0; font-size: 13px; line-height: 20px; color: #8C827A;">We highly recommend changing your password immediately after your first login.</p>
+      <div style="text-align: center; margin: 28px 0 20px 0;">
+        <a href="${loginUrl}" style="display: inline-block; background-color: #9C5E43; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 10px; font-weight: 700; font-size: 14px; box-shadow: 0 3px 8px rgba(156, 94, 67, 0.25);">Login to Partner Portal &rarr;</a>
+      </div>
+
+      <p style="margin: 0 0 8px 0; font-size: 13px; line-height: 20px; color: #8C827A;">For security purposes, please change your temporary password immediately upon your first login.</p>
     `;
     const html = await this.getEmailTemplate(content);
 
@@ -189,6 +242,11 @@ export class EmailService {
       }
     } catch {}
 
+    const frontendUrl = (
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'
+    ).replace(/\/+$/, '');
+    const adminUrl = `${frontendUrl}/admin`;
+
     const subject = `Welcome to ${businessName}! Your Staff Login Credentials`;
     const content = `
       <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #403934; line-height: 26px;">Welcome to the ${businessName} Team, ${name}!</h2>
@@ -196,7 +254,7 @@ export class EmailService {
       <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 22px; color: #8C827A;">You can now log in to the Admin Panel to access your assigned modules.</p>
       
       <div style="background-color: #FAF8F6; border: 1px solid #F4EFEA; padding: 20px; border-radius: 12px; margin: 24px 0; font-size: 13px; line-height: 20px; color: #403934;">
-        <p style="margin: 0 0 10px 0;"><strong>Admin Login URL:</strong> <a href="http://localhost:8080/admin" style="color: #9C5E43; font-weight: 600; text-decoration: none;">http://localhost:8080/admin</a></p>
+        <p style="margin: 0 0 10px 0;"><strong>Admin Login URL:</strong> <a href="${adminUrl}" style="color: #9C5E43; font-weight: 600; text-decoration: underline;">${adminUrl}</a></p>
         <p style="margin: 0 0 10px 0;"><strong>Employee Code:</strong> ${employeeCode}</p>
         <p style="margin: 0 0 10px 0;"><strong>Email Address:</strong> ${email}</p>
         <p style="margin: 0;"><strong>Temporary Password:</strong> <code style="background: #ffffff; border: 1px solid #F4EFEA; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-size: 13px; color: #9C5E43; font-weight: 600;">${plainPassword}</code></p>

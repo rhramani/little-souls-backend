@@ -33,7 +33,8 @@ export class SettingsService {
           contactEmail: superAdmin?.email || null,
           contactPhone: superAdmin?.mobile || null,
           whatsappOrderNumber: superAdmin?.mobile || null,
-          companyAddress: 'Rajkot, Gujarat, India',
+          companyAddress: 'Mumbai, India',
+          companyGstin: null,
         },
       });
     }
@@ -42,6 +43,7 @@ export class SettingsService {
 
   async getPublicSettings() {
     const settings = await this.getSettings();
+    const gstin = settings.companyGstin || (settings as any).gstin || null;
     return {
       businessName: settings.businessName,
       businessLogoUrl: settings.businessLogoUrl,
@@ -50,26 +52,32 @@ export class SettingsService {
       contactPhone: settings.contactPhone,
       companyAddress: settings.companyAddress,
       whatsappOrderNumber: settings.whatsappOrderNumber,
+      gstin,
+      companyGstin: gstin,
+      invoicePrefix: settings.invoicePrefix,
+      orderPrefix: settings.orderPrefix,
+      paymentPrefix: settings.paymentPrefix,
+      taxEnabled: settings.taxEnabled,
+      defaultTaxPercent: settings.defaultTaxPercent,
     };
   }
 
   async updateSettings(dto: UpdateSettingsDto) {
     const settings = await this.prisma.setting.findFirst();
+    const dataToSave: any = { ...dto };
+    if (dto.companyGstin !== undefined) {
+      dataToSave.companyGstin = dto.companyGstin || null;
+    }
+
     if (!settings) {
       return this.prisma.setting.create({
-        data: {
-          ...dto,
-          defaultTaxPercent: dto.defaultTaxPercent,
-        },
+        data: dataToSave,
       });
     }
 
     return this.prisma.setting.update({
       where: { id: settings.id },
-      data: {
-        ...dto,
-        defaultTaxPercent: dto.defaultTaxPercent,
-      },
+      data: dataToSave,
     });
   }
 

@@ -6,6 +6,7 @@ import {
   Body,
   Req,
   Param,
+  Query,
   UseGuards,
   Ip,
   Headers,
@@ -148,5 +149,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async getCustomerStatus(@Param('id') id: string) {
     return this.authService.getCustomerStatus(id);
+  }
+
+  @Get('check-gstin')
+  @HttpCode(HttpStatus.OK)
+  async checkGstin(@Query('gstin') gstin: string) {
+    return this.authService.checkGstin(gstin);
   }
 }

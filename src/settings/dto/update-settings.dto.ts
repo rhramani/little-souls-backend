@@ -33,6 +33,10 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsString()
+  companyGstin?: string;
+
+  @IsOptional()
+  @IsString()
   whatsappOrderNumber?: string;
 
   @IsOptional()

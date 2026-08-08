@@ -184,6 +184,12 @@ export class CustomerService {
         result.contact.email,
         result.contact.name || 'Customer',
         plainPassword,
+        {
+          businessName: result.customer.businessName,
+          gstin: result.customer.gstin,
+          mobile: result.contact.mobile || result.customer.mainContactNumber,
+          customerCode: result.customer.customerCode,
+        },
       );
     }
 
@@ -531,6 +537,12 @@ export class CustomerService {
         primaryContact.email,
         primaryContact.name || 'Customer',
         plainPassword,
+        {
+          businessName: customer.businessName,
+          gstin: customer.gstin,
+          mobile: primaryContact.mobile || customer.mainContactNumber,
+          customerCode: customer.customerCode,
+        },
       );
     }
 

@@ -943,11 +943,12 @@ model Payroll {
   staffId        String    @map("staff_id") @db.ObjectId
   salaryMonth    Int       @map("salary_month")
   salaryYear     Int       @map("salary_year")
-  basicSalary    Float   @map("basic_salary")
-  overtimeAmount Float   @map("overtime_amount")
-  deductions     Float   @map("deductions")
-  bonus          Float   @map("bonus")
-  payableSalary  Float   @map("payable_salary")
+  daysWorked     Int?      @default(30) @map("days_worked")
+  basicSalary    Float     @map("basic_salary")
+  overtimeAmount Float     @map("overtime_amount")
+  deductions     Float     @map("deductions")
+  bonus          Float     @map("bonus")
+  payableSalary  Float     @map("payable_salary")
   paymentStatus  String    @map("payment_status") // "PENDING", "PAID"
   paidAt         DateTime? @map("paid_at")
   paidBy         String?   @map("paid_by") @db.ObjectId
@@ -1017,6 +1018,7 @@ model Setting {
   contactEmail           String?  @map("contact_email")
   contactPhone           String?  @map("contact_phone")
   companyAddress         String?  @map("company_address")
+  companyGstin           String?  @map("company_gstin")
   whatsappOrderNumber    String?  @map("whatsapp_order_number")
   imageCleaningProvider  String?  @map("image_cleaning_provider")
   imageCleaningApiKey    String?  @map("image_cleaning_api_key")

@@ -374,7 +374,25 @@ export class BillingService {
     const customers = customerIds.length
       ? await this.prisma.customer.findMany({
           where: { id: { in: customerIds } },
-          select: { id: true, businessName: true, customerCode: true },
+          select: {
+            id: true,
+            businessName: true,
+            customerCode: true,
+            gstin: true,
+            billingAddressLine1: true,
+            billingAddressLine2: true,
+            billingCity: true,
+            billingState: true,
+            billingPincode: true,
+            billingCountry: true,
+            shippingAddressLine1: true,
+            shippingAddressLine2: true,
+            shippingCity: true,
+            shippingState: true,
+            shippingPincode: true,
+            shippingCountry: true,
+            mainContactNumber: true,
+          },
         })
       : [];
     const customerMap = new Map(customers.map((c) => [c.id, c]));
@@ -464,7 +482,25 @@ export class BillingService {
     const customers = customerIds.length
       ? await this.prisma.customer.findMany({
           where: { id: { in: customerIds } },
-          select: { id: true, businessName: true, customerCode: true },
+          select: {
+            id: true,
+            businessName: true,
+            customerCode: true,
+            gstin: true,
+            billingAddressLine1: true,
+            billingAddressLine2: true,
+            billingCity: true,
+            billingState: true,
+            billingPincode: true,
+            billingCountry: true,
+            shippingAddressLine1: true,
+            shippingAddressLine2: true,
+            shippingCity: true,
+            shippingState: true,
+            shippingPincode: true,
+            shippingCountry: true,
+            mainContactNumber: true,
+          },
         })
       : [];
     const customerMap = new Map(customers.map((c) => [c.id, c]));
@@ -534,7 +570,25 @@ export class BillingService {
     const customers = customerIds.length
       ? await this.prisma.customer.findMany({
           where: { id: { in: customerIds } },
-          select: { id: true, businessName: true, customerCode: true },
+          select: {
+            id: true,
+            businessName: true,
+            customerCode: true,
+            gstin: true,
+            billingAddressLine1: true,
+            billingAddressLine2: true,
+            billingCity: true,
+            billingState: true,
+            billingPincode: true,
+            billingCountry: true,
+            shippingAddressLine1: true,
+            shippingAddressLine2: true,
+            shippingCity: true,
+            shippingState: true,
+            shippingPincode: true,
+            shippingCountry: true,
+            mainContactNumber: true,
+          },
         })
       : [];
     const customerMap = new Map(customers.map((c) => [c.id, c]));

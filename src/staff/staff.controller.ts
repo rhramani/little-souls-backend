@@ -295,10 +295,29 @@ export class StaffController {
   @HttpCode(HttpStatus.OK)
   async calculatePayroll(
     @Param('staffId') staffId: string,
-    @Body('month') month: number,
-    @Body('year') year: number,
+    @Body() dto: any,
     @GetUser('id') userId: string,
   ) {
-    return this.staffService.calculatePayroll(staffId, month, year, userId);
+    const month = dto?.month || new Date().getMonth() + 1;
+    const year = dto?.year || new Date().getFullYear();
+    return this.staffService.calculatePayroll(staffId, month, year, userId, dto);
+  }
+
+  @Patch('payroll/:id')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async updatePayroll(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @GetUser('id') userId: string,
+  ) {
+    return this.staffService.updatePayroll(id, dto, userId);
+  }
+
+  @Delete('payroll/:id')
+  @Roles(UserType.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async deletePayroll(@Param('id') id: string) {
+    return this.staffService.deletePayroll(id);
   }
 }

@@ -1,10 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import PDFDocument = require('pdfkit');
 
 @Injectable()
 export class PdfService {
   private readonly logger = new Logger(PdfService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
 
   /**
    * Fetch an image URL and return it as a Buffer.
@@ -25,6 +32,24 @@ export class PdfService {
   }
 
   async generateInvoicePdf(invoice: any): Promise<Buffer> {
+    const settings = await this.prisma.setting.findFirst().catch(() => null);
+    const businessName = settings?.businessName || 'Little Souls';
+    const companyAddress = settings?.companyAddress || '';
+    const companyGstin =
+      (settings as any)?.companyGstin || (settings as any)?.gstin || '';
+
+    let logoBuffer: Buffer | null = null;
+    if (settings?.businessLogoUrl) {
+      let logoUrl = settings.businessLogoUrl;
+      if (logoUrl.startsWith('/uploads/')) {
+        const r2Public = (
+          this.configService.get<string>('R2_PUBLIC_URL') || ''
+        ).replace(/\/+$/, '');
+        logoUrl = r2Public ? `${r2Public}${logoUrl}` : logoUrl;
+      }
+      logoBuffer = await this.fetchImageBuffer(logoUrl);
+    }
+
     // Pre-fetch all product images before starting PDF (async, outside promise)
     const itemsWithImages = await Promise.all(
       (invoice.items || []).map(async (item: any) => {
@@ -66,20 +91,36 @@ export class PdfService {
         )
         .text(`Status:     ${invoice.paymentStatus}`, { align: 'right' });
 
-      // ─── COMPANY INFO ─────────────────────────────────────────────────────────
-      doc
-        .fontSize(15)
-        .font('Helvetica-Bold')
-        .fillColor('#9c5e43')
-        .text('Little Souls B2B', 50, 50);
+      // ─── COMPANY INFO / LOGO ───────────────────────────────────────────────────
+      if (logoBuffer) {
+        try {
+          doc.image(logoBuffer, 50, 40, { fit: [140, 36] });
+        } catch {
+          doc
+            .fontSize(16)
+            .font('Helvetica-Bold')
+            .fillColor('#9c5e43')
+            .text(businessName, 50, 45);
+        }
+      } else {
+        doc
+          .fontSize(16)
+          .font('Helvetica-Bold')
+          .fillColor('#9c5e43')
+          .text(businessName, 50, 45);
+      }
 
       doc
         .fontSize(9)
         .font('Helvetica')
-        .fillColor('#555555')
-        .text('123 Wholesale Street, Lower Parel', 50, 70)
-        .text('Mumbai, Maharashtra 400001', 50, 82)
-        .text('GSTIN: 27AABCU9603R1ZM', 50, 94);
+        .fillColor('#555555');
+
+      if (companyAddress) {
+        doc.text(companyAddress, 50, 68);
+      }
+      if (companyGstin) {
+        doc.text(`GSTIN: ${companyGstin}`, 50, companyAddress ? 80 : 68);
+      }
 
       // Separator line
       doc.moveDown(3);

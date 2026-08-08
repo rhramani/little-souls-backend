@@ -121,6 +121,45 @@ export class CatalogueService {
       .replace(/\-\-+/g, '-');
   }
 
+  private extractCleanNameAndSkuFromFilename(rawFilename: string, fallbackId: string) {
+    let clean = (rawFilename || '').replace(/^uploads\//i, '');
+    // Strip R2/Multer UUID prefix if present
+    clean = clean.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_?/i, '');
+    clean = clean.replace(/^[0-9a-f]{24}_?/i, '');
+
+    const extIdx = clean.lastIndexOf('.');
+    if (extIdx > 0) {
+      clean = clean.slice(0, extIdx);
+    }
+
+    clean = clean.replace(/_full$/i, '').trim();
+
+    const shortHex = fallbackId.slice(0, 5).toUpperCase();
+
+    if (
+      !clean ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(clean) ||
+      clean.toLowerCase() === 'full'
+    ) {
+      return {
+        name: `Product ${fallbackId.slice(0, 8).toUpperCase()}`,
+        sku: `LS-${shortHex}`, // Max 8 chars: 'LS-' (3) + 5 hex = 8 chars
+      };
+    }
+
+    const name = clean.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+    let sku = clean.toUpperCase().replace(/\s+/g, '-').replace(/[^A-Z0-9\-]/g, '');
+
+    if (sku.length > 8) {
+      sku = sku.slice(0, 8); // Enforce max 8 characters
+    }
+
+    return {
+      name: name || `Product ${fallbackId.slice(0, 8).toUpperCase()}`,
+      sku: sku || `LS-${shortHex}`,
+    };
+  }
+
   async create(dto: CreateCatalogueDto, userId: string) {
     const start = Date.now();
 
@@ -140,15 +179,14 @@ export class CatalogueService {
     }
 
     // 2. Pre-generate all temp IDs synchronously — NO barcode upload here.
-    //    These are TEMP SKUs that get replaced during Excel import, so barcodes
-    //    are generated there (on real SKUs) instead.
     const tempProductsData = (dto.images || []).map((img) => {
       const tempId = randomBytes(12).toString('hex');
-      const tempSku = `TEMP-SKU-${tempId}`;
-      const tempSlug = `temp-sku-${tempId}`;
-      const baseName =
-        img.filename.split('.').slice(0, -1).join('.') || img.filename;
-      return { img, tempId, tempSku, tempSlug, baseName };
+      const { name, sku } = this.extractCleanNameAndSkuFromFilename(
+        img.filename,
+        tempId,
+      );
+      const tempSlug = this.slugify(sku);
+      return { img, tempId, tempSku: sku, tempSlug, baseName: name };
     });
 
     // 3. Create catalogue + all products in ONE transaction using createMany for speed
@@ -1552,14 +1590,12 @@ export class CatalogueService {
     const uploadedImages = await Promise.all(uploadPromises);
 
     // 3. Extract SKUs from filenames
-    const uploadedSkus = uploadedImages.map((img) => {
-      const originalFilename = img.filename;
-      const extensionIdx = originalFilename.lastIndexOf('.');
-      const nameWithoutExtension =
-        extensionIdx > 0
-          ? originalFilename.slice(0, extensionIdx)
-          : originalFilename;
-      return nameWithoutExtension.trim();
+    const uploadedSkus = uploadedImages.map((img, idx) => {
+      const { sku } = this.extractCleanNameAndSkuFromFilename(
+        img.filename,
+        `temp-${idx}`,
+      );
+      return sku;
     });
 
     // Fetch all existing products with the matching SKUs to update or skip
@@ -1600,15 +1636,11 @@ export class CatalogueService {
 
     for (const img of uploadedImages) {
       if (!img.url) continue;
-      const originalFilename = img.filename;
-      const extensionIdx = originalFilename.lastIndexOf('.');
-      const nameWithoutExtension =
-        extensionIdx > 0
-          ? originalFilename.slice(0, extensionIdx)
-          : originalFilename;
-
-      const sku = nameWithoutExtension.trim();
-      const name = nameWithoutExtension.trim();
+      const productId = randomBytes(12).toString('hex');
+      const { name, sku } = this.extractCleanNameAndSkuFromFilename(
+        img.filename,
+        productId,
+      );
 
       const existingProduct = existingProductsMap.get(sku.toUpperCase());
       if (existingProduct) {
@@ -1634,7 +1666,6 @@ export class CatalogueService {
           });
         }
       } else {
-        const productId = randomBytes(12).toString('hex');
         const slug = this.slugify(sku);
 
         newProductsData.push({

@@ -1126,6 +1126,7 @@ export class StaffService {
     salaryMonth: string | number,
     salaryYear: string | number,
     userId: string,
+    dto?: any,
   ) {
     const staff = await this.prisma.staffProfile.findUnique({
       where: { id: staffId },
@@ -1133,27 +1134,42 @@ export class StaffService {
     if (!staff)
       throw new NotFoundException(`Staff Profile '${staffId}' not found.`);
 
-    const basicSalary = Number(staff.salary || 0);
+    const basicSalary =
+      dto?.basicSalary !== undefined && dto?.basicSalary !== ""
+        ? Number(dto.basicSalary)
+        : Number(staff.salary || 0);
+
     const startDate = new Date(Number(salaryYear), Number(salaryMonth) - 1, 1);
     const endDate = new Date(Number(salaryYear), Number(salaryMonth), 0);
 
-    const attendances = await this.prisma.attendanceRecord.findMany({
-      where: { staffId, attendanceDate: { gte: startDate, lte: endDate } },
-    });
+    let daysWorked = 0;
+    if (dto?.daysWorked !== undefined && dto?.daysWorked !== "") {
+      daysWorked = Number(dto.daysWorked);
+    } else {
+      const attendances = await this.prisma.attendanceRecord.findMany({
+        where: { staffId, attendanceDate: { gte: startDate, lte: endDate } },
+      });
 
-    let presentDays = 0;
-    attendances.forEach((a) => {
-      if (a.status === 'PRESENT') presentDays++;
-      if (a.status === 'HALF_DAY') presentDays += 0.5;
-    });
+      attendances.forEach((a) => {
+        if (a.status === 'PRESENT') daysWorked++;
+        if (a.status === 'HALF_DAY') daysWorked += 0.5;
+      });
+      if (daysWorked === 0) daysWorked = 30;
+    }
 
-    const dailyRate = basicSalary / 30;
-    const calculatedSalary = dailyRate * presentDays;
-    const overtimeAmount = 0;
-    const deductions = 0;
-    const bonus = 0;
-    const payableSalary =
-      calculatedSalary + overtimeAmount + bonus - deductions;
+    const overtimeAmount =
+      dto?.overtimeAmount !== undefined && dto?.overtimeAmount !== ""
+        ? Number(dto.overtimeAmount)
+        : 0;
+    const deductions =
+      dto?.deductions !== undefined && dto?.deductions !== ""
+        ? Number(dto.deductions)
+        : 0;
+    const bonus =
+      dto?.bonus !== undefined && dto?.bonus !== "" ? Number(dto.bonus) : 0;
+    const paymentStatus = dto?.paymentStatus || 'PENDING';
+
+    const payableSalary = basicSalary + overtimeAmount + bonus - deductions;
 
     return this.prisma.payroll.upsert({
       where: {
@@ -1163,7 +1179,16 @@ export class StaffService {
           salaryYear: Number(salaryYear),
         },
       },
-      update: { basicSalary, overtimeAmount, deductions, bonus, payableSalary },
+      update: {
+        basicSalary,
+        overtimeAmount,
+        deductions,
+        bonus,
+        daysWorked,
+        payableSalary,
+        paymentStatus,
+        ...(paymentStatus === 'PAID' && { paidAt: new Date(), paidBy: userId }),
+      },
       create: {
         staffId,
         salaryMonth: Number(salaryMonth),
@@ -1172,9 +1197,76 @@ export class StaffService {
         overtimeAmount,
         deductions,
         bonus,
+        daysWorked,
         payableSalary,
-        paymentStatus: 'PENDING',
+        paymentStatus,
+        ...(paymentStatus === 'PAID' && { paidAt: new Date(), paidBy: userId }),
       },
     });
+  }
+
+  async updatePayroll(id: string, dto: any, userId: string) {
+    const payroll = await this.prisma.payroll.findUnique({ where: { id } });
+    if (!payroll)
+      throw new NotFoundException(`Payroll '${id}' not found.`);
+
+    const basicSalary =
+      dto.basicSalary !== undefined
+        ? Number(dto.basicSalary)
+        : Number(payroll.basicSalary || 0);
+    const overtimeAmount =
+      dto.overtimeAmount !== undefined
+        ? Number(dto.overtimeAmount)
+        : Number(payroll.overtimeAmount || 0);
+    const deductions =
+      dto.deductions !== undefined
+        ? Number(dto.deductions)
+        : Number(payroll.deductions || 0);
+    const bonus =
+      dto.bonus !== undefined
+        ? Number(dto.bonus)
+        : Number(payroll.bonus || 0);
+    const daysWorked =
+      dto.daysWorked !== undefined
+        ? Number(dto.daysWorked)
+        : Number(payroll.daysWorked || 0);
+    const salaryMonth =
+      dto.salaryMonth !== undefined
+        ? Number(dto.salaryMonth)
+        : payroll.salaryMonth;
+    const salaryYear =
+      dto.salaryYear !== undefined
+        ? Number(dto.salaryYear)
+        : payroll.salaryYear;
+
+    const payableSalary = basicSalary + overtimeAmount + bonus - deductions;
+
+    return this.prisma.payroll.update({
+      where: { id },
+      data: {
+        ...(dto.basicSalary !== undefined && { basicSalary }),
+        ...(dto.overtimeAmount !== undefined && { overtimeAmount }),
+        ...(dto.deductions !== undefined && { deductions }),
+        ...(dto.bonus !== undefined && { bonus }),
+        ...(dto.daysWorked !== undefined && { daysWorked }),
+        ...(dto.salaryMonth !== undefined && { salaryMonth }),
+        ...(dto.salaryYear !== undefined && { salaryYear }),
+        payableSalary,
+        ...(dto.paymentStatus && { paymentStatus: dto.paymentStatus }),
+        ...(dto.paymentStatus === 'PAID' &&
+          payroll.paymentStatus !== 'PAID' && {
+            paidAt: new Date(),
+            paidBy: userId,
+          }),
+      },
+    });
+  }
+
+  async deletePayroll(id: string) {
+    const payroll = await this.prisma.payroll.findUnique({ where: { id } });
+    if (!payroll)
+      throw new NotFoundException(`Payroll '${id}' not found.`);
+
+    return this.prisma.payroll.delete({ where: { id } });
   }
 }
