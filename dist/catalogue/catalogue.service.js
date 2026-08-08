@@ -1,0 +1,1465 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+var CatalogueService_1;
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CatalogueService = void 0;
+const common_1 = require("@nestjs/common");
+const prisma_service_1 = require("../prisma/prisma.service");
+const crypto_1 = require("crypto");
+const axios_1 = __importDefault(require("axios"));
+const bwipjs = __importStar(require("bwip-js"));
+const upload_service_1 = require("../upload/upload.service");
+function pLimit(concurrency) {
+    const queue = [];
+    let activeCount = 0;
+    const next = () => {
+        activeCount--;
+        if (queue.length > 0) {
+            const run = queue.shift();
+            run();
+        }
+    };
+    return (fn) => {
+        return new Promise((resolve, reject) => {
+            const run = async () => {
+                activeCount++;
+                try {
+                    const res = await fn();
+                    resolve(res);
+                }
+                catch (err) {
+                    reject(err);
+                }
+                finally {
+                    next();
+                }
+            };
+            if (activeCount < concurrency) {
+                run();
+            }
+            else {
+                queue.push(run);
+            }
+        });
+    };
+}
+const image_cleaning_service_1 = require("../image-cleaning/image-cleaning.service");
+let CatalogueService = CatalogueService_1 = class CatalogueService {
+    prisma;
+    uploadService;
+    imageCleaningService;
+    logger = new common_1.Logger(CatalogueService_1.name);
+    constructor(prisma, uploadService, imageCleaningService) {
+        this.prisma = prisma;
+        this.uploadService = uploadService;
+        this.imageCleaningService = imageCleaningService;
+    }
+    async generateAndUploadBarcode(sku) {
+        try {
+            const buffer = await bwipjs.toBuffer({
+                bcid: 'code128',
+                text: sku,
+                scale: 3,
+                height: 10,
+                includetext: true,
+                textxalign: 'center',
+            });
+            const result = await this.uploadService.uploadBuffer(buffer, 'image/png', `${sku}_barcode.png`);
+            return result.fileUrl;
+        }
+        catch (error) {
+            this.logger.error(`Failed to generate barcode for SKU ${sku}`, error);
+            return null;
+        }
+    }
+    async generateBarcodeBuffer(sku) {
+        if (!sku)
+            return null;
+        let barcodeText = sku.trim();
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i.test(barcodeText) ||
+            barcodeText.endsWith('_full') ||
+            barcodeText.includes('-')) {
+            barcodeText = barcodeText.split('-')[0].toUpperCase();
+        }
+        else {
+            barcodeText = barcodeText.toUpperCase();
+        }
+        try {
+            return await bwipjs.toBuffer({
+                bcid: 'code128',
+                text: barcodeText,
+                scale: 4,
+                height: 14,
+                includetext: true,
+                textxalign: 'center',
+                textsize: 12,
+            });
+        }
+        catch (error) {
+            this.logger.warn(`Failed to generate in-memory barcode for SKU ${sku}`);
+            return null;
+        }
+    }
+    slugify(text) {
+        return text
+            .toString()
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, '-')
+            .replace(/[^\w\-]+/g, '')
+            .replace(/\-\-+/g, '-');
+    }
+    extractCleanNameAndSkuFromFilename(rawFilename, fallbackId) {
+        let clean = (rawFilename || '').replace(/^uploads\//i, '');
+        clean = clean.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_?/i, '');
+        clean = clean.replace(/^[0-9a-f]{24}_?/i, '');
+        const extIdx = clean.lastIndexOf('.');
+        if (extIdx > 0) {
+            clean = clean.slice(0, extIdx);
+        }
+        clean = clean.replace(/_full$/i, '').trim();
+        const shortHex = fallbackId.slice(0, 5).toUpperCase();
+        if (!clean ||
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(clean) ||
+            clean.toLowerCase() === 'full') {
+            return {
+                name: `Product ${fallbackId.slice(0, 8).toUpperCase()}`,
+                sku: `LS-${shortHex}`,
+            };
+        }
+        const name = clean.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+        let sku = clean.toUpperCase().replace(/\s+/g, '-').replace(/[^A-Z0-9\-]/g, '');
+        if (sku.length > 8) {
+            sku = sku.slice(0, 8);
+        }
+        return {
+            name: name || `Product ${fallbackId.slice(0, 8).toUpperCase()}`,
+            sku: sku || `LS-${shortHex}`,
+        };
+    }
+    async create(dto, userId) {
+        const start = Date.now();
+        let category = await this.prisma.category.findUnique({
+            where: { slug: 'uncategorized' },
+        });
+        if (!category) {
+            category = await this.prisma.category.create({
+                data: {
+                    name: 'Uncategorized',
+                    slug: 'uncategorized',
+                    isActive: true,
+                    createdBy: userId,
+                },
+            });
+        }
+        const tempProductsData = (dto.images || []).map((img) => {
+            const tempId = (0, crypto_1.randomBytes)(12).toString('hex');
+            const { name, sku } = this.extractCleanNameAndSkuFromFilename(img.filename, tempId);
+            const tempSlug = this.slugify(sku);
+            return { img, tempId, tempSku: sku, tempSlug, baseName: name };
+        });
+        const result = await this.prisma.$transaction(async (tx) => {
+            const catalogue = await tx.catalogue.create({
+                data: {
+                    name: dto.name,
+                    description: dto.description,
+                    imageUrl: dto.imageUrl,
+                    isPublished: dto.isPublished,
+                },
+            });
+            if (tempProductsData.length > 0) {
+                await tx.product.createMany({
+                    data: tempProductsData.map((data) => ({
+                        id: data.tempId,
+                        sku: data.tempSku,
+                        name: data.baseName,
+                        slug: data.tempSlug,
+                        categoryId: category.id,
+                        catalogueIds: [catalogue.id],
+                        barcode: data.tempSku,
+                        moq: 1,
+                        stockQuantity: 0,
+                        stockStatus: 'OUT_OF_STOCK',
+                        isActive: false,
+                        createdBy: userId,
+                    })),
+                });
+                await tx.productImage.createMany({
+                    data: tempProductsData.map((data) => ({
+                        productId: data.tempId,
+                        originalUrl: data.img.url,
+                        isPrimary: true,
+                        createdBy: userId,
+                    })),
+                });
+            }
+            const cat = await tx.catalogue.findUnique({
+                where: { id: catalogue.id },
+            });
+            if (!cat) {
+                throw new common_1.NotFoundException(`Catalogue with ID '${catalogue.id}' not created.`);
+            }
+            const products = await tx.product.findMany({
+                where: { catalogueIds: { has: catalogue.id } },
+                include: { images: true },
+            });
+            return {
+                ...cat,
+                products,
+            };
+        });
+        this.logger.log(`Catalogue created with ${dto.images.length} products in ${Date.now() - start}ms`);
+        if (result) {
+            this.imageCleaningService
+                .triggerBackgroundCleaningForCatalogue(result.id, userId)
+                .catch(() => { });
+        }
+        return result;
+    }
+    async findAll(search, publishedOnly = false) {
+        const where = {};
+        if (search) {
+            where.name = { contains: search, mode: 'insensitive' };
+        }
+        if (publishedOnly) {
+            where.isPublished = true;
+        }
+        const catalogues = await this.prisma.catalogue.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+        });
+        return Promise.all(catalogues.map(async (c) => {
+            const [productsCount, categoriesCount, previewProducts] = await Promise.all([
+                this.prisma.product.count({
+                    where: { catalogueIds: { has: c.id } },
+                }),
+                this.prisma.category.count({
+                    where: { catalogueId: c.id },
+                }),
+                this.prisma.product.findMany({
+                    where: { catalogueIds: { has: c.id } },
+                    take: 4,
+                    select: {
+                        productImage: true,
+                        images: {
+                            take: 1,
+                            orderBy: { sortOrder: 'asc' },
+                            select: { originalUrl: true },
+                        },
+                    },
+                }),
+            ]);
+            const previewImages = previewProducts
+                .map((p) => p.images?.[0]?.originalUrl || p.productImage)
+                .filter((url) => !!url);
+            return {
+                id: c.id,
+                name: c.name,
+                description: c.description,
+                imageUrl: c.imageUrl,
+                isPublished: c.isPublished,
+                createdAt: c.createdAt,
+                updatedAt: c.updatedAt,
+                productsCount,
+                categoriesCount,
+                previewImages,
+            };
+        }));
+    }
+    async findOne(id, search, page, limit, publishedOnly = false, categoryId) {
+        const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+        if (!objectIdRegex.test(id)) {
+            throw new common_1.BadRequestException(`Invalid catalogue ID format: ${id}`);
+        }
+        const productWhere = {};
+        if (typeof search === 'string' && search.trim()) {
+            productWhere.OR = [
+                { name: { contains: search, mode: 'insensitive' } },
+                { sku: { contains: search, mode: 'insensitive' } },
+                { barcode: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+        if (categoryId) {
+            productWhere.categoryId = categoryId;
+        }
+        const validPage = typeof page === 'number' && page > 0 ? page : 1;
+        const validLimit = typeof limit === 'number' && limit > 0 ? limit : undefined;
+        const [catalogue, products, totalProductsCount] = await Promise.all([
+            this.prisma.catalogue.findUnique({
+                where: { id },
+            }),
+            this.prisma.product.findMany({
+                where: {
+                    catalogueIds: { has: id },
+                    ...productWhere,
+                },
+                include: {
+                    category: { select: { id: true, name: true, slug: true } },
+                    images: { orderBy: { sortOrder: 'asc' } },
+                    pricing: { include: { pricingGroup: true } },
+                },
+                orderBy: { createdAt: 'asc' },
+                skip: validLimit ? (validPage - 1) * validLimit : undefined,
+                take: validLimit,
+            }),
+            this.prisma.product.count({
+                where: {
+                    catalogueIds: { has: id },
+                    ...productWhere,
+                },
+            }),
+        ]);
+        if (!catalogue || (publishedOnly && !catalogue.isPublished)) {
+            throw new common_1.NotFoundException(`Catalogue with ID '${id}' not found.`);
+        }
+        return {
+            ...catalogue,
+            products,
+            productsMeta: {
+                total: totalProductsCount,
+                page: validPage,
+                limit: validLimit || totalProductsCount,
+                totalPages: validLimit ? Math.ceil(totalProductsCount / validLimit) : 1,
+            },
+        };
+    }
+    async update(id, dto) {
+        const catalogue = await this.prisma.catalogue.findUnique({ where: { id } });
+        if (!catalogue) {
+            throw new common_1.NotFoundException(`Catalogue with ID '${id}' not found.`);
+        }
+        return this.prisma.catalogue.update({
+            where: { id },
+            data: {
+                name: dto.name,
+                description: dto.description,
+                imageUrl: dto.imageUrl,
+                isPublished: dto.isPublished,
+            },
+        });
+    }
+    async remove(id) {
+        const catalogue = await this.prisma.catalogue.findUnique({
+            where: { id },
+        });
+        if (!catalogue) {
+            throw new common_1.NotFoundException(`Catalogue with ID '${id}' not found.`);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const products = await tx.product.findMany({
+                where: { catalogueIds: { has: id } },
+            });
+            for (const product of products) {
+                const orderItemCount = await tx.orderItem.count({
+                    where: { productId: product.id },
+                });
+                const backorderApprovalCount = await tx.backorderApproval.count({
+                    where: { productId: product.id },
+                });
+                const isReferenced = orderItemCount > 0 ||
+                    backorderApprovalCount > 0;
+                const belongsToOtherCatalogues = product.catalogueIds.some((cid) => cid !== id);
+                if (isReferenced || belongsToOtherCatalogues) {
+                    await tx.product.update({
+                        where: { id: product.id },
+                        data: {
+                            catalogueIds: {
+                                set: product.catalogueIds.filter((cid) => cid !== id),
+                            },
+                            isActive: belongsToOtherCatalogues ? product.isActive : false,
+                        },
+                    });
+                }
+                else {
+                    await tx.imageCleaningTask.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.productImage.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.productPricing.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.productCatalogFile.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.productVideo.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.cartItem.deleteMany({ where: { productId: product.id } });
+                    await tx.stockMovement.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.backorderApproval.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.product.delete({
+                        where: { id: product.id },
+                    });
+                }
+            }
+            await tx.category.updateMany({
+                where: { catalogueId: id },
+                data: { catalogueId: null },
+            });
+            await tx.catalogue.delete({
+                where: { id },
+            });
+        });
+        return {
+            message: 'Catalogue and its associated products deleted successfully.',
+        };
+    }
+    async exportCatalogue(catalogueId, productIds, categoryId) {
+        const start = Date.now();
+        const catalogue = await this.prisma.catalogue.findUnique({
+            where: { id: catalogueId },
+        });
+        if (!catalogue) {
+            throw new common_1.NotFoundException(`Catalogue with ID '${catalogueId}' not found.`);
+        }
+        const productWhere = {
+            catalogueIds: { has: catalogueId },
+        };
+        if (categoryId) {
+            productWhere.categoryId = categoryId;
+        }
+        if (productIds) {
+            const ids = productIds.split(',').map((id) => id.trim()).filter(Boolean);
+            if (ids.length > 0) {
+                productWhere.id = { in: ids };
+            }
+        }
+        const products = await this.prisma.product.findMany({
+            where: productWhere,
+            include: {
+                images: { orderBy: { sortOrder: 'asc' } },
+                pricing: { include: { pricingGroup: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+        });
+        const ExcelJS = require('exceljs');
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Catalogue Products');
+        const pricingGroups = await this.prisma.pricingGroup.findMany({
+            where: { isActive: true },
+            orderBy: { code: 'asc' },
+        });
+        const columns = [
+            { header: 'Product Image', key: 'productImage', width: 22 },
+            { header: 'Barcode Image', key: 'barcodeImage', width: 30 },
+            { header: 'Product ID (System ID - Do Not Edit)', key: 'id', width: 36 },
+            { header: 'SKU', key: 'sku', width: 20 },
+            { header: 'Product Name', key: 'name', width: 40 },
+            { header: 'Product Description', key: 'description', width: 50 },
+            { header: 'Product Price', key: 'productPrice', width: 15 },
+            { header: 'Discounted price', key: 'discountedPrice', width: 18 },
+            { header: 'Available quantity', key: 'stockQuantity', width: 18 },
+            { header: 'Is Active (YES/NO)', key: 'isActive', width: 18 },
+            { header: 'MOQ', key: 'moq', width: 10 },
+            { header: 'Brand', key: 'brand', width: 15 },
+            { header: 'Size', key: 'size', width: 12 },
+            { header: 'Color', key: 'color', width: 12 },
+            { header: 'Unit', key: 'unit', width: 10 },
+            { header: 'Tax "type"', key: 'taxType', width: 15 },
+            { header: 'Tax percentage', key: 'taxPercent', width: 15 },
+            { header: 'Weight', key: 'weight', width: 12 },
+            { header: 'Parent product sku', key: 'parentProductSku', width: 20 },
+            { header: 'Parent product id', key: 'parentProductId', width: 36 },
+            { header: 'Private notes', key: 'privateNotes', width: 30 },
+            { header: 'Set Name', key: 'setName', width: 20 },
+            { header: 'Set Quantity', key: 'setQuantity', width: 15 },
+            { header: 'Set Type', key: 'setType', width: 15 },
+            { header: 'sizes', key: 'sizes', width: 15 },
+            { header: 'Sizes Set Quantity', key: 'sizesSetQuantity', width: 18 },
+            { header: 'colors', key: 'colors', width: 15 },
+            { header: 'Colors Set Quantity', key: 'colorsSetQuantity', width: 18 },
+            { header: 'nt11-48', key: 'nt11_48', width: 15 },
+            { header: 'Nt11-48 Set Quantity', key: 'nt11_48SetQuantity', width: 20 },
+            { header: '6-12 months', key: 'sixToTwelveMonths', width: 15 },
+            {
+                header: '6-12 months Set Quantity',
+                key: 'sixToTwelveMonthsSetQuantity',
+                width: 25,
+            },
+        ];
+        pricingGroups.forEach((group) => {
+            columns.push({
+                header: `Price - ${group.code}`,
+                key: `price_${group.code}`,
+                width: 18,
+            }, { header: `MRP - ${group.code}`, key: `mrp_${group.code}`, width: 18 }, {
+                header: `Discount % - ${group.code}`,
+                key: `discount_${group.code}`,
+                width: 18,
+            });
+        });
+        sheet.columns = columns;
+        const headerRow = sheet.getRow(1);
+        headerRow.height = 30;
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        const sharp = require('sharp');
+        const barcodeColIdx = columns.findIndex((c) => c.key === 'barcodeImage');
+        const limit = pLimit(10);
+        this.logger.log(`Preparing ${products.length} product images & barcodes in parallel (concurrency=10)...`);
+        const imageResults = await Promise.all(products.map((p) => limit(async () => {
+            const primaryImageUrl = p.images[0]?.originalUrl || '';
+            const imageUrl = p.productImage || primaryImageUrl;
+            const result = {
+                productId: p.id,
+                productImageBuffer: null,
+                barcodeBuffer: null,
+            };
+            const [imgRes, barcodeRes] = await Promise.allSettled([
+                imageUrl
+                    ? axios_1.default.get(imageUrl, {
+                        responseType: 'arraybuffer',
+                        timeout: 5000,
+                    })
+                    : Promise.resolve(null),
+                this.generateBarcodeBuffer(p.sku),
+            ]);
+            if (imgRes.status === 'fulfilled' && imgRes.value) {
+                try {
+                    const originalBuffer = Buffer.from(imgRes.value.data);
+                    result.productImageBuffer = await sharp(originalBuffer)
+                        .resize(300, 300, { fit: 'inside' })
+                        .jpeg({ quality: 90 })
+                        .toBuffer();
+                }
+                catch (err) {
+                    this.logger.warn(`Failed to resize image for product ${p.id}: ${err.message}`);
+                }
+            }
+            if (barcodeRes.status === 'fulfilled' && barcodeRes.value) {
+                result.barcodeBuffer = barcodeRes.value;
+            }
+            return result;
+        })));
+        const imageMap = new Map(imageResults.map((r) => [r.productId, r]));
+        let rowIndex = 1;
+        for (const p of products) {
+            rowIndex++;
+            const primaryImageUrl = p.images[0]?.originalUrl || '';
+            const imageUrl = p.productImage || primaryImageUrl;
+            const rowData = {
+                productImage: '',
+                barcodeImage: '',
+                id: p.id,
+                sku: p.sku,
+                name: p.name,
+                description: p.description || '',
+                productPrice: p.productPrice ? p.productPrice.toString() : '',
+                discountedPrice: p.discountedPrice ? p.discountedPrice.toString() : '',
+                stockQuantity: p.stockQuantity,
+                isActive: p.isActive ? 'YES' : 'NO',
+                moq: p.moq,
+                brand: p.brand || '',
+                size: p.size || '',
+                color: p.color || '',
+                unit: p.unit || 'PCS',
+                taxType: p.taxType || '',
+                taxPercent: p.taxPercent ? p.taxPercent.toString() : '0',
+                weight: p.weight ? p.weight.toString() : '',
+                parentProductSku: p.parentProductSku || '',
+                parentProductId: p.parentProductId || '',
+                privateNotes: p.privateNotes || '',
+                setName: p.setName || '',
+                setQuantity: p.setQuantity !== null && p.setQuantity !== undefined
+                    ? p.setQuantity
+                    : '',
+                setType: p.setType || '',
+                sizes: p.sizes || '',
+                sizesSetQuantity: p.sizesSetQuantity !== null && p.sizesSetQuantity !== undefined
+                    ? p.sizesSetQuantity
+                    : '',
+                colors: p.colors || '',
+                colorsSetQuantity: p.colorsSetQuantity !== null && p.colorsSetQuantity !== undefined
+                    ? p.colorsSetQuantity
+                    : '',
+                nt11_48: p.nt11_48 || '',
+                nt11_48SetQuantity: p.nt11_48SetQuantity !== null && p.nt11_48SetQuantity !== undefined
+                    ? p.nt11_48SetQuantity
+                    : '',
+                sixToTwelveMonths: p.sixToTwelveMonths || '',
+                sixToTwelveMonthsSetQuantity: p.sixToTwelveMonthsSetQuantity !== null &&
+                    p.sixToTwelveMonthsSetQuantity !== undefined
+                    ? p.sixToTwelveMonthsSetQuantity
+                    : '',
+            };
+            pricingGroups.forEach((group) => {
+                const pricing = p.pricing.find((pr) => pr.pricingGroupId === group.id);
+                rowData[`price_${group.code}`] = pricing
+                    ? pricing.price.toString()
+                    : '';
+                rowData[`mrp_${group.code}`] =
+                    pricing && pricing.mrp ? pricing.mrp.toString() : '';
+                rowData[`discount_${group.code}`] =
+                    pricing && pricing.discountPercent
+                        ? pricing.discountPercent.toString()
+                        : '';
+            });
+            sheet.addRow(rowData);
+            const row = sheet.getRow(rowIndex);
+            row.height = 95;
+            row.alignment = { vertical: 'middle' };
+            const imgData = imageMap.get(p.id);
+            if (imgData?.productImageBuffer) {
+                const imageId = workbook.addImage({
+                    buffer: imgData.productImageBuffer,
+                    extension: 'jpeg',
+                });
+                sheet.addImage(imageId, {
+                    tl: { col: 0.05, row: rowIndex - 1 + 0.05 },
+                    ext: { width: 120, height: 110 },
+                    editAs: 'oneCell',
+                });
+            }
+            if (imgData?.barcodeBuffer) {
+                const imageId = workbook.addImage({
+                    buffer: imgData.barcodeBuffer,
+                    extension: 'png',
+                });
+                sheet.addImage(imageId, {
+                    tl: { col: barcodeColIdx + 0.05, row: rowIndex - 1 + 0.08 },
+                    ext: { width: 200, height: 100 },
+                    editAs: 'oneCell',
+                });
+            }
+        }
+        const buffer = await workbook.xlsx.writeBuffer();
+        this.logger.log(`Export completed for ${products.length} products in ${Date.now() - start}ms`);
+        return buffer;
+    }
+    async importCatalogue(catalogueId, fileBuffer, userId, targetCategoryId) {
+        const start = Date.now();
+        const catalogue = await this.findOne(catalogueId);
+        const ExcelJS = require('exceljs');
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(fileBuffer);
+        const sheet = workbook.worksheets[0];
+        if (!sheet) {
+            throw new common_1.BadRequestException('The uploaded file is empty or invalid.');
+        }
+        const headers = [];
+        const headerRow = sheet.getRow(1);
+        headerRow.eachCell((cell, colNumber) => {
+            headers[colNumber] = cell.value ? cell.value.toString().trim() : '';
+        });
+        const idHeaderKey = headers.find((h) => h &&
+            (h.toLowerCase().includes('product id') || h.toLowerCase() === 'id'));
+        const skuHeaderKey = headers.find((h) => h && h.toLowerCase() === 'sku');
+        const nameHeaderKey = headers.find((h) => h && (h.toLowerCase() === 'product name' || h.toLowerCase() === 'name'));
+        const descHeaderKey = headers.find((h) => h &&
+            (h.toLowerCase() === 'product description' ||
+                h.toLowerCase() === 'description'));
+        const productImageHeaderKey = headers.find((h) => h && h.toLowerCase() === 'product image');
+        const productPictureUrlHeaderKey = headers.find((h) => h && h.toLowerCase() === 'product picture url');
+        const productPriceHeaderKey = headers.find((h) => h && h.toLowerCase() === 'product price');
+        const discountedPriceHeaderKey = headers.find((h) => h && h.toLowerCase() === 'discounted price');
+        const stockHeaderKey = headers.find((h) => h &&
+            (h.toLowerCase().includes('available quantity') ||
+                h.toLowerCase().includes('stock quantity')));
+        const activeHeaderKey = headers.find((h) => h &&
+            (h.toLowerCase().includes('is active') || h.toLowerCase() === 'active'));
+        const moqHeaderKey = headers.find((h) => h && h.toLowerCase() === 'moq');
+        const brandHeaderKey = headers.find((h) => h && h.toLowerCase() === 'brand');
+        const sizeHeaderKey = headers.find((h) => h && h.toLowerCase() === 'size');
+        const colorHeaderKey = headers.find((h) => h && h.toLowerCase() === 'color');
+        const unitHeaderKey = headers.find((h) => h && h.toLowerCase() === 'unit');
+        const taxTypeHeaderKey = headers.find((h) => h &&
+            (h.toLowerCase() === 'tax "type"' || h.toLowerCase() === 'tax type'));
+        const taxHeaderKey = headers.find((h) => h &&
+            (h.toLowerCase() === 'tax percentage' ||
+                h.toLowerCase().includes('tax percent')));
+        const weightHeaderKey = headers.find((h) => h && h.toLowerCase() === 'weight');
+        const parentProductSkuHeaderKey = headers.find((h) => h && h.toLowerCase() === 'parent product sku');
+        const parentProductIdHeaderKey = headers.find((h) => h && h.toLowerCase() === 'parent product id');
+        const privateNotesHeaderKey = headers.find((h) => h && h.toLowerCase() === 'private notes');
+        const setNameHeaderKey = headers.find((h) => h && h.toLowerCase() === 'set name');
+        const setQuantityHeaderKey = headers.find((h) => h && h.toLowerCase() === 'set quantity');
+        const setTypeHeaderKey = headers.find((h) => h && h.toLowerCase() === 'set type');
+        const sizesHeaderKey = headers.find((h) => h && h.toLowerCase() === 'sizes');
+        const sizesSetQuantityHeaderKey = headers.find((h) => h && h.toLowerCase() === 'sizes set quantity');
+        const colorsHeaderKey = headers.find((h) => h && h.toLowerCase() === 'colors');
+        const colorsSetQuantityHeaderKey = headers.find((h) => h && h.toLowerCase() === 'colors set quantity');
+        const nt11_48HeaderKey = headers.find((h) => h && h.toLowerCase() === 'nt11-48');
+        const nt11_48SetQuantityHeaderKey = headers.find((h) => h && h.toLowerCase() === 'nt11-48 set quantity');
+        const sixToTwelveMonthsHeaderKey = headers.find((h) => h && h.toLowerCase() === '6-12 months');
+        const sixToTwelveMonthsSetQuantityHeaderKey = headers.find((h) => h && h.toLowerCase() === '6-12 months set quantity');
+        const pricingHeaderMap = {};
+        headers.forEach((header, idx) => {
+            if (!header)
+                return;
+            const priceMatch = header.match(/Price\s*-\s*(.+)/i);
+            if (priceMatch) {
+                pricingHeaderMap[idx] = {
+                    type: 'price',
+                    groupCode: priceMatch[1].trim().toUpperCase(),
+                };
+                return;
+            }
+            const mrpMatch = header.match(/MRP\s*-\s*(.+)/i);
+            if (mrpMatch) {
+                pricingHeaderMap[idx] = {
+                    type: 'mrp',
+                    groupCode: mrpMatch[1].trim().toUpperCase(),
+                };
+                return;
+            }
+            const discountMatch = header.match(/Discount\s*(?:%\s*)?-\s*(.+)/i);
+            if (discountMatch) {
+                pricingHeaderMap[idx] = {
+                    type: 'discount',
+                    groupCode: discountMatch[1].trim().toUpperCase(),
+                };
+                return;
+            }
+        });
+        const getCellValueString = (cell) => {
+            if (!cell || cell.value === null || cell.value === undefined)
+                return null;
+            if (typeof cell.value === 'object') {
+                if (cell.value.result !== undefined && cell.value.result !== null)
+                    return cell.value.result.toString();
+                if (cell.value.text !== undefined && cell.value.text !== null)
+                    return cell.value.text.toString();
+                return JSON.stringify(cell.value);
+            }
+            return cell.value.toString();
+        };
+        const getCellValueNumber = (cell) => {
+            if (!cell || cell.value === null || cell.value === undefined)
+                return null;
+            let val = cell.value;
+            if (typeof val === 'object') {
+                if (val.result !== undefined && val.result !== null) {
+                    val = val.result;
+                }
+                else {
+                    return null;
+                }
+            }
+            const parsed = parseFloat(val);
+            return isNaN(parsed) ? null : parsed;
+        };
+        const parsedRows = [];
+        sheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1)
+                return;
+            const getValString = (headerKey) => {
+                if (!headerKey)
+                    return undefined;
+                const idx = headers.indexOf(headerKey);
+                if (idx === -1)
+                    return undefined;
+                const val = getCellValueString(row.getCell(idx));
+                return val ? val.trim() : null;
+            };
+            const getValNumber = (headerKey) => {
+                if (!headerKey)
+                    return undefined;
+                const idx = headers.indexOf(headerKey);
+                if (idx === -1)
+                    return undefined;
+                return getCellValueNumber(row.getCell(idx));
+            };
+            const roundVal = (v, defaultValue = null) => {
+                if (v === undefined)
+                    return undefined;
+                if (v === null)
+                    return defaultValue;
+                return Math.round(v);
+            };
+            const id = getValString(idHeaderKey);
+            const sku = getValString(skuHeaderKey);
+            const name = getValString(nameHeaderKey);
+            if (!sku && !name)
+                return;
+            const isActiveStr = getValString(activeHeaderKey);
+            let isActive = undefined;
+            if (activeHeaderKey) {
+                if (isActiveStr !== undefined && isActiveStr !== null) {
+                    const cleanVal = isActiveStr.trim().toUpperCase();
+                    isActive =
+                        cleanVal === 'YES' || cleanVal === 'TRUE' || cleanVal === '1';
+                }
+                else {
+                    isActive = false;
+                }
+            }
+            const pricingData = {};
+            Object.keys(pricingHeaderMap).forEach((colIdxStr) => {
+                const colIdx = parseInt(colIdxStr);
+                const mapInfo = pricingHeaderMap[colIdx];
+                const cellVal = getCellValueNumber(row.getCell(colIdx));
+                if (cellVal !== null && cellVal !== undefined) {
+                    if (!pricingData[mapInfo.groupCode])
+                        pricingData[mapInfo.groupCode] = {};
+                    if (mapInfo.type === 'price')
+                        pricingData[mapInfo.groupCode].price = cellVal;
+                    if (mapInfo.type === 'mrp')
+                        pricingData[mapInfo.groupCode].mrp = cellVal;
+                    if (mapInfo.type === 'discount')
+                        pricingData[mapInfo.groupCode].discountPercent = cellVal;
+                }
+            });
+            const stockQuantity = getValNumber(stockHeaderKey);
+            const moq = getValNumber(moqHeaderKey);
+            const setQuantity = getValNumber(setQuantityHeaderKey);
+            const sizesSetQuantity = getValNumber(sizesSetQuantityHeaderKey);
+            const colorsSetQuantity = getValNumber(colorsSetQuantityHeaderKey);
+            const nt11_48SetQuantity = getValNumber(nt11_48SetQuantityHeaderKey);
+            const sixToTwelveMonthsSetQuantity = getValNumber(sixToTwelveMonthsSetQuantityHeaderKey);
+            parsedRows.push({
+                rowNumber,
+                id: id || null,
+                sku: sku ? sku.trim() : null,
+                name: name ? name.trim() : null,
+                description: getValString(descHeaderKey)?.trim() ?? null,
+                productImage: getValString(productImageHeaderKey),
+                productPictureUrl: getValString(productPictureUrlHeaderKey),
+                productPrice: getValNumber(productPriceHeaderKey),
+                discountedPrice: getValNumber(discountedPriceHeaderKey),
+                stockQuantity: roundVal(stockQuantity, 0),
+                moq: roundVal(moq, 1),
+                brand: getValString(brandHeaderKey),
+                size: getValString(sizeHeaderKey),
+                color: getValString(colorHeaderKey),
+                unit: getValString(unitHeaderKey) || 'PCS',
+                taxType: getValString(taxTypeHeaderKey),
+                taxPercent: getValNumber(taxHeaderKey),
+                weight: getValNumber(weightHeaderKey),
+                parentProductSku: getValString(parentProductSkuHeaderKey),
+                parentProductId: getValString(parentProductIdHeaderKey),
+                privateNotes: getValString(privateNotesHeaderKey),
+                setName: getValString(setNameHeaderKey),
+                setQuantity: roundVal(setQuantity, null),
+                setType: getValString(setTypeHeaderKey),
+                sizes: getValString(sizesHeaderKey),
+                sizesSetQuantity: roundVal(sizesSetQuantity, null),
+                colors: getValString(colorsHeaderKey),
+                colorsSetQuantity: roundVal(colorsSetQuantity, null),
+                nt11_48: getValString(nt11_48HeaderKey),
+                nt11_48SetQuantity: roundVal(nt11_48SetQuantity, null),
+                sixToTwelveMonths: getValString(sixToTwelveMonthsHeaderKey),
+                sixToTwelveMonthsSetQuantity: roundVal(sixToTwelveMonthsSetQuantity, null),
+                isActive,
+                pricingData,
+            });
+        });
+        const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
+        const isValidObjectId = (v) => !!v && OBJECT_ID_REGEX.test(v);
+        const catalogProductIds = new Set(catalogue.products.map((p) => p.id));
+        const allSkusInFile = parsedRows.map((r) => r.sku).filter(Boolean);
+        const validObjectIdsInFile = parsedRows
+            .map((r) => r.id)
+            .filter(isValidObjectId);
+        const dbProducts = await this.prisma.product.findMany({
+            where: {
+                OR: [
+                    { sku: { in: allSkusInFile } },
+                    { id: { in: validObjectIdsInFile } },
+                ],
+            },
+            select: { id: true, sku: true, barcodeUrl: true, catalogueIds: true },
+        });
+        const skuToDbProductMap = new Map(dbProducts.map((p) => [p.sku.toUpperCase(), p]));
+        const idToDbProductMap = new Map(dbProducts.map((p) => [p.id, p]));
+        const barcodeLimit = pLimit(10);
+        await Promise.all(parsedRows.map((row) => barcodeLimit(async () => {
+            if (!row.sku) {
+                row.barcodeUrl = null;
+                return;
+            }
+            const upperSku = row.sku.toUpperCase();
+            let dbProduct = skuToDbProductMap.get(upperSku);
+            if (!dbProduct && isValidObjectId(row.id)) {
+                dbProduct = idToDbProductMap.get(row.id);
+            }
+            if (dbProduct) {
+                row.id = dbProduct.id;
+                row.isNew = false;
+                if (upperSku === dbProduct.sku.toUpperCase() && dbProduct.barcodeUrl) {
+                    row.barcodeUrl = dbProduct.barcodeUrl;
+                }
+                else {
+                    row.barcodeUrl = await this.generateAndUploadBarcode(row.sku);
+                }
+            }
+            else {
+                row.isNew = true;
+                row.id = (0, crypto_1.randomBytes)(12).toString('hex');
+                row.barcodeUrl = await this.generateAndUploadBarcode(row.sku);
+            }
+        })));
+        const skuSet = new Set();
+        for (const row of parsedRows) {
+            if (!row.sku)
+                throw new common_1.BadRequestException(`Row ${row.rowNumber}: SKU is required.`);
+            if (!row.name)
+                throw new common_1.BadRequestException(`Row ${row.rowNumber}: Product name is required.`);
+            const upperSku = row.sku.toUpperCase();
+            if (skuSet.has(upperSku))
+                throw new common_1.BadRequestException(`Duplicate SKU "${row.sku}" found in the uploaded Excel sheet.`);
+            skuSet.add(upperSku);
+        }
+        const allProductIds = parsedRows.map((r) => r.id);
+        const existingImages = await this.prisma.productImage.findMany({
+            where: { productId: { in: allProductIds } },
+            select: { productId: true, originalUrl: true, isPrimary: true },
+        });
+        const existingImageMap = new Map();
+        for (const img of existingImages) {
+            if (!existingImageMap.has(img.productId))
+                existingImageMap.set(img.productId, new Set());
+            existingImageMap.get(img.productId).add(img.originalUrl);
+        }
+        const allGroupCodes = [
+            ...new Set(parsedRows.flatMap((r) => Object.keys(r.pricingData))),
+        ];
+        const pricingGroups = await this.prisma.pricingGroup.findMany({
+            where: { code: { in: allGroupCodes } },
+        });
+        const pricingGroupMap = new Map(pricingGroups.map((g) => [g.code, g]));
+        await this.prisma.$transaction(async (tx) => {
+            let category = null;
+            if (targetCategoryId) {
+                category = await tx.category.findUnique({
+                    where: { id: targetCategoryId },
+                });
+            }
+            if (!category) {
+                category = await tx.category.findUnique({
+                    where: { slug: 'uncategorized' },
+                });
+                if (!category) {
+                    category = await tx.category.create({
+                        data: {
+                            name: 'Uncategorized',
+                            slug: 'uncategorized',
+                            isActive: true,
+                            createdBy: userId,
+                        },
+                    });
+                }
+            }
+            for (const groupCode of allGroupCodes) {
+                let pricingGroup = pricingGroupMap.get(groupCode);
+                if (!pricingGroup) {
+                    const dbGroup = await tx.pricingGroup.findUnique({
+                        where: { code: groupCode },
+                    });
+                    if (dbGroup) {
+                        pricingGroup = dbGroup;
+                    }
+                    else {
+                        pricingGroup = await tx.pricingGroup.create({
+                            data: {
+                                name: groupCode.charAt(0) + groupCode.slice(1).toLowerCase(),
+                                code: groupCode,
+                                description: `Automatically created during catalog import`,
+                                isActive: true,
+                            },
+                        });
+                    }
+                    pricingGroupMap.set(groupCode, pricingGroup);
+                }
+            }
+            const uploadedExistingIds = new Set(parsedRows.filter((r) => !r.isNew).map((r) => r.id));
+            const omittedProducts = catalogue.products.filter((p) => !uploadedExistingIds.has(p.id));
+            for (const product of omittedProducts) {
+                const belongsToOtherCatalogues = product.catalogueIds.some((cid) => cid !== catalogueId);
+                const orderItemCount = await tx.orderItem.count({
+                    where: { productId: product.id },
+                });
+                const backorderApprovalCount = await tx.backorderApproval.count({
+                    where: { productId: product.id },
+                });
+                const isReferenced = orderItemCount > 0 ||
+                    backorderApprovalCount > 0;
+                if (isReferenced || belongsToOtherCatalogues) {
+                    await tx.product.update({
+                        where: { id: product.id },
+                        data: {
+                            catalogueIds: {
+                                set: product.catalogueIds.filter((cid) => cid !== catalogueId),
+                            },
+                            isActive: belongsToOtherCatalogues ? product.isActive : false,
+                        },
+                    });
+                }
+                else {
+                    await tx.imageCleaningTask.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.productImage.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.productPricing.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.productCatalogFile.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.productVideo.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.cartItem.deleteMany({ where: { productId: product.id } });
+                    await tx.stockMovement.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.backorderApproval.deleteMany({
+                        where: { productId: product.id },
+                    });
+                    await tx.product.delete({
+                        where: { id: product.id },
+                    });
+                }
+            }
+            const newRows = parsedRows.filter((r) => r.isNew);
+            const existingRows = parsedRows.filter((r) => !r.isNew);
+            if (newRows.length > 0) {
+                await tx.product.createMany({
+                    data: newRows.map((row) => {
+                        const slug = `${this.slugify(row.name)}-${row.sku.toLowerCase()}`;
+                        return {
+                            id: row.id,
+                            sku: row.sku,
+                            name: row.name,
+                            slug,
+                            description: row.description,
+                            productImage: row.productImage,
+                            productPictureUrl: row.productPictureUrl,
+                            productPrice: row.productPrice,
+                            discountedPrice: row.discountedPrice,
+                            stockQuantity: row.stockQuantity,
+                            moq: row.moq,
+                            brand: row.brand,
+                            size: row.size,
+                            color: row.color,
+                            unit: row.unit || 'PCS',
+                            taxType: row.taxType,
+                            taxPercent: row.taxPercent,
+                            weight: row.weight,
+                            parentProductSku: row.parentProductSku,
+                            parentProductId: row.parentProductId,
+                            privateNotes: row.privateNotes,
+                            setName: row.setName,
+                            setQuantity: row.setQuantity,
+                            setType: row.setType,
+                            sizes: row.sizes,
+                            sizesSetQuantity: row.sizesSetQuantity,
+                            colors: row.colors,
+                            colorsSetQuantity: row.colorsSetQuantity,
+                            nt11_48: row.nt11_48,
+                            nt11_48SetQuantity: row.nt11_48SetQuantity,
+                            sixToTwelveMonths: row.sixToTwelveMonths,
+                            sixToTwelveMonthsSetQuantity: row.sixToTwelveMonthsSetQuantity,
+                            isActive: row.isActive,
+                            barcode: row.sku,
+                            barcodeUrl: row.barcodeUrl,
+                            stockStatus: row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+                            categoryId: category.id,
+                            catalogueIds: [catalogueId],
+                            createdBy: userId,
+                        };
+                    }),
+                });
+                const newProductImagesData = [];
+                for (const row of newRows) {
+                    if (row.productImage || row.productPictureUrl) {
+                        const primaryUrl = row.productImage || row.productPictureUrl;
+                        newProductImagesData.push({
+                            productId: row.id,
+                            originalUrl: primaryUrl,
+                            isPrimary: true,
+                            createdBy: userId,
+                        });
+                    }
+                }
+                if (newProductImagesData.length > 0) {
+                    await tx.productImage.createMany({
+                        data: newProductImagesData,
+                    });
+                }
+                const newProductPricingData = [];
+                for (const row of newRows) {
+                    Object.keys(row.pricingData).forEach((groupCode) => {
+                        const groupPricing = row.pricingData[groupCode];
+                        if (groupPricing.price !== undefined && groupPricing.price !== null) {
+                            const pricingGroup = pricingGroupMap.get(groupCode);
+                            newProductPricingData.push({
+                                productId: row.id,
+                                pricingGroupId: pricingGroup.id,
+                                price: groupPricing.price,
+                                mrp: groupPricing.mrp,
+                                discountPercent: groupPricing.discountPercent,
+                                createdBy: userId,
+                            });
+                        }
+                    });
+                }
+                if (newProductPricingData.length > 0) {
+                    await tx.productPricing.createMany({
+                        data: newProductPricingData,
+                    });
+                }
+            }
+            if (existingRows.length > 0) {
+                const updateLimit = pLimit(15);
+                await Promise.all(existingRows.map((row) => updateLimit(async () => {
+                    const slug = `${this.slugify(row.name)}-${row.sku.toLowerCase()}`;
+                    const existingProduct = idToDbProductMap.get(row.id) ||
+                        skuToDbProductMap.get(row.sku.toUpperCase());
+                    const currentIds = existingProduct?.catalogueIds || [];
+                    const nextIds = Array.from(new Set([...currentIds, catalogueId]));
+                    await tx.product.update({
+                        where: { id: row.id },
+                        data: {
+                            sku: row.sku,
+                            name: row.name,
+                            slug,
+                            description: row.description,
+                            productImage: row.productImage,
+                            productPictureUrl: row.productPictureUrl,
+                            productPrice: row.productPrice,
+                            discountedPrice: row.discountedPrice,
+                            stockQuantity: row.stockQuantity,
+                            moq: row.moq,
+                            brand: row.brand,
+                            size: row.size,
+                            color: row.color,
+                            unit: row.unit,
+                            taxType: row.taxType,
+                            taxPercent: row.taxPercent,
+                            weight: row.weight,
+                            parentProductSku: row.parentProductSku,
+                            parentProductId: row.parentProductId,
+                            privateNotes: row.privateNotes,
+                            setName: row.setName,
+                            setQuantity: row.setQuantity,
+                            setType: row.setType,
+                            sizes: row.sizes,
+                            sizesSetQuantity: row.sizesSetQuantity,
+                            colors: row.colors,
+                            colorsSetQuantity: row.colorsSetQuantity,
+                            nt11_48: row.nt11_48,
+                            nt11_48SetQuantity: row.nt11_48SetQuantity,
+                            sixToTwelveMonths: row.sixToTwelveMonths,
+                            sixToTwelveMonthsSetQuantity: row.sixToTwelveMonthsSetQuantity,
+                            isActive: row.isActive,
+                            barcode: row.sku,
+                            barcodeUrl: row.barcodeUrl,
+                            stockStatus: row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+                            catalogueIds: {
+                                set: nextIds,
+                            },
+                            updatedBy: userId,
+                        },
+                    });
+                    const urlsToSync = [
+                        row.productImage,
+                        row.productPictureUrl,
+                    ].filter((url) => !!url && url.trim().length > 0);
+                    const knownUrls = existingImageMap.get(row.id) ?? new Set();
+                    const newUrls = urlsToSync
+                        .map((u) => u.trim())
+                        .filter((u) => !knownUrls.has(u));
+                    if (newUrls.length > 0) {
+                        await tx.productImage.updateMany({
+                            where: { productId: row.id, isPrimary: true },
+                            data: { isPrimary: false },
+                        });
+                        await tx.productImage.create({
+                            data: {
+                                productId: row.id,
+                                originalUrl: newUrls[0],
+                                isPrimary: true,
+                                createdBy: userId,
+                            },
+                        });
+                        if (newUrls.length > 1) {
+                            await tx.productImage.createMany({
+                                data: newUrls.slice(1).map((u) => ({
+                                    productId: row.id,
+                                    originalUrl: u,
+                                    isPrimary: false,
+                                    createdBy: userId,
+                                })),
+                            });
+                        }
+                    }
+                    await Promise.all(Object.keys(row.pricingData).map(async (groupCode) => {
+                        const groupPricing = row.pricingData[groupCode];
+                        if (groupPricing.price === undefined || groupPricing.price === null)
+                            return;
+                        const pricingGroup = pricingGroupMap.get(groupCode);
+                        await tx.productPricing.upsert({
+                            where: {
+                                productId_pricingGroupId: {
+                                    productId: row.id,
+                                    pricingGroupId: pricingGroup.id,
+                                },
+                            },
+                            update: {
+                                price: groupPricing.price,
+                                mrp: groupPricing.mrp,
+                                discountPercent: groupPricing.discountPercent,
+                                updatedBy: userId,
+                            },
+                            create: {
+                                productId: row.id,
+                                pricingGroupId: pricingGroup.id,
+                                price: groupPricing.price,
+                                mrp: groupPricing.mrp,
+                                discountPercent: groupPricing.discountPercent,
+                                createdBy: userId,
+                            },
+                        });
+                    }));
+                })));
+            }
+        }, { timeout: 60000 });
+        this.logger.log(`Import completed for ${parsedRows.length} products in ${Date.now() - start}ms`);
+        this.imageCleaningService
+            .triggerBackgroundCleaningForCatalogue(catalogueId, userId)
+            .catch(() => { });
+        return { message: 'Catalogue products successfully updated and replaced.' };
+    }
+    async bulkAddProducts(catalogueId, files, userId, targetCategoryId) {
+        const start = Date.now();
+        const catalogue = await this.prisma.catalogue.findUnique({
+            where: { id: catalogueId },
+        });
+        if (!catalogue) {
+            throw new common_1.NotFoundException(`Catalogue with ID '${catalogueId}' not found.`);
+        }
+        let category = null;
+        if (targetCategoryId) {
+            category = await this.prisma.category.findUnique({
+                where: { id: targetCategoryId },
+            });
+        }
+        if (!category) {
+            category = await this.prisma.category.findUnique({
+                where: { slug: 'uncategorized' },
+            });
+        }
+        if (!category) {
+            category = await this.prisma.category.create({
+                data: {
+                    name: 'Uncategorized',
+                    slug: 'uncategorized',
+                    isActive: true,
+                    createdBy: userId,
+                },
+            });
+        }
+        const limit = pLimit(10);
+        const uploadPromises = files.map((file) => limit(async () => {
+            const result = await this.uploadService.uploadDirectFile(file);
+            return {
+                url: result.fileUrl,
+                filename: file.originalname,
+            };
+        }));
+        const uploadedImages = await Promise.all(uploadPromises);
+        const uploadedSkus = uploadedImages.map((img, idx) => {
+            const { sku } = this.extractCleanNameAndSkuFromFilename(img.filename, `temp-${idx}`);
+            return sku;
+        });
+        const existingProducts = await this.prisma.product.findMany({
+            where: {
+                sku: { in: uploadedSkus },
+            },
+            include: {
+                images: true,
+            },
+        });
+        const existingProductsMap = new Map(existingProducts.map((p) => [p.sku.toUpperCase(), p]));
+        const barcodeMap = new Map();
+        const barcodeLimit = pLimit(10);
+        await Promise.all(uploadedSkus.map((sku) => barcodeLimit(async () => {
+            const upperSku = sku.toUpperCase();
+            const existing = existingProductsMap.get(upperSku);
+            if (existing && existing.barcodeUrl) {
+                barcodeMap.set(upperSku, existing.barcodeUrl);
+            }
+            else {
+                const url = await this.generateAndUploadBarcode(sku);
+                barcodeMap.set(upperSku, url);
+            }
+        })));
+        const newProductsData = [];
+        const newProductImagesData = [];
+        const productsToUpdate = [];
+        const newImagesForExistingProducts = [];
+        for (const img of uploadedImages) {
+            if (!img.url)
+                continue;
+            const productId = (0, crypto_1.randomBytes)(12).toString('hex');
+            const { name, sku } = this.extractCleanNameAndSkuFromFilename(img.filename, productId);
+            const existingProduct = existingProductsMap.get(sku.toUpperCase());
+            if (existingProduct) {
+                const updatedCatalogueIds = Array.from(new Set([...existingProduct.catalogueIds, catalogueId]));
+                productsToUpdate.push({
+                    id: existingProduct.id,
+                    catalogueIds: updatedCatalogueIds,
+                    productImage: img.url,
+                    barcode: sku,
+                    barcodeUrl: barcodeMap.get(sku.toUpperCase()) || null,
+                });
+                const hasPrimaryImage = existingProduct.images.some((i) => i.isPrimary);
+                if (!hasPrimaryImage) {
+                    newImagesForExistingProducts.push({
+                        productId: existingProduct.id,
+                        originalUrl: img.url,
+                        isPrimary: true,
+                        createdBy: userId,
+                    });
+                }
+            }
+            else {
+                const slug = this.slugify(sku);
+                newProductsData.push({
+                    id: productId,
+                    sku: sku,
+                    name: name,
+                    slug: slug,
+                    categoryId: category.id,
+                    catalogueIds: [catalogueId],
+                    moq: 1,
+                    stockQuantity: 0,
+                    stockStatus: 'OUT_OF_STOCK',
+                    isActive: true,
+                    createdBy: userId,
+                    productImage: img.url,
+                    barcode: sku,
+                    barcodeUrl: barcodeMap.get(sku.toUpperCase()) || null,
+                });
+                newProductImagesData.push({
+                    productId: productId,
+                    originalUrl: img.url,
+                    isPrimary: true,
+                    createdBy: userId,
+                });
+            }
+        }
+        await this.prisma.$transaction(async (tx) => {
+            if (newProductsData.length > 0) {
+                await tx.product.createMany({
+                    data: newProductsData,
+                });
+                await tx.productImage.createMany({
+                    data: newProductImagesData,
+                });
+            }
+            for (const prod of productsToUpdate) {
+                await tx.product.update({
+                    where: { id: prod.id },
+                    data: {
+                        catalogueIds: prod.catalogueIds,
+                        productImage: prod.productImage,
+                        barcode: prod.barcode,
+                        barcodeUrl: prod.barcodeUrl,
+                    },
+                });
+            }
+            if (newImagesForExistingProducts.length > 0) {
+                await tx.productImage.createMany({
+                    data: newImagesForExistingProducts,
+                });
+            }
+        }, { timeout: 60000 });
+        this.logger.log(`Bulk added ${newProductsData.length} new and updated ${productsToUpdate.length} existing products in catalogue ${catalogueId} in ${Date.now() - start}ms`);
+        this.imageCleaningService
+            .triggerBackgroundCleaningForCatalogue(catalogueId, userId)
+            .catch(() => { });
+        return {
+            message: `${newProductsData.length} new products created and ${productsToUpdate.length} existing products updated.`,
+            addedCount: newProductsData.length,
+            updatedCount: productsToUpdate.length,
+        };
+    }
+    async addProductsToCatalogue(catalogueId, productIds) {
+        const catalogue = await this.prisma.catalogue.findUnique({
+            where: { id: catalogueId },
+        });
+        if (!catalogue) {
+            throw new common_1.NotFoundException(`Catalogue with ID '${catalogueId}' not found.`);
+        }
+        return this.prisma.$transaction(async (tx) => {
+            const updatedProductIds = Array.from(new Set([...catalogue.productIds, ...productIds]));
+            await tx.catalogue.update({
+                where: { id: catalogueId },
+                data: { productIds: updatedProductIds },
+            });
+            for (const productId of productIds) {
+                const product = await tx.product.findUnique({
+                    where: { id: productId },
+                });
+                if (product) {
+                    const updatedCatalogueIds = Array.from(new Set([...product.catalogueIds, catalogueId]));
+                    await tx.product.update({
+                        where: { id: productId },
+                        data: { catalogueIds: updatedCatalogueIds },
+                    });
+                }
+            }
+            return { success: true };
+        });
+    }
+};
+exports.CatalogueService = CatalogueService;
+exports.CatalogueService = CatalogueService = CatalogueService_1 = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        upload_service_1.UploadService,
+        image_cleaning_service_1.ImageCleaningService])
+], CatalogueService);
+//# sourceMappingURL=catalogue.service.js.map

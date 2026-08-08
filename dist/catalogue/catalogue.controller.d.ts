@@ -1,0 +1,247 @@
+import type { Response } from 'express';
+import { CatalogueService } from './catalogue.service';
+import { WhatsappService } from '../notification/whatsapp.service';
+import { CreateCatalogueDto } from './dto/create-catalogue.dto';
+import { UpdateCatalogueDto } from './dto/update-catalogue.dto';
+export declare class CatalogueController {
+    private readonly catalogueService;
+    private readonly whatsappService;
+    constructor(catalogueService: CatalogueService, whatsappService: WhatsappService);
+    create(dto: CreateCatalogueDto, userId: string): Promise<{
+        products: ({
+            images: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                isPrimary: boolean;
+                sortOrder: number | null;
+                createdBy: string | null;
+                originalUrl: string;
+                altText: string | null;
+                cleanedUrl: string | null;
+                productId: string;
+                thumbnailUrl: string | null;
+                cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
+            }[];
+        } & {
+            productImage: string | null;
+            name: string;
+            id: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            description: string | null;
+            slug: string;
+            sortOrder: number | null;
+            createdBy: string | null;
+            updatedBy: string | null;
+            sku: string;
+            shortDescription: string | null;
+            categoryId: string;
+            moq: number;
+            barcode: string | null;
+            barcodeUrl: string | null;
+            brand: string | null;
+            size: string | null;
+            color: string | null;
+            material: string | null;
+            unit: string | null;
+            hsnCode: string | null;
+            weight: number | null;
+            taxPercent: number | null;
+            stockQuantity: number;
+            stockStatus: import("@prisma/client").$Enums.StockStatus;
+            allowBackorder: boolean;
+            expectedRestockDate: Date | null;
+            tags: string | null;
+            isFeatured: boolean;
+            publishedAt: Date | null;
+            productPrice: number | null;
+            discountedPrice: number | null;
+            parentProductSku: string | null;
+            taxType: string | null;
+            productPictureUrl: string | null;
+            privateNotes: string | null;
+            parentProductId: string | null;
+            setName: string | null;
+            setQuantity: number | null;
+            setType: string | null;
+            sizes: string | null;
+            sizesSetQuantity: number | null;
+            colors: string | null;
+            colorsSetQuantity: number | null;
+            nt11_48: string | null;
+            nt11_48SetQuantity: number | null;
+            sixToTwelveMonths: string | null;
+            sixToTwelveMonthsSetQuantity: number | null;
+            catalogueIds: string[];
+        })[];
+        name: string;
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        description: string | null;
+        imageUrl: string | null;
+        isPublished: boolean;
+        productIds: string[];
+    }>;
+    findAll(search?: string, publishedOnly?: string): Promise<{
+        id: string;
+        name: string;
+        description: string | null;
+        imageUrl: string | null;
+        isPublished: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        productsCount: number;
+        categoriesCount: number;
+        previewImages: string[];
+    }[]>;
+    findOne(id: string, search?: string, page?: string, limit?: string, publishedOnly?: string, categoryId?: string): Promise<{
+        products: ({
+            category: {
+                name: string;
+                id: string;
+                slug: string;
+            };
+            images: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                isPrimary: boolean;
+                sortOrder: number | null;
+                createdBy: string | null;
+                originalUrl: string;
+                altText: string | null;
+                cleanedUrl: string | null;
+                productId: string;
+                thumbnailUrl: string | null;
+                cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
+            }[];
+            pricing: ({
+                pricingGroup: {
+                    name: string;
+                    id: string;
+                    isActive: boolean;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    description: string | null;
+                    code: string;
+                };
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                pricingGroupId: string;
+                createdBy: string | null;
+                updatedBy: string | null;
+                price: number;
+                mrp: number | null;
+                discountPercent: number | null;
+                minQuantity: number | null;
+                maxQuantity: number | null;
+                productId: string;
+                effectiveFrom: Date | null;
+                effectiveTo: Date | null;
+            })[];
+        } & {
+            productImage: string | null;
+            name: string;
+            id: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            description: string | null;
+            slug: string;
+            sortOrder: number | null;
+            createdBy: string | null;
+            updatedBy: string | null;
+            sku: string;
+            shortDescription: string | null;
+            categoryId: string;
+            moq: number;
+            barcode: string | null;
+            barcodeUrl: string | null;
+            brand: string | null;
+            size: string | null;
+            color: string | null;
+            material: string | null;
+            unit: string | null;
+            hsnCode: string | null;
+            weight: number | null;
+            taxPercent: number | null;
+            stockQuantity: number;
+            stockStatus: import("@prisma/client").$Enums.StockStatus;
+            allowBackorder: boolean;
+            expectedRestockDate: Date | null;
+            tags: string | null;
+            isFeatured: boolean;
+            publishedAt: Date | null;
+            productPrice: number | null;
+            discountedPrice: number | null;
+            parentProductSku: string | null;
+            taxType: string | null;
+            productPictureUrl: string | null;
+            privateNotes: string | null;
+            parentProductId: string | null;
+            setName: string | null;
+            setQuantity: number | null;
+            setType: string | null;
+            sizes: string | null;
+            sizesSetQuantity: number | null;
+            colors: string | null;
+            colorsSetQuantity: number | null;
+            nt11_48: string | null;
+            nt11_48SetQuantity: number | null;
+            sixToTwelveMonths: string | null;
+            sixToTwelveMonthsSetQuantity: number | null;
+            catalogueIds: string[];
+        })[];
+        productsMeta: {
+            total: number;
+            page: number;
+            limit: number;
+            totalPages: number;
+        };
+        name: string;
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        description: string | null;
+        imageUrl: string | null;
+        isPublished: boolean;
+        productIds: string[];
+    }>;
+    update(id: string, body: UpdateCatalogueDto): Promise<{
+        name: string;
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        description: string | null;
+        imageUrl: string | null;
+        isPublished: boolean;
+        productIds: string[];
+    }>;
+    remove(id: string): Promise<{
+        message: string;
+    }>;
+    exportCatalogue(id: string, productIds: string | undefined, categoryId: string | undefined, res: Response): Promise<void>;
+    uploadCatalogue(id: string, file: Express.Multer.File, userId: string, categoryId?: string): Promise<{
+        message: string;
+    }>;
+    shareImagesMeta(id: string, body: {
+        phone: string;
+        images: string[];
+    }): Promise<{
+        success: boolean;
+        message: string;
+    }>;
+    bulkAddProducts(id: string, files: Express.Multer.File[], userId: string, categoryId?: string, queryCategoryId?: string): Promise<{
+        message: string;
+        addedCount: number;
+        updatedCount: number;
+    }>;
+    addProducts(id: string, productIds: string[]): Promise<{
+        success: boolean;
+    }>;
+}

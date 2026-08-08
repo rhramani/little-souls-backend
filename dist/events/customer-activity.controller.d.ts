@@ -1,0 +1,111 @@
+import { CustomerActivityService } from './customer-activity.service';
+export declare class CustomerActivityController {
+    private readonly activityService;
+    constructor(activityService: CustomerActivityService);
+    getSessions(page?: string, limit?: string): Promise<{
+        sessions: {
+            totalDurationFormatted: string;
+            sectionDurationsObj: any;
+            activitiesList: any;
+            user: {
+                name: string;
+                email: string | null;
+                mobile: string;
+                id: string;
+            };
+            customer: {
+                businessName: string;
+                id: string;
+                customerCode: string | null;
+                mainContactNumber: string;
+            };
+            id: string;
+            customerId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            sessionId: string | null;
+            loginTime: Date;
+            logoutTime: Date | null;
+            totalDuration: number | null;
+            status: string;
+            sectionDurations: string | null;
+            activities: string | null;
+            userId: string;
+        }[];
+        meta: {
+            total: number;
+            page: number;
+            limit: number;
+            totalPages: number;
+        };
+    }>;
+    getSessionDetails(id: string): Promise<{
+        totalDurationFormatted: string;
+        sectionDurationsObj: any;
+        activitiesList: any;
+        user: {
+            name: string;
+            email: string | null;
+            mobile: string;
+            id: string;
+            customerContactId: string | null;
+            passwordHash: string;
+            plainPassword: string | null;
+            userType: import("@prisma/client").$Enums.UserType;
+            customerId: string | null;
+            staffId: string | null;
+            isActive: boolean;
+            isVerified: boolean;
+            lastLoginAt: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
+        };
+        customer: {
+            businessName: string;
+            businessType: string | null;
+            gstin: string | null;
+            billingAddressLine1: string | null;
+            billingAddressLine2: string | null;
+            billingCity: string | null;
+            billingState: string | null;
+            billingPincode: string | null;
+            billingCountry: string | null;
+            shippingAddressLine1: string | null;
+            shippingAddressLine2: string | null;
+            shippingCity: string | null;
+            shippingState: string | null;
+            shippingPincode: string | null;
+            shippingCountry: string | null;
+            storePhotoUrl: string | null;
+            customerSource: string | null;
+            id: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            customerCode: string | null;
+            mainContactNumber: string;
+            pricingGroupId: string | null;
+            assignedSalesStaffId: string | null;
+            approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
+            approvedBy: string | null;
+            approvedAt: Date | null;
+            rejectionReason: string | null;
+            creditLimit: number | null;
+            openingBalance: number | null;
+            currentBalance: number | null;
+            lastOrderAt: Date | null;
+        };
+        id: string;
+        customerId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        sessionId: string | null;
+        loginTime: Date;
+        logoutTime: Date | null;
+        totalDuration: number | null;
+        status: string;
+        sectionDurations: string | null;
+        activities: string | null;
+        userId: string;
+    }>;
+}
