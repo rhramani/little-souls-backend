@@ -62,6 +62,7 @@ export class AppController {
         contentType = 'image/webp';
       }
 
+      res.set('Access-Control-Allow-Origin', '*');
       res.set('Content-Type', contentType);
       res.set('Cache-Control', 'public, max-age=31536000');
       res.send(buffer);
