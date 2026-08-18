@@ -17,7 +17,6 @@ import { BillingService } from './billing.service';
 import { PdfService } from './pdf.service';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { QueryBillingDto } from './dto/query-billing.dto';
-import { CreateCreditDebitNoteDto } from './dto/create-credit-debit-note.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -97,25 +96,7 @@ export class BillingController {
     return this.billingService.findAllPayments(query, customerId);
   }
 
-  @Post('ledger/credit-note')
-  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
-  @HttpCode(HttpStatus.CREATED)
-  async createCreditNote(
-    @Body() dto: CreateCreditDebitNoteDto,
-    @GetUser('id') userId: string,
-  ) {
-    return this.billingService.createCreditNote(dto, userId);
-  }
 
-  @Post('ledger/debit-note')
-  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
-  @HttpCode(HttpStatus.CREATED)
-  async createDebitNote(
-    @Body() dto: CreateCreditDebitNoteDto,
-    @GetUser('id') userId: string,
-  ) {
-    return this.billingService.createDebitNote(dto, userId);
-  }
 
   @Post('payment/:id/verify')
   @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
@@ -211,17 +192,5 @@ export class BillingController {
     res.end(buffer);
   }
 
-  @Patch('credit-debit-note/:id')
-  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
-  @HttpCode(HttpStatus.OK)
-  async updateCreditDebitNote(@Param('id') id: string, @Body() body: any) {
-    return this.billingService.updateCreditDebitNote(id, body);
-  }
 
-  @Delete('credit-debit-note/:id')
-  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
-  @HttpCode(HttpStatus.OK)
-  async deleteCreditDebitNote(@Param('id') id: string) {
-    return this.billingService.deleteCreditDebitNote(id);
-  }
 }

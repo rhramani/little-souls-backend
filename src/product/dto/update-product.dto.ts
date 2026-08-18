@@ -96,6 +96,10 @@ export class UpdateProductDto {
   @IsOptional()
   moq?: number;
 
+  @IsInt()
+  @IsOptional()
+  fixQty?: number;
+
   @IsString()
   @IsOptional()
   barcode?: string;

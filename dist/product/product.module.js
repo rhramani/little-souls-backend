@@ -12,13 +12,12 @@ const product_service_1 = require("./product.service");
 const product_controller_1 = require("./product.controller");
 const prisma_module_1 = require("../prisma/prisma.module");
 const auth_module_1 = require("../auth/auth.module");
-const image_cleaning_module_1 = require("../image-cleaning/image-cleaning.module");
 let ProductModule = class ProductModule {
 };
 exports.ProductModule = ProductModule;
 exports.ProductModule = ProductModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule, auth_module_1.AuthModule, image_cleaning_module_1.ImageCleaningModule],
+        imports: [prisma_module_1.PrismaModule, auth_module_1.AuthModule],
         providers: [product_service_1.ProductService],
         controllers: [product_controller_1.ProductController],
         exports: [product_service_1.ProductService],

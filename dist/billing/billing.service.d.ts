@@ -195,8 +195,8 @@ export declare class BillingService {
                         createdBy: string | null;
                         originalUrl: string;
                         altText: string | null;
-                        cleanedUrl: string | null;
                         productId: string;
+                        cleanedUrl: string | null;
                         thumbnailUrl: string | null;
                         cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
                     }[];
@@ -216,6 +216,7 @@ export declare class BillingService {
                     shortDescription: string | null;
                     categoryId: string;
                     moq: number;
+                    fixQty: number | null;
                     barcode: string | null;
                     barcodeUrl: string | null;
                     brand: string | null;
@@ -287,11 +288,21 @@ export declare class BillingService {
             updatedAt: Date;
             approvedBy: string | null;
             approvedAt: Date | null;
+            discountPercent: number | null;
             deliveryAddress: string | null;
             notes: string | null;
             orderSource: string;
             shippingCharge: number;
             discountTotal: number;
+            packingCharges: number | null;
+            packingCtnNote: string | null;
+            otherCharges: number | null;
+            otherChargesNote: string | null;
+            otherDeduction: number | null;
+            otherDeductionNote: string | null;
+            discountType: string | null;
+            transportName: string | null;
+            ctn: string | null;
             paymentStatus: string;
             subTotal: number;
             taxTotal: number;
@@ -316,8 +327,8 @@ export declare class BillingService {
                     createdBy: string | null;
                     originalUrl: string;
                     altText: string | null;
-                    cleanedUrl: string | null;
                     productId: string;
+                    cleanedUrl: string | null;
                     thumbnailUrl: string | null;
                     cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
                 }[];
@@ -337,6 +348,7 @@ export declare class BillingService {
                 shortDescription: string | null;
                 categoryId: string;
                 moq: number;
+                fixQty: number | null;
                 barcode: string | null;
                 barcodeUrl: string | null;
                 brand: string | null;
@@ -477,6 +489,13 @@ export declare class BillingService {
                 customerCode: string | null;
                 mainContactNumber: string;
             } | null;
+            order: any;
+            invoice: any;
+            payment: any;
+            finalAmount: any;
+            paymentType: string | null;
+            withGST: boolean | null;
+            taxAmount: any;
             id: string;
             customerId: string;
             createdAt: Date;
@@ -506,46 +525,15 @@ export declare class BillingService {
         openingBalance: number | null;
         currentBalance: number | null;
     }>;
-    createCreditNote(dto: any, userId: string): Promise<{
-        id: string;
-        customerId: string;
-        createdAt: Date;
-        updatedAt: Date;
-        createdBy: string | null;
-        amount: number;
-        referenceType: string;
-        referenceId: string | null;
-        noteNumber: string;
-        noteType: string;
-        chargeType: string | null;
-        discountAmount: number | null;
-        packingCharges: number | null;
-        otherCharges: number | null;
-        reason: string | null;
-    }>;
-    createDebitNote(dto: any, userId: string): Promise<{
-        id: string;
-        customerId: string;
-        createdAt: Date;
-        updatedAt: Date;
-        createdBy: string | null;
-        amount: number;
-        referenceType: string;
-        referenceId: string | null;
-        noteNumber: string;
-        noteType: string;
-        chargeType: string | null;
-        discountAmount: number | null;
-        packingCharges: number | null;
-        otherCharges: number | null;
-        reason: string | null;
-    }>;
     exportLedger(customerId?: string): Promise<Buffer>;
     updateLedgerEntry(id: string, data: {
         amount?: number;
         referenceNumber?: string;
         notes?: string;
         transactionStatus?: string;
+        entryDate?: string | Date;
+        entryType?: string;
+        paymentMode?: string;
     }): Promise<{
         id: string;
         customerId: string;
@@ -569,6 +557,9 @@ export declare class BillingService {
         amount?: number;
         referenceNumber?: string;
         notes?: string;
+        paymentMode?: string;
+        paymentStatus?: string;
+        transactionDate?: string | Date;
     }): Promise<{
         id: string;
         customerId: string;
@@ -595,31 +586,6 @@ export declare class BillingService {
         pendingAmount: number;
     }>;
     clearAllAccountsData(): Promise<{
-        message: string;
-    }>;
-    private findNoteByAnyIdentifier;
-    updateCreditDebitNote(id: string, data: {
-        amount?: number;
-        reason?: string;
-        chargeType?: string;
-    }): Promise<{
-        id: string;
-        customerId: string;
-        createdAt: Date;
-        updatedAt: Date;
-        createdBy: string | null;
-        amount: number;
-        referenceType: string;
-        referenceId: string | null;
-        noteNumber: string;
-        noteType: string;
-        chargeType: string | null;
-        discountAmount: number | null;
-        packingCharges: number | null;
-        otherCharges: number | null;
-        reason: string | null;
-    }>;
-    deleteCreditDebitNote(id: string): Promise<{
         message: string;
     }>;
 }

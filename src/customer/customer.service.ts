@@ -240,7 +240,14 @@ export class CustomerService {
 
     const customerIds = customers.map((c) => c.id);
 
-    const [ledgerGrouped, ordersGrouped, paymentsGrouped, notesGrouped, pendingDebitsGrouped] = customerIds.length > 0
+    const [
+      ledgerGrouped,
+      ordersGrouped,
+      paymentsGrouped,
+      paidInvoicesGrouped,
+      completedLedgerInvoicesGrouped,
+      pendingDebitsGrouped,
+    ] = customerIds.length > 0
       ? await Promise.all([
           this.prisma.ledgerEntry.groupBy({
             by: ['customerId'],
@@ -262,18 +269,26 @@ export class CustomerService {
             by: ['customerId'],
             where: {
               customerId: { in: customerIds },
-              paymentStatus: 'VERIFIED',
+              paymentStatus: { in: ['VERIFIED', 'COMPLETED'] },
             },
             _sum: { amount: true },
           }),
-          this.prisma.ledgerEntry.groupBy({
-            by: ['customerId', 'entryType'],
+          this.prisma.invoice.groupBy({
+            by: ['customerId'],
             where: {
               customerId: { in: customerIds },
-              entryType: { in: ['CREDIT_NOTE', 'DEBIT_NOTE'] },
-              transactionStatus: { in: ['COMPLETED', 'DONE', 'ACTIVE'] },
+              paymentStatus: 'PAID',
             },
-            _sum: { debit: true, credit: true },
+            _sum: { grandTotal: true },
+          }),
+          this.prisma.ledgerEntry.groupBy({
+            by: ['customerId'],
+            where: {
+              customerId: { in: customerIds },
+              entryType: 'INVOICE',
+              transactionStatus: { in: ['COMPLETED', 'VERIFIED'] },
+            },
+            _sum: { debit: true },
           }),
           this.prisma.ledgerEntry.groupBy({
             by: ['customerId'],
@@ -286,50 +301,37 @@ export class CustomerService {
             _sum: { debit: true },
           }),
         ])
-      : [[], [], [], [], []];
+      : [[], [], [], [], [], []];
 
     const ledgerMap = new Map(ledgerGrouped.map((g) => [g.customerId, { debit: g._sum.debit || 0, credit: g._sum.credit || 0 }]));
     const ordersMap = new Map(ordersGrouped.map((g) => [g.customerId, g._sum.grandTotal || 0]));
     const paymentsMap = new Map(paymentsGrouped.map((g) => [g.customerId, g._sum.amount || 0]));
+    const paidInvoicesMap = new Map(paidInvoicesGrouped.map((g) => [g.customerId, g._sum.grandTotal || 0]));
+    const completedLedgerInvoicesMap = new Map(completedLedgerInvoicesGrouped.map((g) => [g.customerId, g._sum.debit || 0]));
     const pendingInvoicesMap = new Map(pendingDebitsGrouped.map((g) => [g.customerId, g._sum.debit || 0]));
-
-    const creditNotesMap = new Map<string, number>();
-    const debitNotesMap = new Map<string, number>();
-    notesGrouped.forEach((g) => {
-      if (g.entryType === 'CREDIT_NOTE') {
-        creditNotesMap.set(g.customerId, (creditNotesMap.get(g.customerId) || 0) + (g._sum.credit || 0));
-      } else if (g.entryType === 'DEBIT_NOTE') {
-        debitNotesMap.set(g.customerId, (debitNotesMap.get(g.customerId) || 0) + (g._sum.debit || 0));
-      }
-    });
 
     const customersWithMetrics = customers.map((c) => {
       const l = ledgerMap.get(c.id) || { debit: 0, credit: 0 };
       const approvedOrdersTotal = ordersMap.get(c.id) || 0;
       const verifiedPaymentsTotal = paymentsMap.get(c.id) || 0;
-      const creditNotesTotal = creditNotesMap.get(c.id) || 0;
-      const debitNotesTotal = debitNotesMap.get(c.id) || 0;
-      const pendingInvoiceAmt = pendingInvoicesMap.get(c.id) || 0;
+      const paidInvoicesTotal = Math.max(
+        paidInvoicesMap.get(c.id) || 0,
+        completedLedgerInvoicesMap.get(c.id) || 0,
+      );
       const openBal = c.openingBalance || 0;
 
-      // 1. Total Amount = Approved Orders + COMPLETED/DONE Debit Notes + Opening Balance
-      const totalAmount = approvedOrdersTotal + debitNotesTotal + openBal;
+      // 1. Total Amount / Receivable (Lena Hai)
+      const totalAmount = Math.max(l.debit, approvedOrdersTotal + openBal);
 
-      // 2. Net Billed Amount = Total Amount - COMPLETED/DONE Credit Notes
-      const netBilledAmount = Math.max(0, totalAmount - creditNotesTotal);
+      // 2. Amount Received (Aaya Hai: ledger credits, verified payments, paid invoices)
+      const directPaymentsReceived = Math.max(l.credit, verifiedPaymentsTotal);
+      const amountReceived = Math.min(
+        totalAmount,
+        Math.max(directPaymentsReceived, paidInvoicesTotal),
+      );
 
-      let pendingAmount = 0;
-      let amountReceived = 0;
-
-      if (pendingInvoiceAmt > 0) {
-        // Customer has pending invoice(s)
-        pendingAmount = Math.max(0, netBilledAmount - verifiedPaymentsTotal);
-        amountReceived = verifiedPaymentsTotal + creditNotesTotal;
-      } else {
-        // All main invoices are COMPLETED or paid
-        pendingAmount = 0;
-        amountReceived = totalAmount > 0 ? (verifiedPaymentsTotal > 0 ? verifiedPaymentsTotal + creditNotesTotal : netBilledAmount) : 0;
-      }
+      // 3. Pending Amount (Due)
+      const pendingAmount = Math.max(0, totalAmount - amountReceived);
 
       return {
         ...c,
@@ -709,10 +711,6 @@ export class CustomerService {
                 where: { createdBy: { in: userIds } },
                 data: { createdBy: null },
               }),
-              tx.creditDebitNote.updateMany({
-                where: { createdBy: { in: userIds } },
-                data: { createdBy: null },
-              }),
               tx.stockMovement.updateMany({
                 where: { createdBy: { in: userIds } },
                 data: { createdBy: null },
@@ -845,10 +843,9 @@ export class CustomerService {
             await tx.order.deleteMany({ where: { id: { in: orderIds } } });
           }
 
-          // 8. Delete Payments, CreditDebitNotes, LedgerEntries
+          // 8. Delete Payments, LedgerEntries
           await Promise.all([
             tx.payment.deleteMany({ where: { customerId: id } }),
-            tx.creditDebitNote.deleteMany({ where: { customerId: id } }),
             tx.ledgerEntry.deleteMany({ where: { customerId: id } }),
           ]);
 

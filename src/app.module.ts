@@ -25,7 +25,6 @@ import { PurchaseModule } from './purchase/purchase.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { ReportModule } from './report/report.module';
-import { ImageCleaningModule } from './image-cleaning/image-cleaning.module';
 import { StockModule } from './stock/stock.module';
 import { SettingsModule } from './settings/settings.module';
 import { BannerModule } from './banner/banner.module';
@@ -48,7 +47,6 @@ import { BannerModule } from './banner/banner.module';
     CustomerModule,
     NotificationModule,
     ReportModule,
-    ImageCleaningModule,
     StockModule,
     SettingsModule,
     BannerModule,

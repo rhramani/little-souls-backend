@@ -88,6 +88,7 @@ let ImportService = class ImportService {
                                 unit: rowData.unit || 'PCS',
                                 hsnCode: rowData.hsnCode || null,
                                 moq: rowData.moq ? parseInt(rowData.moq) : 1,
+                                fixQty: rowData.fixQty ? parseInt(rowData.fixQty) : null,
                                 weight: rowData.weight ? Number(rowData.weight) : null,
                                 taxPercent: rowData.taxPercent
                                     ? Number(rowData.taxPercent)
@@ -139,6 +140,7 @@ let ImportService = class ImportService {
                                 unit: rowData.unit || undefined,
                                 hsnCode: rowData.hsnCode || undefined,
                                 moq: rowData.moq ? parseInt(rowData.moq) : undefined,
+                                fixQty: rowData.fixQty ? parseInt(rowData.fixQty) : undefined,
                                 weight: rowData.weight ? Number(rowData.weight) : undefined,
                                 taxPercent: rowData.taxPercent
                                     ? Number(rowData.taxPercent)
@@ -305,13 +307,13 @@ let ImportService = class ImportService {
             { header: 'Category ID', key: 'categoryId', width: 30 },
             { header: 'Category Name', key: 'categoryName', width: 30 },
             { header: 'MOQ', key: 'moq', width: 10 },
+            { header: 'Fix Qty', key: 'fixQty', width: 12 },
             { header: 'Barcode', key: 'barcode', width: 20 },
             { header: 'Brand', key: 'brand', width: 20 },
             { header: 'Size', key: 'size', width: 15 },
             { header: 'Color', key: 'color', width: 15 },
             { header: 'Unit', key: 'unit', width: 10 },
             { header: 'Stock Quantity', key: 'stockQuantity', width: 15 },
-            { header: 'Tax Percent', key: 'taxPercent', width: 15 },
         ];
         const products = await this.prisma.product.findMany({
             include: { category: true },
@@ -324,13 +326,13 @@ let ImportService = class ImportService {
                 categoryId: p.categoryId,
                 categoryName: p.category.name,
                 moq: p.moq,
+                fixQty: p.fixQty,
                 barcode: p.barcode,
                 brand: p.brand,
                 size: p.size,
                 color: p.color,
                 unit: p.unit,
                 stockQuantity: p.stockQuantity,
-                taxPercent: p.taxPercent ? p.taxPercent.toString() : '0',
             });
         });
         const pricingSheet = workbook.addWorksheet('Pricing');

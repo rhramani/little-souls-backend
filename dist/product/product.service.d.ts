@@ -2,11 +2,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductDto } from './dto/query-product.dto';
-import { ImageCleaningService } from '../image-cleaning/image-cleaning.service';
 export declare class ProductService {
     private readonly prisma;
-    private readonly imageCleaningService;
-    constructor(prisma: PrismaService, imageCleaningService: ImageCleaningService);
+    constructor(prisma: PrismaService);
     private slugify;
     create(dto: CreateProductDto, userId: string): Promise<({
         category: {
@@ -34,8 +32,8 @@ export declare class ProductService {
             createdBy: string | null;
             originalUrl: string;
             altText: string | null;
-            cleanedUrl: string | null;
             productId: string;
+            cleanedUrl: string | null;
             thumbnailUrl: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
@@ -81,6 +79,7 @@ export declare class ProductService {
         shortDescription: string | null;
         categoryId: string;
         moq: number;
+        fixQty: number | null;
         barcode: string | null;
         barcodeUrl: string | null;
         brand: string | null;
@@ -146,8 +145,8 @@ export declare class ProductService {
                 createdBy: string | null;
                 originalUrl: string;
                 altText: string | null;
-                cleanedUrl: string | null;
                 productId: string;
+                cleanedUrl: string | null;
                 thumbnailUrl: string | null;
                 cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
             }[];
@@ -192,6 +191,7 @@ export declare class ProductService {
             shortDescription: string | null;
             categoryId: string;
             moq: number;
+            fixQty: number | null;
             barcode: string | null;
             barcodeUrl: string | null;
             brand: string | null;
@@ -263,8 +263,8 @@ export declare class ProductService {
             createdBy: string | null;
             originalUrl: string;
             altText: string | null;
-            cleanedUrl: string | null;
             productId: string;
+            cleanedUrl: string | null;
             thumbnailUrl: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
@@ -309,6 +309,7 @@ export declare class ProductService {
         shortDescription: string | null;
         categoryId: string;
         moq: number;
+        fixQty: number | null;
         barcode: string | null;
         barcodeUrl: string | null;
         brand: string | null;
@@ -373,8 +374,8 @@ export declare class ProductService {
             createdBy: string | null;
             originalUrl: string;
             altText: string | null;
-            cleanedUrl: string | null;
             productId: string;
+            cleanedUrl: string | null;
             thumbnailUrl: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
@@ -419,6 +420,7 @@ export declare class ProductService {
         shortDescription: string | null;
         categoryId: string;
         moq: number;
+        fixQty: number | null;
         barcode: string | null;
         barcodeUrl: string | null;
         brand: string | null;
@@ -482,8 +484,8 @@ export declare class ProductService {
             createdBy: string | null;
             originalUrl: string;
             altText: string | null;
-            cleanedUrl: string | null;
             productId: string;
+            cleanedUrl: string | null;
             thumbnailUrl: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
@@ -529,6 +531,7 @@ export declare class ProductService {
         shortDescription: string | null;
         categoryId: string;
         moq: number;
+        fixQty: number | null;
         barcode: string | null;
         barcodeUrl: string | null;
         brand: string | null;
@@ -607,8 +610,8 @@ export declare class ProductService {
         createdBy: string | null;
         originalUrl: string;
         altText: string | null;
-        cleanedUrl: string | null;
         productId: string;
+        cleanedUrl: string | null;
         thumbnailUrl: string | null;
         cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
     }>;

@@ -303,11 +303,11 @@ export declare class PurchaseController {
         invoiceNumber: string;
         invoiceDate: Date;
         grandTotal: number;
-        discountAmount: number;
         supplierId: string;
         businessState: string;
         gstRate: number;
         subtotal: number;
+        discountAmount: number;
         cgstAmount: number;
         sgstAmount: number;
         igstAmount: number;
@@ -352,11 +352,11 @@ export declare class PurchaseController {
         invoiceNumber: string;
         invoiceDate: Date;
         grandTotal: number;
-        discountAmount: number;
         supplierId: string;
         businessState: string;
         gstRate: number;
         subtotal: number;
+        discountAmount: number;
         cgstAmount: number;
         sgstAmount: number;
         igstAmount: number;

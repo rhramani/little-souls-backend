@@ -38,6 +38,18 @@ export class PosCheckoutDto {
   @IsOptional()
   walkInGstin?: string;
 
+  @IsString()
+  @IsOptional()
+  walkInPricingGroupId?: string;
+
+  @IsString()
+  @IsOptional()
+  transportName?: string;
+
+  @IsString()
+  @IsOptional()
+  ctn?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PosOrderItemDto)
@@ -51,9 +63,45 @@ export class PosCheckoutDto {
   @IsOptional()
   discountTotal?: number = 0;
 
+  @IsString()
+  @IsOptional()
+  discountType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  discountPercent?: number;
+
+  @IsNumber()
+  @IsOptional()
+  otherDeduction?: number;
+
+  @IsString()
+  @IsOptional()
+  otherDeductionNote?: string;
+
+  @IsNumber()
+  @IsOptional()
+  packingCharges?: number;
+
+  @IsString()
+  @IsOptional()
+  packingCtnNote?: string;
+
+  @IsNumber()
+  @IsOptional()
+  otherCharges?: number;
+
+  @IsString()
+  @IsOptional()
+  otherChargesNote?: string;
+
   @IsNumber()
   @IsOptional()
   taxPercent?: number;
+
+  @IsNumber()
+  @IsOptional()
+  taxAmount?: number;
 
   @IsOptional()
   withGst?: boolean;

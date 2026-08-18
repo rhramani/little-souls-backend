@@ -37,8 +37,8 @@ export declare class ImportController {
             createdAt: Date;
             status: string;
             sku: string | null;
-            errorMessage: string | null;
             rowNumber: number;
+            errorMessage: string | null;
             rawData: string | null;
             catalogImportId: string;
         }[];

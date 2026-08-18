@@ -93,6 +93,10 @@ export class CreateProductDto {
   @IsOptional()
   moq?: number;
 
+  @IsInt()
+  @IsOptional()
+  fixQty?: number;
+
   @IsString()
   @IsOptional()
   barcode?: string;

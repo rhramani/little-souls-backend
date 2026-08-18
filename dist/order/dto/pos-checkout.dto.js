@@ -36,10 +36,22 @@ class PosCheckoutDto {
     walkInName;
     walkInMobile;
     walkInGstin;
+    walkInPricingGroupId;
+    transportName;
+    ctn;
     items;
     paymentMethod = 'CASH';
     discountTotal = 0;
+    discountType;
+    discountPercent;
+    otherDeduction;
+    otherDeductionNote;
+    packingCharges;
+    packingCtnNote;
+    otherCharges;
+    otherChargesNote;
     taxPercent;
+    taxAmount;
     withGst;
 }
 exports.PosCheckoutDto = PosCheckoutDto;
@@ -64,6 +76,21 @@ __decorate([
     __metadata("design:type", String)
 ], PosCheckoutDto.prototype, "walkInGstin", void 0);
 __decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], PosCheckoutDto.prototype, "walkInPricingGroupId", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], PosCheckoutDto.prototype, "transportName", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], PosCheckoutDto.prototype, "ctn", void 0);
+__decorate([
     (0, class_validator_1.IsArray)(),
     (0, class_validator_1.ValidateNested)({ each: true }),
     (0, class_transformer_1.Type)(() => PosOrderItemDto),
@@ -80,10 +107,55 @@ __decorate([
     __metadata("design:type", Number)
 ], PosCheckoutDto.prototype, "discountTotal", void 0);
 __decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], PosCheckoutDto.prototype, "discountType", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], PosCheckoutDto.prototype, "discountPercent", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], PosCheckoutDto.prototype, "otherDeduction", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], PosCheckoutDto.prototype, "otherDeductionNote", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], PosCheckoutDto.prototype, "packingCharges", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], PosCheckoutDto.prototype, "packingCtnNote", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], PosCheckoutDto.prototype, "otherCharges", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], PosCheckoutDto.prototype, "otherChargesNote", void 0);
+__decorate([
     (0, class_validator_1.IsNumber)(),
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Number)
 ], PosCheckoutDto.prototype, "taxPercent", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], PosCheckoutDto.prototype, "taxAmount", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Boolean)

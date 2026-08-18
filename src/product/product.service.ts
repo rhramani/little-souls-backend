@@ -9,13 +9,11 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductDto } from './dto/query-product.dto';
 import { Prisma } from '@prisma/client';
-import { ImageCleaningService } from '../image-cleaning/image-cleaning.service';
 
 @Injectable()
 export class ProductService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly imageCleaningService: ImageCleaningService,
   ) {}
 
   private slugify(text: string): string {
@@ -91,6 +89,7 @@ export class ProductService {
           categoryId: categoryId,
           catalogueIds: dto.catalogueId ? [dto.catalogueId] : [],
           moq: dto.moq || 1,
+          fixQty: dto.fixQty || null,
           barcode: dto.barcode || dto.sku,
           brand: dto.brand,
           size: dto.size,
@@ -198,12 +197,6 @@ export class ProductService {
         },
       });
     });
-
-    if (product) {
-      this.imageCleaningService
-        .triggerBackgroundCleaningForProduct(product.id, userId)
-        .catch(() => {});
-    }
 
     return product;
   }
@@ -318,16 +311,6 @@ export class ProductService {
         { description: { contains: search, mode: 'insensitive' } },
         { brand: { contains: search, mode: 'insensitive' } },
       ];
-
-      // If search is alphanumeric, construct a regex pattern to allow optional hyphens (e.g. "2514" -> "^2-?5-?1-?4$")
-      const isAlphanumeric = /^[a-zA-Z0-9]+$/.test(search);
-      if (isAlphanumeric) {
-        const hyphenRegex = search.split('').join('-?');
-        orConditions.push(
-          { sku: { regex: `^${hyphenRegex}$`, options: 'i' } },
-          { barcode: { regex: `^${hyphenRegex}$`, options: 'i' } },
-        );
-      }
 
       andConditions.push({
         OR: orConditions,
@@ -550,6 +533,7 @@ export class ProductService {
           description: dto.description,
           categoryId: dto.categoryId,
           moq: dto.moq,
+          fixQty: dto.fixQty !== undefined ? dto.fixQty : undefined,
           barcode:
             dto.barcode !== undefined
               ? dto.barcode || dto.sku || product.sku
@@ -684,12 +668,6 @@ export class ProductService {
         },
       });
     });
-
-    if (updatedProduct) {
-      this.imageCleaningService
-        .triggerBackgroundCleaningForProduct(id, userId)
-        .catch(() => {});
-    }
 
     return updatedProduct;
   }

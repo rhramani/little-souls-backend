@@ -18,8 +18,8 @@ export declare class CatalogueController {
                 createdBy: string | null;
                 originalUrl: string;
                 altText: string | null;
-                cleanedUrl: string | null;
                 productId: string;
+                cleanedUrl: string | null;
                 thumbnailUrl: string | null;
                 cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
             }[];
@@ -39,6 +39,7 @@ export declare class CatalogueController {
             shortDescription: string | null;
             categoryId: string;
             moq: number;
+            fixQty: number | null;
             barcode: string | null;
             barcodeUrl: string | null;
             brand: string | null;
@@ -113,8 +114,8 @@ export declare class CatalogueController {
                 createdBy: string | null;
                 originalUrl: string;
                 altText: string | null;
-                cleanedUrl: string | null;
                 productId: string;
+                cleanedUrl: string | null;
                 thumbnailUrl: string | null;
                 cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
             }[];
@@ -160,6 +161,7 @@ export declare class CatalogueController {
             shortDescription: string | null;
             categoryId: string;
             moq: number;
+            fixQty: number | null;
             barcode: string | null;
             barcodeUrl: string | null;
             brand: string | null;

@@ -14,7 +14,6 @@ const prisma_module_1 = require("../prisma/prisma.module");
 const auth_module_1 = require("../auth/auth.module");
 const upload_module_1 = require("../upload/upload.module");
 const notification_module_1 = require("../notification/notification.module");
-const image_cleaning_module_1 = require("../image-cleaning/image-cleaning.module");
 let CatalogueModule = class CatalogueModule {
 };
 exports.CatalogueModule = CatalogueModule;
@@ -25,7 +24,6 @@ exports.CatalogueModule = CatalogueModule = __decorate([
             auth_module_1.AuthModule,
             upload_module_1.UploadModule,
             notification_module_1.NotificationModule,
-            image_cleaning_module_1.ImageCleaningModule,
         ],
         providers: [catalogue_service_1.CatalogueService],
         controllers: [catalogue_controller_1.CatalogueController],

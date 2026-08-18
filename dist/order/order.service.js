@@ -352,15 +352,18 @@ let OrderService = class OrderService {
         if (!order) {
             throw new common_1.NotFoundException(`Order with ID '${id}' not found.`);
         }
-        if (order.orderStatus === 'CANCELLED') {
-            throw new common_1.BadRequestException('Cannot update status of a cancelled order.');
+        if (order.orderStatus === newStatus) {
+            return order;
         }
+        const activeStatuses = ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'];
         const result = await this.prisma.$transaction(async (tx) => {
-            const activeStatuses = ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'];
-            if (activeStatuses.includes(newStatus) && order.orderStatus === 'SUBMITTED') {
+            const wasInactive = order.orderStatus === 'SUBMITTED' || order.orderStatus === 'CANCELLED';
+            const isNowActive = activeStatuses.includes(newStatus);
+            if (wasInactive && isNowActive) {
                 for (const item of order.items) {
                     const product = await tx.product.findUnique({
                         where: { id: item.productId },
+                        select: { id: true, name: true, stockQuantity: true },
                     });
                     if (!product) {
                         throw new common_1.NotFoundException(`Product '${item.productName}' not found during order status update.`);
@@ -395,12 +398,51 @@ let OrderService = class OrderService {
                     });
                 }
             }
+            const wasActive = activeStatuses.includes(order.orderStatus);
+            const isNowInactive = newStatus === 'CANCELLED' || newStatus === 'SUBMITTED';
+            if (wasActive && isNowInactive) {
+                for (const item of order.items) {
+                    const product = await tx.product.findUnique({
+                        where: { id: item.productId },
+                        select: { id: true, stockQuantity: true },
+                    });
+                    if (product) {
+                        const restoredStock = product.stockQuantity + item.quantity;
+                        await tx.product.update({
+                            where: { id: item.productId },
+                            data: {
+                                stockQuantity: restoredStock,
+                                stockStatus: restoredStock > 5
+                                    ? 'IN_STOCK'
+                                    : restoredStock > 0
+                                        ? 'LOW_STOCK'
+                                        : 'OUT_OF_STOCK',
+                            },
+                        });
+                        await tx.stockMovement.create({
+                            data: {
+                                productId: item.productId,
+                                movementType: 'RETURN_IN',
+                                referenceType: 'ORDER',
+                                referenceId: order.id,
+                                quantity: item.quantity,
+                                stockBefore: product.stockQuantity,
+                                stockAfter: restoredStock,
+                                note: `Stock returned from ${newStatus} Order '${order.orderNumber}' (Previous Status: ${order.orderStatus})`,
+                                createdBy: userId,
+                            },
+                        });
+                    }
+                }
+            }
             const updatedOrder = await tx.order.update({
                 where: { id },
                 data: {
                     orderStatus: newStatus,
                     approvedBy: newStatus === 'APPROVED' ? userId : undefined,
                     approvedAt: newStatus === 'APPROVED' ? new Date() : undefined,
+                    cancelledBy: newStatus === 'CANCELLED' ? userId : (newStatus !== 'CANCELLED' && order.cancelledBy ? null : undefined),
+                    cancelledAt: newStatus === 'CANCELLED' ? new Date() : (newStatus !== 'CANCELLED' && order.cancelledAt ? null : undefined),
                 },
             });
             await tx.orderStatusHistory.create({
@@ -804,42 +846,73 @@ let OrderService = class OrderService {
             const finalDiscountTotal = orderDiscountTotal !== null
                 ? orderDiscountTotal
                 : calculatedDiscountTotal;
-            const grandTotal = subTotal + taxTotal - finalDiscountTotal + shippingCharge;
+            const packingCharges = dto.packingCharges !== undefined
+                ? Number(dto.packingCharges)
+                : order.packingCharges
+                    ? Number(order.packingCharges)
+                    : 0;
+            const packingCtnNote = dto.packingCtnNote !== undefined
+                ? dto.packingCtnNote
+                : order.packingCtnNote || null;
+            const otherCharges = dto.otherCharges !== undefined
+                ? Number(dto.otherCharges)
+                : order.otherCharges
+                    ? Number(order.otherCharges)
+                    : 0;
+            const otherChargesNote = dto.otherChargesNote !== undefined
+                ? dto.otherChargesNote
+                : order.otherChargesNote || null;
+            const otherDeduction = dto.otherDeduction !== undefined
+                ? Number(dto.otherDeduction)
+                : order.otherDeduction
+                    ? Number(order.otherDeduction)
+                    : 0;
+            const otherDeductionNote = dto.otherDeductionNote !== undefined
+                ? dto.otherDeductionNote
+                : order.otherDeductionNote || null;
+            const discountType = dto.discountType !== undefined
+                ? dto.discountType
+                : order.discountType || null;
+            const discountPercent = dto.discountPercent !== undefined
+                ? Number(dto.discountPercent)
+                : order.discountPercent
+                    ? Number(order.discountPercent)
+                    : 0;
+            const finalTaxTotal = dto.taxAmount !== undefined ? Number(dto.taxAmount) : taxTotal;
+            const grandTotal = Math.max(0, subTotal + finalTaxTotal - finalDiscountTotal - otherDeduction + shippingCharge + packingCharges + otherCharges);
             if (order.orderStatus === 'APPROVED') {
                 for (const newItem of orderItemsData) {
                     const product = await tx.product.findUnique({
                         where: { id: newItem.productId },
+                        select: { stockQuantity: true },
                     });
-                    if (!product)
-                        continue;
-                    if (product.stockQuantity < newItem.quantity) {
-                        throw new common_1.BadRequestException(`Cannot edit order to requested quantities: Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, Ordered: ${newItem.quantity}.`);
+                    if (product) {
+                        const newStock = product.stockQuantity - newItem.quantity;
+                        await tx.product.update({
+                            where: { id: newItem.productId },
+                            data: {
+                                stockQuantity: newStock,
+                                stockStatus: newStock > 5
+                                    ? 'IN_STOCK'
+                                    : newStock > 0
+                                        ? 'LOW_STOCK'
+                                        : 'OUT_OF_STOCK',
+                            },
+                        });
+                        await tx.stockMovement.create({
+                            data: {
+                                productId: newItem.productId,
+                                movementType: 'SALE',
+                                referenceType: 'ORDER',
+                                referenceId: order.id,
+                                quantity: newItem.quantity,
+                                stockBefore: product.stockQuantity,
+                                stockAfter: newStock,
+                                note: `Stock re-allocated for edited Order '${order.orderNumber}'`,
+                                createdBy: userId,
+                            },
+                        });
                     }
-                    const newStock = product.stockQuantity - newItem.quantity;
-                    await tx.product.update({
-                        where: { id: product.id },
-                        data: {
-                            stockQuantity: newStock,
-                            stockStatus: newStock === 0
-                                ? 'OUT_OF_STOCK'
-                                : newStock <= 5
-                                    ? 'LOW_STOCK'
-                                    : 'IN_STOCK',
-                        },
-                    });
-                    await tx.stockMovement.create({
-                        data: {
-                            productId: product.id,
-                            movementType: 'ORDER_OUT',
-                            referenceType: 'ORDER',
-                            referenceId: order.id,
-                            quantity: newItem.quantity,
-                            stockBefore: product.stockQuantity,
-                            stockAfter: newStock,
-                            note: `Stock re-allocated for edited Order '${order.orderNumber}'`,
-                            createdBy: userId,
-                        },
-                    });
                 }
             }
             await tx.orderItem.createMany({
@@ -850,8 +923,16 @@ let OrderService = class OrderService {
                 data: {
                     totalQuantity,
                     subTotal,
-                    taxTotal,
+                    taxTotal: finalTaxTotal,
                     discountTotal: finalDiscountTotal,
+                    packingCharges,
+                    packingCtnNote,
+                    otherCharges,
+                    otherChargesNote,
+                    otherDeduction,
+                    otherDeductionNote,
+                    discountType,
+                    discountPercent,
                     grandTotal,
                 },
                 include: {
@@ -1003,7 +1084,16 @@ let OrderService = class OrderService {
                     createdBy: userId,
                 });
             }
-            const grandTotal = Math.max(0, subTotal + taxTotal - orderDiscountTotal);
+            const packingCharges = Number(dto.packingCharges || 0);
+            const otherCharges = Number(dto.otherCharges || 0);
+            const otherDeduction = Number(dto.otherDeduction || 0);
+            const finalTaxTotal = dto.taxAmount !== undefined ? Number(dto.taxAmount) : taxTotal;
+            const grandTotal = Math.max(0, subTotal +
+                finalTaxTotal -
+                orderDiscountTotal -
+                otherDeduction +
+                packingCharges +
+                otherCharges);
             const order = await tx.order.create({
                 data: {
                     orderNumber,
@@ -1013,10 +1103,22 @@ let OrderService = class OrderService {
                     totalQuantity,
                     subTotal,
                     discountTotal: orderDiscountTotal,
-                    taxTotal,
+                    discountType: dto.discountType || null,
+                    discountPercent: dto.discountPercent !== undefined
+                        ? Number(dto.discountPercent)
+                        : 0,
+                    otherDeduction,
+                    otherDeductionNote: dto.otherDeductionNote || null,
+                    packingCharges,
+                    packingCtnNote: dto.packingCtnNote || null,
+                    otherCharges,
+                    otherChargesNote: dto.otherChargesNote || null,
+                    taxTotal: finalTaxTotal,
                     shippingCharge: 0,
                     grandTotal,
                     paymentStatus: dto.paymentMethod === 'UNPAID' ? 'UNPAID' : 'PAID',
+                    transportName: dto.transportName || null,
+                    ctn: dto.ctn || null,
                     notes: `POS Walk-in. Payment: ${dto.paymentMethod || 'CASH'}.`,
                     handledBySalesStaffId: userId,
                     submittedAt: new Date(),

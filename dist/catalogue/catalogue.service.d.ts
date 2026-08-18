@@ -2,16 +2,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateCatalogueDto } from './dto/create-catalogue.dto';
 import { UpdateCatalogueDto } from './dto/update-catalogue.dto';
 import { UploadService } from '../upload/upload.service';
-import { ImageCleaningService } from '../image-cleaning/image-cleaning.service';
 export declare class CatalogueService {
     private readonly prisma;
     private readonly uploadService;
-    private readonly imageCleaningService;
     private readonly logger;
-    constructor(prisma: PrismaService, uploadService: UploadService, imageCleaningService: ImageCleaningService);
+    constructor(prisma: PrismaService, uploadService: UploadService);
     private generateAndUploadBarcode;
     private generateBarcodeBuffer;
     private slugify;
+    private formatSku;
+    private getUniqueSku;
     private extractCleanNameAndSkuFromFilename;
     create(dto: CreateCatalogueDto, userId: string): Promise<{
         products: ({
@@ -24,8 +24,8 @@ export declare class CatalogueService {
                 createdBy: string | null;
                 originalUrl: string;
                 altText: string | null;
-                cleanedUrl: string | null;
                 productId: string;
+                cleanedUrl: string | null;
                 thumbnailUrl: string | null;
                 cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
             }[];
@@ -45,6 +45,7 @@ export declare class CatalogueService {
             shortDescription: string | null;
             categoryId: string;
             moq: number;
+            fixQty: number | null;
             barcode: string | null;
             barcodeUrl: string | null;
             brand: string | null;
@@ -119,8 +120,8 @@ export declare class CatalogueService {
                 createdBy: string | null;
                 originalUrl: string;
                 altText: string | null;
-                cleanedUrl: string | null;
                 productId: string;
+                cleanedUrl: string | null;
                 thumbnailUrl: string | null;
                 cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
             }[];
@@ -166,6 +167,7 @@ export declare class CatalogueService {
             shortDescription: string | null;
             categoryId: string;
             moq: number;
+            fixQty: number | null;
             barcode: string | null;
             barcodeUrl: string | null;
             brand: string | null;

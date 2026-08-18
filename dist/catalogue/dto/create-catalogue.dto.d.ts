@@ -7,5 +7,5 @@ export declare class CreateCatalogueDto {
     description?: string;
     imageUrl?: string;
     isPublished?: boolean;
-    images: CatalogueImageDto[];
+    images?: CatalogueImageDto[];
 }

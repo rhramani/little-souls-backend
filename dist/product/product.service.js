@@ -12,13 +12,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
-const image_cleaning_service_1 = require("../image-cleaning/image-cleaning.service");
 let ProductService = class ProductService {
     prisma;
-    imageCleaningService;
-    constructor(prisma, imageCleaningService) {
+    constructor(prisma) {
         this.prisma = prisma;
-        this.imageCleaningService = imageCleaningService;
     }
     slugify(text) {
         return text
@@ -79,6 +76,7 @@ let ProductService = class ProductService {
                     categoryId: categoryId,
                     catalogueIds: dto.catalogueId ? [dto.catalogueId] : [],
                     moq: dto.moq || 1,
+                    fixQty: dto.fixQty || null,
                     barcode: dto.barcode || dto.sku,
                     brand: dto.brand,
                     size: dto.size,
@@ -178,11 +176,6 @@ let ProductService = class ProductService {
                 },
             });
         });
-        if (product) {
-            this.imageCleaningService
-                .triggerBackgroundCleaningForProduct(product.id, userId)
-                .catch(() => { });
-        }
         return product;
     }
     async findAll(query, userPricingGroupId) {
@@ -268,11 +261,6 @@ let ProductService = class ProductService {
                 { description: { contains: search, mode: 'insensitive' } },
                 { brand: { contains: search, mode: 'insensitive' } },
             ];
-            const isAlphanumeric = /^[a-zA-Z0-9]+$/.test(search);
-            if (isAlphanumeric) {
-                const hyphenRegex = search.split('').join('-?');
-                orConditions.push({ sku: { regex: `^${hyphenRegex}$`, options: 'i' } }, { barcode: { regex: `^${hyphenRegex}$`, options: 'i' } });
-            }
             andConditions.push({
                 OR: orConditions,
             });
@@ -456,6 +444,7 @@ let ProductService = class ProductService {
                     description: dto.description,
                     categoryId: dto.categoryId,
                     moq: dto.moq,
+                    fixQty: dto.fixQty !== undefined ? dto.fixQty : undefined,
                     barcode: dto.barcode !== undefined
                         ? dto.barcode || dto.sku || product.sku
                         : dto.sku !== undefined
@@ -571,11 +560,6 @@ let ProductService = class ProductService {
                 },
             });
         });
-        if (updatedProduct) {
-            this.imageCleaningService
-                .triggerBackgroundCleaningForProduct(id, userId)
-                .catch(() => { });
-        }
         return updatedProduct;
     }
     async remove(id) {
@@ -728,7 +712,6 @@ let ProductService = class ProductService {
 exports.ProductService = ProductService;
 exports.ProductService = ProductService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        image_cleaning_service_1.ImageCleaningService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
 ], ProductService);
 //# sourceMappingURL=product.service.js.map

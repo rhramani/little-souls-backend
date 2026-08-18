@@ -495,10 +495,126 @@ let BillingService = class BillingService {
             })
             : [];
         const customerMap = new Map(customers.map((c) => [c.id, c]));
-        const ledgerEntriesWithCustomer = ledgerEntries.map((e) => ({
-            ...e,
-            customer: customerMap.get(e.customerId) ?? null,
-        }));
+        const invoiceIds = ledgerEntries
+            .filter((e) => e.referenceType === 'INVOICE' && e.referenceId)
+            .map((e) => e.referenceId);
+        const orderIds = ledgerEntries
+            .filter((e) => e.referenceType === 'ORDER' && e.referenceId)
+            .map((e) => e.referenceId);
+        const paymentIds = ledgerEntries
+            .filter((e) => e.referenceType === 'PAYMENT' && e.referenceId)
+            .map((e) => e.referenceId);
+        const [invoices, directOrders, payments] = await Promise.all([
+            invoiceIds.length > 0
+                ? this.prisma.invoice.findMany({
+                    where: { id: { in: invoiceIds } },
+                    select: {
+                        id: true,
+                        invoiceNumber: true,
+                        orderId: true,
+                        grandTotal: true,
+                        taxTotal: true,
+                        subTotal: true,
+                        discountTotal: true,
+                        paymentStatus: true,
+                        order: {
+                            select: {
+                                id: true,
+                                orderNumber: true,
+                                grandTotal: true,
+                                taxTotal: true,
+                                subTotal: true,
+                                discountTotal: true,
+                                paymentStatus: true,
+                                notes: true,
+                                orderStatus: true,
+                            },
+                        },
+                    },
+                })
+                : [],
+            orderIds.length > 0
+                ? this.prisma.order.findMany({
+                    where: { id: { in: orderIds } },
+                    select: {
+                        id: true,
+                        orderNumber: true,
+                        grandTotal: true,
+                        taxTotal: true,
+                        subTotal: true,
+                        discountTotal: true,
+                        paymentStatus: true,
+                        notes: true,
+                        orderStatus: true,
+                    },
+                })
+                : [],
+            paymentIds.length > 0
+                ? this.prisma.payment.findMany({
+                    where: { id: { in: paymentIds } },
+                    select: {
+                        id: true,
+                        paymentNumber: true,
+                        amount: true,
+                        paymentMode: true,
+                        paymentStatus: true,
+                        referenceNumber: true,
+                        notes: true,
+                    },
+                })
+                : [],
+        ]);
+        const invoiceMap = new Map(invoices.map((inv) => [inv.id, inv]));
+        const orderMap = new Map(directOrders.map((ord) => [ord.id, ord]));
+        const paymentMap = new Map(payments.map((p) => [p.id, p]));
+        const ledgerEntriesWithCustomer = ledgerEntries.map((e) => {
+            let linkedOrder = null;
+            let linkedInvoice = null;
+            let linkedPayment = null;
+            if (e.referenceType === 'INVOICE' && e.referenceId) {
+                linkedInvoice = invoiceMap.get(e.referenceId) || null;
+                if (linkedInvoice?.order) {
+                    linkedOrder = linkedInvoice.order;
+                }
+            }
+            else if (e.referenceType === 'ORDER' && e.referenceId) {
+                linkedOrder = orderMap.get(e.referenceId) || null;
+            }
+            else if (e.referenceType === 'PAYMENT' && e.referenceId) {
+                linkedPayment = paymentMap.get(e.referenceId) || null;
+            }
+            const taxAmount = linkedOrder?.taxTotal ?? linkedInvoice?.taxTotal ?? 0;
+            const isOrderOrInvoice = e.referenceType === 'ORDER' || e.referenceType === 'INVOICE' || e.entryType === 'INVOICE';
+            const withGST = isOrderOrInvoice ? taxAmount > 0 : null;
+            let paymentType = null;
+            if (linkedPayment?.paymentMode) {
+                paymentType = linkedPayment.paymentMode;
+            }
+            else if (linkedOrder?.notes) {
+                const match = linkedOrder.notes.match(/Payment:\s*([A-Za-z0-9_ -]+)/i);
+                if (match && match[1]) {
+                    paymentType = match[1].trim().replace(/\.$/, '');
+                }
+            }
+            if (!paymentType && e.paymentMode) {
+                paymentType = e.paymentMode;
+            }
+            const finalAmount = linkedOrder?.grandTotal ??
+                linkedInvoice?.grandTotal ??
+                linkedPayment?.amount ??
+                (e.debit > 0 ? e.debit : e.credit);
+            return {
+                ...e,
+                customer: customerMap.get(e.customerId) ?? null,
+                order: linkedOrder,
+                invoice: linkedInvoice,
+                payment: linkedPayment,
+                finalAmount,
+                paymentType: paymentType || (linkedOrder?.paymentStatus === 'PAID' ? 'PAID' : (e.entryType === 'PAYMENT' ? 'PAYMENT' : null)),
+                withGST,
+                taxAmount,
+            };
+        });
         return {
             ledgerEntries: ledgerEntriesWithCustomer,
             meta: {
@@ -524,182 +640,6 @@ let BillingService = class BillingService {
             throw new common_1.NotFoundException(`Customer with ID '${customerId}' not found.`);
         }
         return customer;
-    }
-    async createCreditNote(dto, userId) {
-        const res = await this.prisma.$transaction(async (tx) => {
-            const customer = await tx.customer.findUnique({
-                where: { id: dto.customerId },
-            });
-            if (!customer)
-                throw new common_1.NotFoundException('Customer not found');
-            const noteNumber = `CN-${Date.now().toString().slice(-8)}`;
-            const discountVal = Number(dto.discountAmount || 0);
-            const packingVal = Number(dto.packingCharges || 0);
-            const otherVal = Number(dto.otherCharges || 0);
-            const amount = dto.amount ? Number(dto.amount) : (discountVal + packingVal + otherVal);
-            const chargeLabel = dto.chargeType === 'DISCOUNT'
-                ? 'Discount'
-                : dto.chargeType === 'PACKING'
-                    ? 'Packing Charges'
-                    : dto.chargeType === 'OTHER'
-                        ? 'Other Charges'
-                        : 'Credit Note Adjustment';
-            let refType = 'MANUAL';
-            let refId = undefined;
-            let payTag = '';
-            if (dto.paymentId) {
-                refType = 'PAYMENT';
-                payTag = ` [Payment: ${dto.paymentId}]`;
-                const targetPayment = await tx.payment.findFirst({
-                    where: {
-                        OR: [
-                            ...(dto.paymentId.length === 24 ? [{ id: dto.paymentId }] : []),
-                            { referenceNumber: dto.paymentId },
-                            { paymentNumber: dto.paymentId },
-                        ],
-                    },
-                });
-                if (targetPayment) {
-                    refId = targetPayment.id;
-                }
-            }
-            const noteData = {
-                customerId: dto.customerId,
-                noteNumber,
-                noteType: 'CREDIT_NOTE',
-                chargeType: dto.chargeType || 'CUSTOM',
-                amount,
-                discountAmount: discountVal,
-                packingCharges: packingVal,
-                otherCharges: otherVal,
-                reason: dto.reason ? `${dto.reason}${payTag}` : payTag,
-                referenceType: refType,
-                ...(refId && { referenceId: refId }),
-                createdBy: userId,
-            };
-            const note = await tx.creditDebitNote.create({
-                data: noteData,
-            });
-            const newBalance = (customer.currentBalance || 0) - amount;
-            await tx.customer.update({
-                where: { id: dto.customerId },
-                data: { currentBalance: newBalance },
-            });
-            const breakdownParts = [];
-            if (discountVal > 0)
-                breakdownParts.push(`Discount: ₹${discountVal}`);
-            if (packingVal > 0)
-                breakdownParts.push(`Packing: ₹${packingVal}`);
-            if (otherVal > 0)
-                breakdownParts.push(`Other: ₹${otherVal}`);
-            const descText = `${chargeLabel} — ${noteNumber}${payTag}${breakdownParts.length ? ` (${breakdownParts.join(', ')})` : ''}: ${dto.reason || ''}`;
-            await tx.ledgerEntry.create({
-                data: {
-                    customerId: dto.customerId,
-                    entryDate: new Date(),
-                    entryType: 'CREDIT_NOTE',
-                    referenceType: refType,
-                    referenceId: note.id,
-                    debit: 0,
-                    credit: amount,
-                    balanceAfterEntry: newBalance,
-                    description: descText,
-                    transactionStatus: dto.status || dto.transactionStatus || 'COMPLETED',
-                    createdBy: userId,
-                },
-            });
-            return note;
-        });
-        await this.recalculateCustomerBalance(dto.customerId);
-        return res;
-    }
-    async createDebitNote(dto, userId) {
-        const res = await this.prisma.$transaction(async (tx) => {
-            const customer = await tx.customer.findUnique({
-                where: { id: dto.customerId },
-            });
-            if (!customer)
-                throw new common_1.NotFoundException('Customer not found');
-            const noteNumber = `DN-${Date.now().toString().slice(-8)}`;
-            const discountVal = Number(dto.discountAmount || 0);
-            const packingVal = Number(dto.packingCharges || 0);
-            const otherVal = Number(dto.otherCharges || 0);
-            const amount = dto.amount ? Number(dto.amount) : (discountVal + packingVal + otherVal);
-            const chargeLabel = dto.chargeType === 'PACKING'
-                ? 'Packing Charges'
-                : dto.chargeType === 'OTHER'
-                    ? 'Other Charges'
-                    : dto.chargeType === 'DISCOUNT'
-                        ? 'Discount'
-                        : 'Debit Note Adjustment';
-            let refType = 'MANUAL';
-            let refId = undefined;
-            let payTag = '';
-            if (dto.paymentId) {
-                refType = 'PAYMENT';
-                payTag = ` [Payment: ${dto.paymentId}]`;
-                const targetPayment = await tx.payment.findFirst({
-                    where: {
-                        OR: [
-                            ...(dto.paymentId.length === 24 ? [{ id: dto.paymentId }] : []),
-                            { referenceNumber: dto.paymentId },
-                            { paymentNumber: dto.paymentId },
-                        ],
-                    },
-                });
-                if (targetPayment) {
-                    refId = targetPayment.id;
-                }
-            }
-            const noteData = {
-                customerId: dto.customerId,
-                noteNumber,
-                noteType: 'DEBIT_NOTE',
-                chargeType: dto.chargeType || 'CUSTOM',
-                amount,
-                discountAmount: discountVal,
-                packingCharges: packingVal,
-                otherCharges: otherVal,
-                reason: dto.reason ? `${dto.reason}${payTag}` : payTag,
-                referenceType: refType,
-                ...(refId && { referenceId: refId }),
-                createdBy: userId,
-            };
-            const note = await tx.creditDebitNote.create({
-                data: noteData,
-            });
-            const newBalance = (customer.currentBalance || 0) + amount;
-            await tx.customer.update({
-                where: { id: dto.customerId },
-                data: { currentBalance: newBalance },
-            });
-            const breakdownParts = [];
-            if (discountVal > 0)
-                breakdownParts.push(`Discount: ₹${discountVal}`);
-            if (packingVal > 0)
-                breakdownParts.push(`Packing: ₹${packingVal}`);
-            if (otherVal > 0)
-                breakdownParts.push(`Other: ₹${otherVal}`);
-            const descText = `${chargeLabel} — ${noteNumber}${payTag}${breakdownParts.length ? ` (${breakdownParts.join(', ')})` : ''}: ${dto.reason || ''}`;
-            await tx.ledgerEntry.create({
-                data: {
-                    customerId: dto.customerId,
-                    entryDate: new Date(),
-                    entryType: 'DEBIT_NOTE',
-                    referenceType: refType,
-                    referenceId: note.id,
-                    debit: amount,
-                    credit: 0,
-                    balanceAfterEntry: newBalance,
-                    description: descText,
-                    transactionStatus: dto.status || dto.transactionStatus || 'COMPLETED',
-                    createdBy: userId,
-                },
-            });
-            return note;
-        });
-        await this.recalculateCustomerBalance(dto.customerId);
-        return res;
     }
     async exportLedger(customerId) {
         const ExcelJS = require('exceljs');
@@ -747,7 +687,7 @@ let BillingService = class BillingService {
         const entry = await this.prisma.ledgerEntry.findUnique({ where: { id } });
         if (!entry)
             throw new common_1.NotFoundException(`Ledger entry with ID '${id}' not found.`);
-        const VALID_STATUSES = ['COMPLETED', 'PENDING', 'CANCELLED', 'ADVANCE'];
+        const VALID_STATUSES = ['COMPLETED', 'PENDING', 'CANCELLED', 'ADVANCE', 'VERIFIED'];
         const updatedEntry = await this.prisma.ledgerEntry.update({
             where: { id },
             data: {
@@ -756,12 +696,105 @@ let BillingService = class BillingService {
                     credit: entry.credit > 0 ? data.amount : 0,
                 }),
                 ...(data.notes !== undefined && { description: data.notes }),
+                ...(data.entryDate !== undefined && { entryDate: new Date(data.entryDate) }),
+                ...(data.entryType !== undefined && { entryType: data.entryType }),
                 ...(data.transactionStatus !== undefined &&
                     VALID_STATUSES.includes(data.transactionStatus) && {
                     transactionStatus: data.transactionStatus,
                 }),
             },
         });
+        const isCompleted = data.transactionStatus === 'COMPLETED' || data.transactionStatus === 'VERIFIED';
+        const isPending = data.transactionStatus === 'PENDING';
+        const targetPayStatus = isCompleted ? 'PAID' : isPending ? 'UNPAID' : undefined;
+        if (entry.referenceType === 'INVOICE' && entry.referenceId) {
+            const invoice = await this.prisma.invoice.findUnique({
+                where: { id: entry.referenceId },
+                select: { id: true, orderId: true, paymentStatus: true },
+            });
+            if (invoice) {
+                await this.prisma.invoice.update({
+                    where: { id: invoice.id },
+                    data: {
+                        ...(targetPayStatus && { paymentStatus: targetPayStatus }),
+                        ...(data.amount !== undefined && { grandTotal: data.amount }),
+                    },
+                });
+                if (invoice.orderId) {
+                    const order = await this.prisma.order.findUnique({
+                        where: { id: invoice.orderId },
+                        select: { id: true, notes: true },
+                    });
+                    if (order) {
+                        let updatedNotes = order.notes || '';
+                        if (data.paymentMode) {
+                            if (/Payment:\s*[A-Za-z0-9_ -]+/i.test(updatedNotes)) {
+                                updatedNotes = updatedNotes.replace(/Payment:\s*[A-Za-z0-9_ -]+/i, `Payment: ${data.paymentMode}`);
+                            }
+                            else {
+                                updatedNotes = `${updatedNotes} (Payment: ${data.paymentMode})`.trim();
+                            }
+                        }
+                        await this.prisma.order.update({
+                            where: { id: order.id },
+                            data: {
+                                ...(targetPayStatus && { paymentStatus: targetPayStatus }),
+                                ...(data.paymentMode && { notes: updatedNotes }),
+                            },
+                        });
+                    }
+                }
+            }
+        }
+        else if (entry.referenceType === 'ORDER' && entry.referenceId) {
+            const order = await this.prisma.order.findUnique({
+                where: { id: entry.referenceId },
+                select: { id: true, notes: true },
+            });
+            if (order) {
+                let updatedNotes = order.notes || '';
+                if (data.paymentMode) {
+                    if (/Payment:\s*[A-Za-z0-9_ -]+/i.test(updatedNotes)) {
+                        updatedNotes = updatedNotes.replace(/Payment:\s*[A-Za-z0-9_ -]+/i, `Payment: ${data.paymentMode}`);
+                    }
+                    else {
+                        updatedNotes = `${updatedNotes} (Payment: ${data.paymentMode})`.trim();
+                    }
+                }
+                await this.prisma.order.update({
+                    where: { id: order.id },
+                    data: {
+                        ...(targetPayStatus && { paymentStatus: targetPayStatus }),
+                        ...(data.paymentMode && { notes: updatedNotes }),
+                    },
+                });
+            }
+        }
+        else if (entry.referenceType === 'PAYMENT' && entry.referenceId) {
+            const payment = await this.prisma.payment.findFirst({
+                where: {
+                    OR: [
+                        ...(entry.referenceId.length === 24 ? [{ id: entry.referenceId }] : []),
+                        { paymentNumber: entry.referenceId },
+                        { referenceNumber: entry.referenceId },
+                    ],
+                },
+            });
+            if (payment) {
+                await this.prisma.payment.update({
+                    where: { id: payment.id },
+                    data: {
+                        ...(data.paymentMode && { paymentMode: data.paymentMode }),
+                        ...(data.transactionStatus && {
+                            paymentStatus: isCompleted ? 'VERIFIED' : data.transactionStatus,
+                        }),
+                        ...(data.amount !== undefined && { amount: data.amount }),
+                        ...(data.referenceNumber && { referenceNumber: data.referenceNumber }),
+                        ...(data.notes && { notes: data.notes }),
+                    },
+                });
+            }
+        }
         await this.recalculateCustomerBalance(entry.customerId);
         return updatedEntry;
     }
@@ -781,45 +814,12 @@ let BillingService = class BillingService {
                 },
             });
             if (linkedPayment) {
-                return this.deletePayment(linkedPayment.id);
+                await this.prisma.payment.delete({ where: { id: linkedPayment.id } });
             }
         }
-        const candidateRefIds = [entry.id, entry.referenceId].filter((x) => Boolean(x));
-        const linkedNotes = await this.prisma.creditDebitNote.findMany({
-            where: {
-                customerId,
-                OR: [
-                    { referenceId: { in: candidateRefIds } },
-                    ...(entry.entryType === 'CREDIT_NOTE' || entry.entryType === 'DEBIT_NOTE'
-                        ? [{ id: entry.referenceId || entry.id }]
-                        : []),
-                ],
-            },
-            select: { id: true },
-        });
-        const noteIds = linkedNotes.map((n) => n.id);
-        if ((entry.entryType === 'CREDIT_NOTE' || entry.entryType === 'DEBIT_NOTE') && entry.referenceId) {
-            noteIds.push(entry.referenceId);
-        }
-        if (noteIds.length > 0) {
-            await this.prisma.ledgerEntry.deleteMany({
-                where: {
-                    customerId,
-                    OR: [
-                        { referenceId: { in: noteIds } },
-                        { id: { in: noteIds } },
-                    ],
-                },
-            });
-            await this.prisma.creditDebitNote.deleteMany({
-                where: { id: { in: noteIds } },
-            });
-        }
-        await this.prisma.ledgerEntry.deleteMany({
-            where: { id },
-        });
+        await this.prisma.ledgerEntry.delete({ where: { id } });
         await this.recalculateCustomerBalance(customerId);
-        return { message: 'Ledger entry and associated notes deleted successfully.' };
+        return { message: 'Ledger entry deleted successfully.' };
     }
     async updatePayment(id, data) {
         const payment = await this.prisma.payment.findUnique({ where: { id } });
@@ -831,6 +831,9 @@ let BillingService = class BillingService {
                 ...(data.amount !== undefined && { amount: data.amount }),
                 ...(data.referenceNumber !== undefined && { referenceNumber: data.referenceNumber }),
                 ...(data.notes !== undefined && { notes: data.notes }),
+                ...(data.paymentMode !== undefined && { paymentMode: data.paymentMode }),
+                ...(data.paymentStatus !== undefined && { paymentStatus: data.paymentStatus }),
+                ...(data.transactionDate !== undefined && { transactionDate: new Date(data.transactionDate) }),
             },
         });
         await this.recalculateCustomerBalance(payment.customerId);
@@ -846,32 +849,6 @@ let BillingService = class BillingService {
             payment.paymentNumber,
             payment.referenceNumber,
         ].filter((x) => Boolean(x));
-        const linkedNotes = await this.prisma.creditDebitNote.findMany({
-            where: {
-                customerId,
-                OR: [
-                    { referenceId: { in: refVariants } },
-                    { reason: { contains: payment.id } },
-                    { reason: { contains: payment.paymentNumber } },
-                ],
-            },
-            select: { id: true },
-        });
-        const noteIds = linkedNotes.map((n) => n.id);
-        if (noteIds.length > 0) {
-            await this.prisma.ledgerEntry.deleteMany({
-                where: {
-                    customerId,
-                    OR: [
-                        { referenceId: { in: noteIds } },
-                        { id: { in: noteIds } },
-                    ],
-                },
-            });
-            await this.prisma.creditDebitNote.deleteMany({
-                where: { id: { in: noteIds } },
-            });
-        }
         await this.prisma.ledgerEntry.deleteMany({
             where: {
                 customerId,
@@ -883,7 +860,7 @@ let BillingService = class BillingService {
         });
         await this.prisma.payment.delete({ where: { id } });
         await this.recalculateCustomerBalance(customerId);
-        return { message: 'Payment and associated credit/debit notes deleted successfully.' };
+        return { message: 'Payment deleted successfully.' };
     }
     async recalculateCustomerBalance(customerId) {
         const payments = await this.prisma.payment.findMany({
@@ -904,35 +881,6 @@ let BillingService = class BillingService {
             ...invoices.map((i) => i.invoiceNumber).filter(Boolean),
             ...invoices.map((i) => i.orderId).filter(Boolean),
         ]);
-        const orphanNotes = await this.prisma.creditDebitNote.findMany({
-            where: { customerId },
-            select: { id: true, referenceType: true, referenceId: true },
-        });
-        const orphanNoteIds = orphanNotes
-            .filter((n) => {
-            if (!n.referenceId)
-                return false;
-            if (n.referenceType === 'PAYMENT' && !validPaymentRefIds.has(n.referenceId))
-                return true;
-            if (n.referenceType === 'INVOICE' && !validInvoiceRefIds.has(n.referenceId))
-                return true;
-            return false;
-        })
-            .map((n) => n.id);
-        if (orphanNoteIds.length > 0) {
-            await this.prisma.ledgerEntry.deleteMany({
-                where: {
-                    customerId,
-                    OR: [
-                        { referenceId: { in: orphanNoteIds } },
-                        { id: { in: orphanNoteIds } },
-                    ],
-                },
-            });
-            await this.prisma.creditDebitNote.deleteMany({
-                where: { id: { in: orphanNoteIds } },
-            });
-        }
         const orphanPaymentLedgers = await this.prisma.ledgerEntry.findMany({
             where: {
                 customerId,
@@ -997,105 +945,11 @@ let BillingService = class BillingService {
     }
     async clearAllAccountsData() {
         await this.prisma.$transaction(async (tx) => {
-            await tx.creditDebitNote.deleteMany({});
             await tx.payment.deleteMany({});
             await tx.ledgerEntry.deleteMany({});
             await tx.customer.updateMany({ data: { currentBalance: 0 } });
         });
         return { message: 'All accounts and ledger data removed successfully.' };
-    }
-    async findNoteByAnyIdentifier(id) {
-        let note = await this.prisma.creditDebitNote.findFirst({
-            where: {
-                OR: [
-                    { id },
-                    { noteNumber: id },
-                    { referenceId: id },
-                ],
-            },
-        });
-        if (!note) {
-            const ledger = await this.prisma.ledgerEntry.findUnique({ where: { id } });
-            if (ledger) {
-                const refIds = [ledger.referenceId, ledger.id].filter((x) => Boolean(x));
-                const noteMatch = ledger.description?.match(/\b(CN|DN)-[a-zA-Z0-9-]+\b/i)?.[0];
-                if (noteMatch)
-                    refIds.push(noteMatch);
-                note = await this.prisma.creditDebitNote.findFirst({
-                    where: {
-                        OR: [
-                            { id: { in: refIds } },
-                            { noteNumber: { in: refIds } },
-                            { referenceId: { in: refIds } },
-                        ],
-                    },
-                });
-            }
-        }
-        return note;
-    }
-    async updateCreditDebitNote(id, data) {
-        const note = await this.findNoteByAnyIdentifier(id);
-        if (!note)
-            throw new common_1.NotFoundException(`Credit/Debit note with ID '${id}' not found.`);
-        const newAmount = data.amount !== undefined ? data.amount : note.amount;
-        const newReason = data.reason !== undefined ? data.reason : note.reason;
-        const updatedNote = await this.prisma.creditDebitNote.update({
-            where: { id: note.id },
-            data: {
-                amount: newAmount,
-                reason: newReason,
-                ...(data.chargeType && { chargeType: data.chargeType }),
-            },
-        });
-        const isCN = note.noteType === 'CREDIT_NOTE';
-        const noteNumber = note.noteNumber;
-        await this.prisma.ledgerEntry.updateMany({
-            where: {
-                customerId: note.customerId,
-                OR: [
-                    { referenceId: note.id },
-                    { id: note.id },
-                    { id },
-                    { description: { contains: noteNumber } },
-                ],
-            },
-            data: {
-                debit: isCN ? 0 : newAmount,
-                credit: isCN ? newAmount : 0,
-                description: `${data.chargeType || note.chargeType || (isCN ? 'Credit Note' : 'Debit Note')} - ${noteNumber}: ${newReason}`,
-            },
-        });
-        await this.recalculateCustomerBalance(note.customerId);
-        return updatedNote;
-    }
-    async deleteCreditDebitNote(id) {
-        const note = await this.findNoteByAnyIdentifier(id);
-        if (!note) {
-            const ledger = await this.prisma.ledgerEntry.findUnique({ where: { id } });
-            if (ledger) {
-                await this.prisma.ledgerEntry.delete({ where: { id } });
-                await this.recalculateCustomerBalance(ledger.customerId);
-                return { message: 'Ledger entry deleted successfully.' };
-            }
-            throw new common_1.NotFoundException(`Credit/Debit note with ID '${id}' not found.`);
-        }
-        const customerId = note.customerId;
-        const noteNumber = note.noteNumber;
-        await this.prisma.ledgerEntry.deleteMany({
-            where: {
-                customerId,
-                OR: [
-                    { referenceId: note.id },
-                    { id: note.id },
-                    { id },
-                    { description: { contains: noteNumber } },
-                ],
-            },
-        });
-        await this.prisma.creditDebitNote.delete({ where: { id: note.id } });
-        await this.recalculateCustomerBalance(customerId);
-        return { message: 'Credit/Debit note deleted successfully.' };
     }
 };
 exports.BillingService = BillingService;

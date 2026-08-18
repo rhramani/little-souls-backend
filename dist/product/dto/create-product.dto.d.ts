@@ -22,6 +22,7 @@ export declare class CreateProductDto {
     categoryId?: string;
     catalogueId?: string;
     moq?: number;
+    fixQty?: number;
     barcode?: string;
     brand?: string;
     size?: string;

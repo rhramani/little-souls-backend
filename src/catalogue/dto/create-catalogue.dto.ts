@@ -36,7 +36,8 @@ export class CreateCatalogueDto {
   isPublished?: boolean;
 
   @IsArray()
+  @IsOptional()
   @ValidateNested({ each: true })
   @Type(() => CatalogueImageDto)
-  images: CatalogueImageDto[];
+  images?: CatalogueImageDto[];
 }

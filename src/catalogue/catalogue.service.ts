@@ -47,8 +47,6 @@ function pLimit(concurrency: number) {
   };
 }
 
-import { ImageCleaningService } from '../image-cleaning/image-cleaning.service';
-
 @Injectable()
 export class CatalogueService {
   private readonly logger = new Logger(CatalogueService.name);
@@ -56,7 +54,6 @@ export class CatalogueService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uploadService: UploadService,
-    private readonly imageCleaningService: ImageCleaningService,
   ) {}
 
   private async generateAndUploadBarcode(sku: string): Promise<string | null> {
@@ -84,16 +81,7 @@ export class CatalogueService {
   /** Generate barcode buffer in-memory (no R2 upload) — used for Excel export */
   private async generateBarcodeBuffer(sku: string): Promise<Buffer | null> {
     if (!sku) return null;
-    let barcodeText = sku.trim();
-    if (
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i.test(barcodeText) ||
-      barcodeText.endsWith('_full') ||
-      barcodeText.includes('-')
-    ) {
-      barcodeText = barcodeText.split('-')[0].toUpperCase();
-    } else {
-      barcodeText = barcodeText.toUpperCase();
-    }
+    const barcodeText = sku.trim().replace(/_full$/i, '');
 
     try {
       return await bwipjs.toBuffer({
@@ -121,7 +109,59 @@ export class CatalogueService {
       .replace(/\-\-+/g, '-');
   }
 
-  private extractCleanNameAndSkuFromFilename(rawFilename: string, fallbackId: string) {
+  private formatSku(rawSku: string | null | undefined, fallbackId: string): string;
+  private formatSku(rawSku?: string | null, fallbackId?: string): string | null;
+  private formatSku(rawSku?: string | null, fallbackId?: string): string | null {
+    const fallback = fallbackId ? `LS-${fallbackId.slice(0, 5).toUpperCase()}` : null;
+    if (!rawSku || !rawSku.trim()) {
+      return fallback;
+    }
+    const trimmed = rawSku.trim();
+    // If it looks like a WhatsApp or raw filename string (contains spaces or starts with WhatsApp/IMG)
+    if (/\s/.test(trimmed) || /^(WhatsApp|IMG|DSC|PXL|Photo|Picture)/i.test(trimmed)) {
+      let clean = trimmed.toUpperCase().replace(/\s+/g, '-').replace(/[^A-Z0-9\-]/g, '');
+      if (clean.length > 8) {
+        clean = clean.slice(0, 8).replace(/-+$/, '');
+      }
+      if (clean) return clean;
+    }
+
+    // Clean valid custom SKU (uppercase, sanitize non-alphanumeric/hyphen, max 30 chars)
+    let sku = trimmed.toUpperCase().replace(/[^A-Z0-9\-]/g, '');
+    if (sku.length > 30) {
+      sku = sku.slice(0, 30).replace(/-+$/, '');
+    }
+    return sku || fallback;
+  }
+
+  private getUniqueSku(
+    rawSku: string | null | undefined,
+    usedSkus: Set<string>,
+    fallbackId?: string,
+  ): string {
+    const baseSku =
+      this.formatSku(rawSku, fallbackId!) ||
+      `LS-${randomBytes(3).toString('hex').toUpperCase()}`;
+    let finalSku = baseSku;
+    let counter = 1;
+    while (usedSkus.has(finalSku.toUpperCase())) {
+      const suffix = counter.toString();
+      const maxLen = baseSku.length > 8 ? 30 : 8;
+      const head = baseSku
+        .slice(0, Math.max(1, maxLen - suffix.length))
+        .replace(/-+$/, '');
+      finalSku = `${head}${suffix}`;
+      counter++;
+    }
+    usedSkus.add(finalSku.toUpperCase());
+    return finalSku;
+  }
+
+  private extractCleanNameAndSkuFromFilename(
+    rawFilename: string,
+    fallbackId: string,
+    usedSkus?: Set<string>,
+  ): { name: string; sku: string } {
     let clean = (rawFilename || '').replace(/^uploads\//i, '');
     // Strip R2/Multer UUID prefix if present
     clean = clean.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_?/i, '');
@@ -141,22 +181,25 @@ export class CatalogueService {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(clean) ||
       clean.toLowerCase() === 'full'
     ) {
+      const sku = usedSkus
+        ? this.getUniqueSku(`LS-${shortHex}`, usedSkus, fallbackId)
+        : `LS-${shortHex}`;
       return {
         name: `Product ${fallbackId.slice(0, 8).toUpperCase()}`,
-        sku: `LS-${shortHex}`, // Max 8 chars: 'LS-' (3) + 5 hex = 8 chars
+        sku,
       };
     }
 
     const name = clean.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
-    let sku = clean.toUpperCase().replace(/\s+/g, '-').replace(/[^A-Z0-9\-]/g, '');
+    const rawBaseSku = clean.toUpperCase().replace(/\s+/g, '-').replace(/[^A-Z0-9\-]/g, '');
 
-    if (sku.length > 8) {
-      sku = sku.slice(0, 8); // Enforce max 8 characters
-    }
+    const sku = usedSkus
+      ? this.getUniqueSku(rawBaseSku || `LS-${shortHex}`, usedSkus, fallbackId)
+      : this.formatSku(rawBaseSku || `LS-${shortHex}`, fallbackId);
 
     return {
       name: name || `Product ${fallbackId.slice(0, 8).toUpperCase()}`,
-      sku: sku || `LS-${shortHex}`,
+      sku,
     };
   }
 
@@ -179,13 +222,19 @@ export class CatalogueService {
     }
 
     // 2. Pre-generate all temp IDs synchronously — NO barcode upload here.
+    const existingDbProducts = await this.prisma.product.findMany({
+      select: { sku: true },
+    });
+    const usedSkus = new Set(existingDbProducts.map((p) => p.sku.toUpperCase()));
+
     const tempProductsData = (dto.images || []).map((img) => {
       const tempId = randomBytes(12).toString('hex');
       const { name, sku } = this.extractCleanNameAndSkuFromFilename(
         img.filename,
         tempId,
+        usedSkus,
       );
-      const tempSlug = this.slugify(sku);
+      const tempSlug = `${this.slugify(name)}-${sku.toLowerCase()}`;
       return { img, tempId, tempSku: sku, tempSlug, baseName: name };
     });
 
@@ -211,6 +260,7 @@ export class CatalogueService {
             categoryId: category.id,
             catalogueIds: [catalogue.id],
             barcode: data.tempSku,
+            productImage: data.img.url,
             moq: 1,
             stockQuantity: 0,
             stockStatus: 'OUT_OF_STOCK',
@@ -247,14 +297,8 @@ export class CatalogueService {
     });
 
     this.logger.log(
-      `Catalogue created with ${dto.images.length} products in ${Date.now() - start}ms`,
+      `Catalogue created with ${dto.images?.length || 0} products in ${Date.now() - start}ms`,
     );
-
-    if (result) {
-      this.imageCleaningService
-        .triggerBackgroundCleaningForCatalogue(result.id, userId)
-        .catch(() => {});
-    }
 
     return result;
   }
@@ -286,17 +330,18 @@ export class CatalogueService {
             take: 4,
             select: {
               productImage: true,
+              productPictureUrl: true,
               images: {
                 take: 1,
                 orderBy: { sortOrder: 'asc' },
-                select: { originalUrl: true },
+                select: { originalUrl: true, cleanedUrl: true, thumbnailUrl: true },
               },
             },
           }),
         ]);
 
         const previewImages = previewProducts
-          .map((p) => p.images?.[0]?.originalUrl || p.productImage)
+          .map((p) => p.images?.[0]?.originalUrl || p.images?.[0]?.cleanedUrl || p.images?.[0]?.thumbnailUrl || p.productImage || p.productPictureUrl)
           .filter((url): url is string => !!url);
 
         return {
@@ -545,7 +590,7 @@ export class CatalogueService {
     // Define main columns
     const columns = [
       { header: 'Product Image', key: 'productImage', width: 22 },
-      { header: 'Barcode Image', key: 'barcodeImage', width: 30 },
+      { header: 'Barcode Image', key: 'barcodeImage', width: 35 },
       { header: 'Product ID (System ID - Do Not Edit)', key: 'id', width: 36 },
       { header: 'SKU', key: 'sku', width: 20 },
       { header: 'Product Name', key: 'name', width: 40 },
@@ -555,12 +600,11 @@ export class CatalogueService {
       { header: 'Available quantity', key: 'stockQuantity', width: 18 },
       { header: 'Is Active (YES/NO)', key: 'isActive', width: 18 },
       { header: 'MOQ', key: 'moq', width: 10 },
+      { header: 'Fix Qty', key: 'fixQty', width: 12 },
       { header: 'Brand', key: 'brand', width: 15 },
       { header: 'Size', key: 'size', width: 12 },
       { header: 'Color', key: 'color', width: 12 },
       { header: 'Unit', key: 'unit', width: 10 },
-      { header: 'Tax "type"', key: 'taxType', width: 15 },
-      { header: 'Tax percentage', key: 'taxPercent', width: 15 },
       { header: 'Weight', key: 'weight', width: 12 },
       { header: 'Parent product sku', key: 'parentProductSku', width: 20 },
       { header: 'Parent product id', key: 'parentProductId', width: 36 },
@@ -630,6 +674,7 @@ export class CatalogueService {
             barcodeBuffer: null,
           };
 
+          const formattedSku = this.formatSku(p.sku, p.id);
           const [imgRes, barcodeRes] = await Promise.allSettled([
             imageUrl
               ? axios.get(imageUrl, {
@@ -637,7 +682,7 @@ export class CatalogueService {
                   timeout: 5000,
                 })
               : Promise.resolve(null),
-            this.generateBarcodeBuffer(p.sku),
+            this.generateBarcodeBuffer(formattedSku),
           ]);
 
           if (imgRes.status === 'fulfilled' && imgRes.value) {
@@ -671,12 +716,26 @@ export class CatalogueService {
       rowIndex++;
       const primaryImageUrl = p.images[0]?.originalUrl || '';
       const imageUrl = p.productImage || primaryImageUrl;
+      const formattedSku = this.formatSku(p.sku, p.id);
+
+      if (p.sku !== formattedSku) {
+        this.prisma.product
+          .update({
+            where: { id: p.id },
+            data: { sku: formattedSku, barcode: formattedSku },
+          })
+          .catch((err) =>
+            this.logger.warn(
+              `Failed to auto-clean SKU for product ${p.id}: ${err.message}`,
+            ),
+          );
+      }
 
       const rowData: any = {
         productImage: '',
         barcodeImage: '',
         id: p.id,
-        sku: p.sku,
+        sku: formattedSku,
         name: p.name,
         description: p.description || '',
         productPrice: p.productPrice ? p.productPrice.toString() : '',
@@ -684,12 +743,14 @@ export class CatalogueService {
         stockQuantity: p.stockQuantity,
         isActive: p.isActive ? 'YES' : 'NO',
         moq: p.moq,
+        fixQty:
+          p.fixQty !== null && p.fixQty !== undefined
+            ? p.fixQty
+            : '',
         brand: p.brand || '',
         size: p.size || '',
         color: p.color || '',
         unit: p.unit || 'PCS',
-        taxType: p.taxType || '',
-        taxPercent: p.taxPercent ? p.taxPercent.toString() : '0',
         weight: p.weight ? p.weight.toString() : '',
         parentProductSku: p.parentProductSku || '',
         parentProductId: p.parentProductId || '',
@@ -815,10 +876,32 @@ export class CatalogueService {
           h.toLowerCase() === 'description'),
     );
     const productImageHeaderKey = headers.find(
-      (h) => h && h.toLowerCase() === 'product image',
+      (h) =>
+        h &&
+        (h.toLowerCase() === 'product image' ||
+          h.toLowerCase() === 'product image url' ||
+          h.toLowerCase() === 'image' ||
+          h.toLowerCase() === 'image url' ||
+          h.toLowerCase() === 'product picture' ||
+          h.toLowerCase() === 'picture' ||
+          h.toLowerCase() === 'picture url' ||
+          h.toLowerCase() === 'photo' ||
+          h.toLowerCase() === 'photo url' ||
+          h.toLowerCase() === 'media' ||
+          h.toLowerCase() === 'media url' ||
+          h.toLowerCase() === 'img' ||
+          h.toLowerCase() === 'img url' ||
+          h.toLowerCase().includes('product image') ||
+          h.toLowerCase().includes('image') ||
+          h.toLowerCase().includes('picture')),
     );
     const productPictureUrlHeaderKey = headers.find(
-      (h) => h && h.toLowerCase() === 'product picture url',
+      (h) =>
+        h &&
+        (h.toLowerCase() === 'product picture url' ||
+          h.toLowerCase() === 'picture url' ||
+          h.toLowerCase() === 'photo url' ||
+          h.toLowerCase().includes('picture url')),
     );
     const productPriceHeaderKey = headers.find(
       (h) => h && h.toLowerCase() === 'product price',
@@ -838,6 +921,16 @@ export class CatalogueService {
         (h.toLowerCase().includes('is active') || h.toLowerCase() === 'active'),
     );
     const moqHeaderKey = headers.find((h) => h && h.toLowerCase() === 'moq');
+    const fixQtyHeaderKey = headers.find(
+      (h) =>
+        h &&
+        (h.toLowerCase() === 'fix qty' ||
+          h.toLowerCase() === 'fix_qty' ||
+          h.toLowerCase() === 'fixqty' ||
+          h.toLowerCase() === 'fixed qty' ||
+          h.toLowerCase() === 'fix quantity' ||
+          h.toLowerCase() === 'fixed quantity'),
+    );
     const brandHeaderKey = headers.find(
       (h) => h && h.toLowerCase() === 'brand',
     );
@@ -963,6 +1056,63 @@ export class CatalogueService {
       return isNaN(parsed) ? null : parsed;
     };
 
+    // Extract and upload embedded images from sheet to Cloudflare R2
+    const embeddedImageUrlMap = new Map<number, string>();
+    try {
+      const sheetImages = sheet.getImages();
+      if (sheetImages && sheetImages.length > 0) {
+        this.logger.log(
+          `Found ${sheetImages.length} embedded images in uploaded Excel sheet. Uploading to Cloudflare R2...`,
+        );
+        const uploadLimit = pLimit(10);
+        const prodImgHeaderIdx = productImageHeaderKey ? headers.indexOf(productImageHeaderKey) : 0;
+        const barcodeHeaderIdx = headers.findIndex((h) => h && h.toLowerCase().includes('barcode'));
+
+        await Promise.all(
+          sheetImages.map((img: any) =>
+            uploadLimit(async () => {
+              const tl = img.range?.tl;
+              if (!tl) return;
+              const rIdx = tl.nativeRow !== undefined ? tl.nativeRow : tl.row;
+              const cIdx = tl.nativeCol !== undefined ? tl.nativeCol : tl.col;
+
+              // Strictly match ONLY Product Image column and EXCLUDE Barcode Image column (Column B / index 1)
+              const isBarcodeCol = cIdx === 1 || (barcodeHeaderIdx !== -1 && cIdx === barcodeHeaderIdx);
+              const isProductImgCol = !isBarcodeCol && (cIdx === 0 || (prodImgHeaderIdx !== -1 && cIdx === prodImgHeaderIdx));
+
+              if (rIdx !== undefined && isProductImgCol) {
+                const excelRowNumber = rIdx + 1; // 1-indexed row number matching sheet.eachRow
+                const imageMedia = workbook.getImage(img.imageId);
+                if (imageMedia && imageMedia.buffer) {
+                  const ext = imageMedia.extension || 'jpeg';
+                  const mimeType =
+                    ext === 'jpg' || ext === 'jpeg'
+                      ? 'image/jpeg'
+                      : `image/${ext}`;
+                  try {
+                    const uploadRes = await this.uploadService.uploadBuffer(
+                      Buffer.from(imageMedia.buffer),
+                      mimeType,
+                      `excel_import_row${excelRowNumber}_${Date.now()}.${ext}`,
+                    );
+                    embeddedImageUrlMap.set(excelRowNumber, uploadRes.fileUrl);
+                  } catch (uploadErr: any) {
+                    this.logger.error(
+                      `Failed to upload embedded image for row ${excelRowNumber} to R2: ${uploadErr.message}`,
+                    );
+                  }
+                }
+              }
+            }),
+          ),
+        );
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `Could not parse embedded images from Excel sheet: ${err.message}`,
+      );
+    }
+
     const parsedRows: any[] = [];
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return;
@@ -992,11 +1142,13 @@ export class CatalogueService {
       };
 
       const id = getValString(idHeaderKey);
-      const sku = getValString(skuHeaderKey);
+      const rawSku = getValString(skuHeaderKey);
       const name = getValString(nameHeaderKey);
 
       // Skip the row if it has neither SKU nor Name (likely empty row)
-      if (!sku && !name) return;
+      if (!rawSku && !name) return;
+
+      const formattedSku = rawSku ? this.formatSku(rawSku, id || undefined) : null;
 
       const isActiveStr = getValString(activeHeaderKey);
       let isActive: boolean | undefined = undefined;
@@ -1035,6 +1187,7 @@ export class CatalogueService {
 
       const stockQuantity = getValNumber(stockHeaderKey);
       const moq = getValNumber(moqHeaderKey);
+      const fixQty = getValNumber(fixQtyHeaderKey);
       const setQuantity = getValNumber(setQuantityHeaderKey);
       const sizesSetQuantity = getValNumber(sizesSetQuantityHeaderKey);
       const colorsSetQuantity = getValNumber(colorsSetQuantityHeaderKey);
@@ -1043,18 +1196,27 @@ export class CatalogueService {
         sixToTwelveMonthsSetQuantityHeaderKey,
       );
 
+      const rawProdImg = getValString(productImageHeaderKey);
+      const rawProdPic = getValString(productPictureUrlHeaderKey);
+      const embeddedImgUrl = embeddedImageUrlMap.get(rowNumber);
+
+      const finalImgUrl = (rawProdImg && rawProdImg.trim().length > 0 ? rawProdImg.trim() : null) || (rawProdPic && rawProdPic.trim().length > 0 ? rawProdPic.trim() : null) || embeddedImgUrl || null;
+      const finalPicUrl = (rawProdPic && rawProdPic.trim().length > 0 ? rawProdPic.trim() : null) || (rawProdImg && rawProdImg.trim().length > 0 ? rawProdImg.trim() : null) || embeddedImgUrl || null;
+
       parsedRows.push({
         rowNumber,
         id: id || null,
-        sku: sku ? sku.trim() : null,
+        rawSku: rawSku || null,
+        sku: formattedSku,
         name: name ? name.trim() : null,
         description: getValString(descHeaderKey)?.trim() ?? null,
-        productImage: getValString(productImageHeaderKey),
-        productPictureUrl: getValString(productPictureUrlHeaderKey),
+        productImage: finalImgUrl,
+        productPictureUrl: finalPicUrl,
         productPrice: getValNumber(productPriceHeaderKey),
         discountedPrice: getValNumber(discountedPriceHeaderKey),
         stockQuantity: roundVal(stockQuantity, 0),
         moq: roundVal(moq, 1),
+        fixQty: roundVal(fixQty, null),
         brand: getValString(brandHeaderKey),
         size: getValString(sizeHeaderKey),
         color: getValString(colorHeaderKey),
@@ -1090,53 +1252,50 @@ export class CatalogueService {
       !!v && OBJECT_ID_REGEX.test(v);
 
     // ─── Classify rows: existing products to UPDATE vs new products to CREATE ──
-    const catalogProductIds = new Set(catalogue.products.map((p) => p.id));
-    const allSkusInFile = parsedRows.map((r) => r.sku).filter(Boolean);
-    const validObjectIdsInFile = parsedRows
-      .map((r) => r.id)
-      .filter(isValidObjectId);
-
-    const dbProducts = await this.prisma.product.findMany({
-      where: {
-        OR: [
-          { sku: { in: allSkusInFile } },
-          { id: { in: validObjectIdsInFile } },
-        ],
-      },
-      select: { id: true, sku: true, barcodeUrl: true, catalogueIds: true },
+    const allDbProducts = await this.prisma.product.findMany({
+      select: { id: true, sku: true, barcodeUrl: true, catalogueIds: true, productImage: true, productPictureUrl: true },
     });
 
     const skuToDbProductMap = new Map(
-      dbProducts.map((p) => [p.sku.toUpperCase(), p]),
+      allDbProducts.map((p) => [p.sku.toUpperCase(), p]),
     );
-    const idToDbProductMap = new Map(dbProducts.map((p) => [p.id, p]));
+    const idToDbProductMap = new Map(allDbProducts.map((p) => [p.id, p]));
+    const usedSkus = new Set(allDbProducts.map((p) => p.sku.toUpperCase()));
 
     const barcodeLimit = pLimit(10);
     await Promise.all(
       parsedRows.map((row) =>
         barcodeLimit(async () => {
-          if (!row.sku) {
-            row.barcodeUrl = null;
-            return;
-          }
-          const upperSku = row.sku.toUpperCase();
-          let dbProduct = skuToDbProductMap.get(upperSku);
-          if (!dbProduct && isValidObjectId(row.id)) {
+          let dbProduct: any = null;
+          if (isValidObjectId(row.id)) {
             dbProduct = idToDbProductMap.get(row.id);
+          }
+          if (!dbProduct && row.sku) {
+            dbProduct = skuToDbProductMap.get(row.sku.toUpperCase());
           }
 
           if (dbProduct) {
             row.id = dbProduct.id;
             row.isNew = false;
-            if (upperSku === dbProduct.sku.toUpperCase() && dbProduct.barcodeUrl) {
+            row.sku = this.formatSku(row.rawSku || row.sku) || this.formatSku(dbProduct.sku);
+            if (row.sku) usedSkus.add(row.sku.toUpperCase());
+
+            if (row.sku && row.sku.toUpperCase() === dbProduct.sku.toUpperCase() && dbProduct.barcodeUrl) {
               row.barcodeUrl = dbProduct.barcodeUrl;
-            } else {
+            } else if (row.sku) {
               row.barcodeUrl = await this.generateAndUploadBarcode(row.sku);
+            } else {
+              row.barcodeUrl = null;
             }
           } else {
             row.isNew = true;
-            row.id = randomBytes(12).toString('hex');
-            row.barcodeUrl = await this.generateAndUploadBarcode(row.sku);
+            row.id = row.id && isValidObjectId(row.id) ? row.id : randomBytes(12).toString('hex');
+            row.sku = row.rawSku || row.sku ? this.getUniqueSku(row.rawSku || row.sku, usedSkus, row.id) : null;
+            if (row.sku) {
+              row.barcodeUrl = await this.generateAndUploadBarcode(row.sku);
+            } else {
+              row.barcodeUrl = null;
+            }
           }
         }),
       ),
@@ -1319,6 +1478,7 @@ export class CatalogueService {
                 discountedPrice: row.discountedPrice,
                 stockQuantity: row.stockQuantity,
                 moq: row.moq,
+                fixQty: row.fixQty,
                 brand: row.brand,
                 size: row.size,
                 color: row.color,
@@ -1415,12 +1575,13 @@ export class CatalogueService {
                     name: row.name,
                     slug,
                     description: row.description,
-                    productImage: row.productImage,
-                    productPictureUrl: row.productPictureUrl,
+                    productImage: row.productImage || existingProduct?.productImage || null,
+                    productPictureUrl: row.productPictureUrl || existingProduct?.productPictureUrl || null,
                     productPrice: row.productPrice,
                     discountedPrice: row.discountedPrice,
                     stockQuantity: row.stockQuantity,
                     moq: row.moq,
+                    fixQty: row.fixQty,
                     brand: row.brand,
                     size: row.size,
                     color: row.color,
@@ -1532,10 +1693,6 @@ export class CatalogueService {
       `Import completed for ${parsedRows.length} products in ${Date.now() - start}ms`,
     );
 
-    this.imageCleaningService
-      .triggerBackgroundCleaningForCatalogue(catalogueId, userId)
-      .catch(() => {});
-
     return { message: 'Catalogue products successfully updated and replaced.' };
   }
 
@@ -1589,11 +1746,17 @@ export class CatalogueService {
     );
     const uploadedImages = await Promise.all(uploadPromises);
 
+    const allDbProducts = await this.prisma.product.findMany({
+      select: { sku: true },
+    });
+    const usedSkus = new Set(allDbProducts.map((p) => p.sku.toUpperCase()));
+
     // 3. Extract SKUs from filenames
     const uploadedSkus = uploadedImages.map((img, idx) => {
       const { sku } = this.extractCleanNameAndSkuFromFilename(
         img.filename,
         `temp-${idx}`,
+        usedSkus,
       );
       return sku;
     });
@@ -1640,6 +1803,7 @@ export class CatalogueService {
       const { name, sku } = this.extractCleanNameAndSkuFromFilename(
         img.filename,
         productId,
+        usedSkus,
       );
 
       const existingProduct = existingProductsMap.get(sku.toUpperCase());
@@ -1734,11 +1898,6 @@ export class CatalogueService {
     this.logger.log(
       `Bulk added ${newProductsData.length} new and updated ${productsToUpdate.length} existing products in catalogue ${catalogueId} in ${Date.now() - start}ms`,
     );
-
-    // Trigger background cleaning (if required)
-    this.imageCleaningService
-      .triggerBackgroundCleaningForCatalogue(catalogueId, userId)
-      .catch(() => {});
 
     return {
       message: `${newProductsData.length} new products created and ${productsToUpdate.length} existing products updated.`,

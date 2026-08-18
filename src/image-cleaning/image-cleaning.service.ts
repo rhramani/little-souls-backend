@@ -67,68 +67,21 @@ export class ImageCleaningService {
     productId: string,
     userId?: string,
   ) {
-    const images = await this.prisma.productImage.findMany({
-      where: {
-        productId,
-        cleaningStatus: { in: ['NOT_REQUIRED', 'FAILED'] },
-      },
-    });
-
-    for (const image of images) {
-      this.autoCleanImage(image.id, userId).catch((err) => {
-        this.logger.error(
-          `[ImageCleaning] Auto-clean trigger failed for image ${image.id}: ${err.message}`,
-        );
-      });
-    }
+    // Background auto-cleaning disabled to keep original images clean and intact
+    return;
   }
 
   async triggerBackgroundCleaningForCatalogue(
     catalogueId: string,
     userId?: string,
   ) {
-    const images = await this.prisma.productImage.findMany({
-      where: {
-        product: { catalogueIds: { has: catalogueId } },
-        cleaningStatus: { in: ['NOT_REQUIRED', 'FAILED'] },
-      },
-    });
-
-    for (const image of images) {
-      this.autoCleanImage(image.id, userId).catch((err) => {
-        this.logger.error(
-          `[ImageCleaning] Auto-clean trigger failed for image ${image.id}: ${err.message}`,
-        );
-      });
-    }
+    // Background auto-cleaning disabled to keep original images clean and intact
+    return;
   }
 
   async autoCleanImage(productImageId: string, userId?: string) {
-    const image = await this.prisma.productImage.findUnique({
-      where: { id: productImageId },
-    });
-
-    if (!image || image.cleaningStatus === 'PROCESSING') {
-      return;
-    }
-
-    const task = await this.prisma.imageCleaningTask.create({
-      data: {
-        productImageId: image.id,
-        productId: image.productId,
-        provider: 'PHOTOROOM',
-        originalUrl: image.originalUrl,
-        status: 'PENDING',
-        createdBy: userId || null,
-      },
-    });
-
-    await this.prisma.productImage.update({
-      where: { id: image.id },
-      data: { cleaningStatus: 'PROCESSING' },
-    });
-
-    await this.processTaskInBackground(task.id, userId);
+    // Background auto-cleaning disabled to keep original images clean and intact
+    return;
   }
 
   async processTaskInBackground(taskId: string, userId?: string) {

@@ -62,53 +62,13 @@ let ImageCleaningService = ImageCleaningService_1 = class ImageCleaningService {
         };
     }
     async triggerBackgroundCleaningForProduct(productId, userId) {
-        const images = await this.prisma.productImage.findMany({
-            where: {
-                productId,
-                cleaningStatus: { in: ['NOT_REQUIRED', 'FAILED'] },
-            },
-        });
-        for (const image of images) {
-            this.autoCleanImage(image.id, userId).catch((err) => {
-                this.logger.error(`[ImageCleaning] Auto-clean trigger failed for image ${image.id}: ${err.message}`);
-            });
-        }
+        return;
     }
     async triggerBackgroundCleaningForCatalogue(catalogueId, userId) {
-        const images = await this.prisma.productImage.findMany({
-            where: {
-                product: { catalogueIds: { has: catalogueId } },
-                cleaningStatus: { in: ['NOT_REQUIRED', 'FAILED'] },
-            },
-        });
-        for (const image of images) {
-            this.autoCleanImage(image.id, userId).catch((err) => {
-                this.logger.error(`[ImageCleaning] Auto-clean trigger failed for image ${image.id}: ${err.message}`);
-            });
-        }
+        return;
     }
     async autoCleanImage(productImageId, userId) {
-        const image = await this.prisma.productImage.findUnique({
-            where: { id: productImageId },
-        });
-        if (!image || image.cleaningStatus === 'PROCESSING') {
-            return;
-        }
-        const task = await this.prisma.imageCleaningTask.create({
-            data: {
-                productImageId: image.id,
-                productId: image.productId,
-                provider: 'PHOTOROOM',
-                originalUrl: image.originalUrl,
-                status: 'PENDING',
-                createdBy: userId || null,
-            },
-        });
-        await this.prisma.productImage.update({
-            where: { id: image.id },
-            data: { cleaningStatus: 'PROCESSING' },
-        });
-        await this.processTaskInBackground(task.id, userId);
+        return;
     }
     async processTaskInBackground(taskId, userId) {
         const task = await this.prisma.imageCleaningTask.findUnique({

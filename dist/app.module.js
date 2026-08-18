@@ -33,7 +33,6 @@ const purchase_module_1 = require("./purchase/purchase.module");
 const core_1 = require("@nestjs/core");
 const audit_log_interceptor_1 = require("./common/interceptors/audit-log.interceptor");
 const report_module_1 = require("./report/report.module");
-const image_cleaning_module_1 = require("./image-cleaning/image-cleaning.module");
 const stock_module_1 = require("./stock/stock.module");
 const settings_module_1 = require("./settings/settings.module");
 const banner_module_1 = require("./banner/banner.module");
@@ -59,7 +58,6 @@ exports.AppModule = AppModule = __decorate([
             customer_module_1.CustomerModule,
             notification_module_1.NotificationModule,
             report_module_1.ReportModule,
-            image_cleaning_module_1.ImageCleaningModule,
             stock_module_1.StockModule,
             settings_module_1.SettingsModule,
             banner_module_1.BannerModule,

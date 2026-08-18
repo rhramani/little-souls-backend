@@ -36,6 +36,15 @@ class UpdateOrderItemsDto {
     items;
     discountTotal;
     taxPercent;
+    taxAmount;
+    packingCharges;
+    packingCtnNote;
+    otherCharges;
+    otherChargesNote;
+    otherDeduction;
+    otherDeductionNote;
+    discountType;
+    discountPercent;
 }
 exports.UpdateOrderItemsDto = UpdateOrderItemsDto;
 __decorate([
@@ -54,4 +63,49 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Number)
 ], UpdateOrderItemsDto.prototype, "taxPercent", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateOrderItemsDto.prototype, "taxAmount", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateOrderItemsDto.prototype, "packingCharges", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateOrderItemsDto.prototype, "packingCtnNote", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateOrderItemsDto.prototype, "otherCharges", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateOrderItemsDto.prototype, "otherChargesNote", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateOrderItemsDto.prototype, "otherDeduction", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateOrderItemsDto.prototype, "otherDeductionNote", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateOrderItemsDto.prototype, "discountType", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateOrderItemsDto.prototype, "discountPercent", void 0);
 //# sourceMappingURL=update-order-items.dto.js.map

@@ -93,7 +93,6 @@ model User {
   verifiedPayments            Payment[]            @relation("PaymentVerifiedBy")
   receivedPayments            Payment[]            @relation("PaymentReceivedBy")
   createdLedgerEntries        LedgerEntry[]        @relation("LedgerEntryCreatedBy")
-  createdCreditDebitNotes     CreditDebitNote[]    @relation("CreditDebitNoteCreatedBy")
   createdStockMovements       StockMovement[]      @relation("StockMovementCreatedBy")
   approvedAttendanceRecords   AttendanceRecord[]   @relation("AttendanceRecordApprovedBy")
   approvedLeaveRequests       LeaveRequest[]       @relation("LeaveRequestApprovedBy")
@@ -278,7 +277,6 @@ model Customer {
   invoices           Invoice[]
   payments           Payment[]
   ledgerEntries      LedgerEntry[]
-  creditDebitNotes   CreditDebitNote[]
   supportTickets     SupportTicket[]
   customerActivitySessions CustomerActivitySession[]
 
@@ -348,6 +346,7 @@ model Product {
   description         String?
   categoryId          String      @map("category_id") @db.ObjectId
   moq                 Int         @default(1)
+  fixQty              Int?        @map("fix_qty")
   barcode             String?
   barcodeUrl          String?
   brand               String?
@@ -619,6 +618,16 @@ model Order {
   grandTotal            Float   @map("grand_total")
   paymentStatus         String    @map("payment_status") // "UNPAID", "PARTIAL", "PAID"
   notes                 String?
+  transportName         String?   @map("transport_name")
+  ctn                   String?   @map("ctn")
+  packingCharges        Float?    @default(0) @map("packing_charges")
+  packingCtnNote        String?   @map("packing_ctn_note")
+  otherCharges          Float?    @default(0) @map("other_charges")
+  otherChargesNote      String?   @map("other_charges_note")
+  otherDeduction        Float?    @default(0) @map("other_deduction")
+  otherDeductionNote    String?   @map("other_deduction_note")
+  discountType          String?   @map("discount_type")
+  discountPercent       Float?    @default(0) @map("discount_percent")
   submittedAt           DateTime? @map("submitted_at")
   approvedBy            String?   @map("approved_by") @db.ObjectId
   approvedAt            DateTime? @map("approved_at")
@@ -854,28 +863,7 @@ model LedgerEntry {
   @@map("ledger_entries")
 }
 
-model CreditDebitNote {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  customerId    String   @map("customer_id") @db.ObjectId
-  noteNumber    String   @unique @map("note_number")
-  noteType      String   @map("note_type") // "CREDIT_NOTE", "DEBIT_NOTE"
-  chargeType    String?  @map("charge_type") // "DISCOUNT", "PACKING", "OTHER", "CUSTOM"
-  amount        Float
-  discountAmount Float?   @default(0) @map("discount_amount")
-  packingCharges Float?   @default(0) @map("packing_charges")
-  otherCharges  Float?   @default(0) @map("other_charges")
-  reason        String?
-  referenceType String   @map("reference_type") // "ORDER", "INVOICE", "PAYMENT", "MANUAL"
-  referenceId   String?  @map("reference_id") @db.ObjectId
-  createdBy     String?  @map("created_by") @db.ObjectId
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  customer      Customer? @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdByUser User?    @relation("CreditDebitNoteCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@map("credit_debit_notes")
-}
 
 
 model StockMovement {

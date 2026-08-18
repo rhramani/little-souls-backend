@@ -18,7 +18,6 @@ const billing_service_1 = require("./billing.service");
 const pdf_service_1 = require("./pdf.service");
 const record_payment_dto_1 = require("./dto/record-payment.dto");
 const query_billing_dto_1 = require("./dto/query-billing.dto");
-const create_credit_debit_note_dto_1 = require("./dto/create-credit-debit-note.dto");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const roles_guard_1 = require("../auth/roles.guard");
 const roles_decorator_1 = require("../auth/decorators/roles.decorator");
@@ -62,12 +61,6 @@ let BillingController = class BillingController {
         const customerId = user.userType === client_1.UserType.CUSTOMER ? user.customerId : undefined;
         return this.billingService.findAllPayments(query, customerId);
     }
-    async createCreditNote(dto, userId) {
-        return this.billingService.createCreditNote(dto, userId);
-    }
-    async createDebitNote(dto, userId) {
-        return this.billingService.createDebitNote(dto, userId);
-    }
     async verifyPayment(id, userId) {
         return this.billingService.verifyPayment(id, userId);
     }
@@ -110,12 +103,6 @@ let BillingController = class BillingController {
             'Content-Length': buffer.length,
         });
         res.end(buffer);
-    }
-    async updateCreditDebitNote(id, body) {
-        return this.billingService.updateCreditDebitNote(id, body);
-    }
-    async deleteCreditDebitNote(id) {
-        return this.billingService.deleteCreditDebitNote(id);
     }
 };
 exports.BillingController = BillingController;
@@ -175,26 +162,6 @@ __decorate([
     __metadata("design:paramtypes", [query_billing_dto_1.QueryBillingDto, Object]),
     __metadata("design:returntype", Promise)
 ], BillingController.prototype, "findAllPayments", null);
-__decorate([
-    (0, common_1.Post)('ledger/credit-note'),
-    (0, roles_decorator_1.Roles)(client_1.UserType.SUPER_ADMIN, client_1.UserType.STAFF),
-    (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, get_user_decorator_1.GetUser)('id')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_credit_debit_note_dto_1.CreateCreditDebitNoteDto, String]),
-    __metadata("design:returntype", Promise)
-], BillingController.prototype, "createCreditNote", null);
-__decorate([
-    (0, common_1.Post)('ledger/debit-note'),
-    (0, roles_decorator_1.Roles)(client_1.UserType.SUPER_ADMIN, client_1.UserType.STAFF),
-    (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, get_user_decorator_1.GetUser)('id')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_credit_debit_note_dto_1.CreateCreditDebitNoteDto, String]),
-    __metadata("design:returntype", Promise)
-], BillingController.prototype, "createDebitNote", null);
 __decorate([
     (0, common_1.Post)('payment/:id/verify'),
     (0, roles_decorator_1.Roles)(client_1.UserType.SUPER_ADMIN, client_1.UserType.STAFF),
@@ -289,25 +256,6 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], BillingController.prototype, "exportLedger", null);
-__decorate([
-    (0, common_1.Patch)('credit-debit-note/:id'),
-    (0, roles_decorator_1.Roles)(client_1.UserType.SUPER_ADMIN, client_1.UserType.STAFF),
-    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
-    __metadata("design:returntype", Promise)
-], BillingController.prototype, "updateCreditDebitNote", null);
-__decorate([
-    (0, common_1.Delete)('credit-debit-note/:id'),
-    (0, roles_decorator_1.Roles)(client_1.UserType.SUPER_ADMIN, client_1.UserType.STAFF),
-    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    __param(0, (0, common_1.Param)('id')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", Promise)
-], BillingController.prototype, "deleteCreditDebitNote", null);
 exports.BillingController = BillingController = __decorate([
     (0, common_1.Controller)('billing'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),

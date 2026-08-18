@@ -8,10 +8,22 @@ export declare class PosCheckoutDto {
     walkInName?: string;
     walkInMobile?: string;
     walkInGstin?: string;
+    walkInPricingGroupId?: string;
+    transportName?: string;
+    ctn?: string;
     items: PosOrderItemDto[];
     paymentMethod?: string;
     discountTotal?: number;
+    discountType?: string;
+    discountPercent?: number;
+    otherDeduction?: number;
+    otherDeductionNote?: string;
+    packingCharges?: number;
+    packingCtnNote?: string;
+    otherCharges?: number;
+    otherChargesNote?: string;
     taxPercent?: number;
+    taxAmount?: number;
     withGst?: boolean;
 }
 export {};
