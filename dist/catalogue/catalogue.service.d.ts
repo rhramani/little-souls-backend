@@ -13,6 +13,7 @@ export declare class CatalogueService {
     private formatSku;
     private getUniqueSku;
     private extractCleanNameAndSkuFromFilename;
+    private normalizeProductTax;
     create(dto: CreateCatalogueDto, userId: string): Promise<{
         products: ({
             images: {

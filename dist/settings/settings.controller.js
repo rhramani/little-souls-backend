@@ -66,9 +66,6 @@ let SettingsController = class SettingsController {
     async updateSettings(dto) {
         return this.settingsService.updateSettings(dto);
     }
-    async getAuditLogs(page, limit) {
-        return this.settingsService.getAuditLogs(Number(page) || 1, Number(limit) || 50);
-    }
     async exportBackup(res) {
         return this.settingsService.exportBackup(res);
     }
@@ -100,15 +97,6 @@ __decorate([
     __metadata("design:paramtypes", [update_settings_dto_1.UpdateSettingsDto]),
     __metadata("design:returntype", Promise)
 ], SettingsController.prototype, "updateSettings", null);
-__decorate([
-    (0, common_1.Get)('audit'),
-    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    __param(0, (0, common_1.Query)('page')),
-    __param(1, (0, common_1.Query)('limit')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number, Number]),
-    __metadata("design:returntype", Promise)
-], SettingsController.prototype, "getAuditLogs", null);
 __decorate([
     (0, common_1.Get)('backup/export'),
     __param(0, (0, common_1.Res)()),

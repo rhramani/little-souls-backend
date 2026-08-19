@@ -116,37 +116,6 @@ let SettingsService = class SettingsService {
             data: dataToSave,
         });
     }
-    async getAuditLogs(page, limit) {
-        const skip = (page - 1) * limit;
-        const [logs, total] = await Promise.all([
-            this.prisma.auditLog.findMany({
-                skip,
-                take: limit,
-                orderBy: { createdAt: 'desc' },
-                include: {
-                    user: {
-                        select: {
-                            name: true,
-                            userType: true,
-                            staff: {
-                                select: { designation: true },
-                            },
-                        },
-                    },
-                },
-            }),
-            this.prisma.auditLog.count(),
-        ]);
-        return {
-            logs,
-            pagination: {
-                total,
-                page,
-                limit,
-                totalPages: Math.ceil(total / limit),
-            },
-        };
-    }
     async exportBackup(res) {
         const backupData = {
             version: '1.0',
@@ -195,7 +164,6 @@ let SettingsService = class SettingsService {
             'supportTicket',
             'savedReport',
             'setting',
-            'auditLog',
             'catalogue',
         ];
         for (const model of prismaModels) {
@@ -292,7 +260,6 @@ let SettingsService = class SettingsService {
             'supportTicket',
             'savedReport',
             'setting',
-            'auditLog',
             'catalogue',
         ];
         for (const model of prismaModels) {

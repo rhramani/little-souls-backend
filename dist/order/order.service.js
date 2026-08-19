@@ -121,7 +121,11 @@ let OrderService = class OrderService {
                 }
                 const quantity = item.quantity;
                 totalQuantity += quantity;
-                const taxPercent = 0;
+                const taxPercent = product.taxPercent !== null && product.taxPercent !== undefined
+                    ? Number(product.taxPercent)
+                    : product.taxValue !== null && product.taxValue !== undefined
+                        ? Number(product.taxValue)
+                        : 18;
                 const customer = await tx.customer.findUnique({
                     where: { id: customerId },
                     select: { pricingGroupId: true },
@@ -283,8 +287,18 @@ let OrderService = class OrderService {
                     },
                     customer: {
                         select: {
+                            id: true,
                             businessName: true,
                             customerCode: true,
+                            mainContactNumber: true,
+                            pricingGroupId: true,
+                            pricingGroup: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    code: true,
+                                },
+                            },
                             billingAddressLine1: true,
                             billingAddressLine2: true,
                             billingCity: true,
@@ -777,8 +791,19 @@ let OrderService = class OrderService {
                 }
                 const quantity = itemInput.quantity;
                 totalQuantity += quantity;
-                const taxPercent = dto.taxPercent !== undefined
-                    ? Number(dto.taxPercent)
+                const hasGst = (dto.taxAmount !== undefined && Number(dto.taxAmount) > 0) ||
+                    (dto.taxPercent !== undefined && Number(dto.taxPercent) > 0) ||
+                    (itemInput.taxPercent !== undefined && Number(itemInput.taxPercent) > 0);
+                const taxPercent = hasGst
+                    ? itemInput.taxPercent !== undefined && Number(itemInput.taxPercent) > 0
+                        ? Number(itemInput.taxPercent)
+                        : product.taxPercent !== undefined && product.taxPercent !== null && Number(product.taxPercent) > 0
+                            ? Number(product.taxPercent)
+                            : product.taxValue !== undefined && product.taxValue !== null && Number(product.taxValue) > 0
+                                ? Number(product.taxValue)
+                                : dto.taxPercent !== undefined && Number(dto.taxPercent) > 0
+                                    ? Number(dto.taxPercent)
+                                    : 18
                     : 0;
                 const price = Number(itemInput.price);
                 const oldItem = order.items.find((i) => i.productId === itemInput.productId);
@@ -981,6 +1006,7 @@ let OrderService = class OrderService {
                             businessName: dto.walkInName || 'Walk-in Store Customer',
                             mainContactNumber: walkInMobile,
                             gstin: dto.walkInGstin || null,
+                            pricingGroupId: dto.walkInPricingGroupId || undefined,
                             customerSource: 'Walk-in Customer',
                             isActive: true,
                             approvalStatus: 'APPROVED',
@@ -1016,9 +1042,15 @@ let OrderService = class OrderService {
                 const quantity = itemInput.quantity;
                 totalQuantity += quantity;
                 const price = Number(itemInput.price);
-                const taxPercent = dto.withGst === true && dto.taxPercent !== undefined
-                    ? Number(dto.taxPercent)
-                    : 0;
+                const taxPercent = dto.withGst === false
+                    ? 0
+                    : itemInput.taxPercent !== undefined && itemInput.taxPercent !== null
+                        ? Number(itemInput.taxPercent)
+                        : product.taxPercent !== null && product.taxPercent !== undefined
+                            ? Number(product.taxPercent)
+                            : dto.taxPercent !== undefined
+                                ? Number(dto.taxPercent)
+                                : 0;
                 const lineSubTotal = price * quantity;
                 subTotal = subTotal + lineSubTotal;
                 resolvedItems.push({

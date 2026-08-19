@@ -1,5 +1,5 @@
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateSupplierDto, UpdateSupplierDto, CreatePurchasedProductDto, UpdatePurchasedProductDto, CreatePurchaseInvoiceDto, CreateSupplierPaymentDto } from './dto/purchase.dto';
+import { CreateSupplierDto, UpdateSupplierDto, CreatePurchasedProductDto, UpdatePurchasedProductDto, CreatePurchaseInvoiceDto, CreateSupplierPaymentDto, UpdateSupplierPaymentDto } from './dto/purchase.dto';
 export declare class PurchaseService {
     private readonly prisma;
     constructor(prisma: PrismaService);
@@ -20,9 +20,31 @@ export declare class PurchaseService {
             purchasePrice: number;
             sellingPrice: number | null;
             supplierId: string;
+            purchaseInvoiceId: string | null;
             purchaseDate: Date;
             movedToCatalogId: string | null;
+            movedToCategoryId: string | null;
             movedAt: Date | null;
+        }[];
+        purchaseInvoices: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            discountPercent: number | null;
+            otherCharges: number | null;
+            withGst: boolean;
+            invoiceNumber: string;
+            invoiceDate: Date;
+            grandTotal: number;
+            supplierId: string;
+            discountOther: number | null;
+            businessState: string;
+            gstRate: number;
+            subtotal: number;
+            discountAmount: number;
+            cgstAmount: number;
+            sgstAmount: number;
+            igstAmount: number;
         }[];
         supplierPayments: {
             id: string;
@@ -33,6 +55,7 @@ export declare class PurchaseService {
             paymentMode: string;
             referenceNumber: string | null;
             supplierId: string;
+            purchaseInvoiceId: string | null;
             paymentDate: Date;
         }[];
     } & {
@@ -44,8 +67,8 @@ export declare class PurchaseService {
         updatedAt: Date;
         status: string;
         notes: string | null;
-        companyName: string;
-        contactPerson: string;
+        companyName: string | null;
+        contactPerson: string | null;
         gstNumber: string | null;
         address: string;
         city: string;
@@ -62,8 +85,8 @@ export declare class PurchaseService {
         updatedAt: Date;
         status: string;
         notes: string | null;
-        companyName: string;
-        contactPerson: string;
+        companyName: string | null;
+        contactPerson: string | null;
         gstNumber: string | null;
         address: string;
         city: string;
@@ -80,8 +103,8 @@ export declare class PurchaseService {
         updatedAt: Date;
         status: string;
         notes: string | null;
-        companyName: string;
-        contactPerson: string;
+        companyName: string | null;
+        contactPerson: string | null;
         gstNumber: string | null;
         address: string;
         city: string;
@@ -98,8 +121,8 @@ export declare class PurchaseService {
         updatedAt: Date;
         status: string;
         notes: string | null;
-        companyName: string;
-        contactPerson: string;
+        companyName: string | null;
+        contactPerson: string | null;
         gstNumber: string | null;
         address: string;
         city: string;
@@ -116,8 +139,8 @@ export declare class PurchaseService {
         updatedAt: Date;
         status: string;
         notes: string | null;
-        companyName: string;
-        contactPerson: string;
+        companyName: string | null;
+        contactPerson: string | null;
         gstNumber: string | null;
         address: string;
         city: string;
@@ -135,8 +158,8 @@ export declare class PurchaseService {
             updatedAt: Date;
             status: string;
             notes: string | null;
-            companyName: string;
-            contactPerson: string;
+            companyName: string | null;
+            contactPerson: string | null;
             gstNumber: string | null;
             address: string;
             city: string;
@@ -144,6 +167,26 @@ export declare class PurchaseService {
             country: string;
             pincode: string;
         };
+        purchaseInvoice: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            discountPercent: number | null;
+            otherCharges: number | null;
+            withGst: boolean;
+            invoiceNumber: string;
+            invoiceDate: Date;
+            grandTotal: number;
+            supplierId: string;
+            discountOther: number | null;
+            businessState: string;
+            gstRate: number;
+            subtotal: number;
+            discountAmount: number;
+            cgstAmount: number;
+            sgstAmount: number;
+            igstAmount: number;
+        } | null;
     } & {
         category: string | null;
         productImage: string | null;
@@ -160,8 +203,10 @@ export declare class PurchaseService {
         purchasePrice: number;
         sellingPrice: number | null;
         supplierId: string;
+        purchaseInvoiceId: string | null;
         purchaseDate: Date;
         movedToCatalogId: string | null;
+        movedToCategoryId: string | null;
         movedAt: Date | null;
     })[]>;
     findOnePurchasedProduct(id: string): Promise<{
@@ -174,8 +219,8 @@ export declare class PurchaseService {
             updatedAt: Date;
             status: string;
             notes: string | null;
-            companyName: string;
-            contactPerson: string;
+            companyName: string | null;
+            contactPerson: string | null;
             gstNumber: string | null;
             address: string;
             city: string;
@@ -183,6 +228,26 @@ export declare class PurchaseService {
             country: string;
             pincode: string;
         };
+        purchaseInvoice: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            discountPercent: number | null;
+            otherCharges: number | null;
+            withGst: boolean;
+            invoiceNumber: string;
+            invoiceDate: Date;
+            grandTotal: number;
+            supplierId: string;
+            discountOther: number | null;
+            businessState: string;
+            gstRate: number;
+            subtotal: number;
+            discountAmount: number;
+            cgstAmount: number;
+            sgstAmount: number;
+            igstAmount: number;
+        } | null;
     } & {
         category: string | null;
         productImage: string | null;
@@ -199,8 +264,10 @@ export declare class PurchaseService {
         purchasePrice: number;
         sellingPrice: number | null;
         supplierId: string;
+        purchaseInvoiceId: string | null;
         purchaseDate: Date;
         movedToCatalogId: string | null;
+        movedToCategoryId: string | null;
         movedAt: Date | null;
     }>;
     createPurchasedProduct(dto: CreatePurchasedProductDto): Promise<{
@@ -219,8 +286,10 @@ export declare class PurchaseService {
         purchasePrice: number;
         sellingPrice: number | null;
         supplierId: string;
+        purchaseInvoiceId: string | null;
         purchaseDate: Date;
         movedToCatalogId: string | null;
+        movedToCategoryId: string | null;
         movedAt: Date | null;
     }>;
     updatePurchasedProduct(id: string, dto: UpdatePurchasedProductDto): Promise<{
@@ -239,8 +308,10 @@ export declare class PurchaseService {
         purchasePrice: number;
         sellingPrice: number | null;
         supplierId: string;
+        purchaseInvoiceId: string | null;
         purchaseDate: Date;
         movedToCatalogId: string | null;
+        movedToCategoryId: string | null;
         movedAt: Date | null;
     }>;
     removePurchasedProduct(id: string): Promise<{
@@ -259,8 +330,10 @@ export declare class PurchaseService {
         purchasePrice: number;
         sellingPrice: number | null;
         supplierId: string;
+        purchaseInvoiceId: string | null;
         purchaseDate: Date;
         movedToCatalogId: string | null;
+        movedToCategoryId: string | null;
         movedAt: Date | null;
     }>;
     findAllPurchaseInvoices(): Promise<({
@@ -273,8 +346,8 @@ export declare class PurchaseService {
             updatedAt: Date;
             status: string;
             notes: string | null;
-            companyName: string;
-            contactPerson: string;
+            companyName: string | null;
+            contactPerson: string | null;
             gstNumber: string | null;
             address: string;
             city: string;
@@ -290,20 +363,48 @@ export declare class PurchaseService {
             unit: string;
             taxPercent: number;
             discountPercent: number;
-            productId: string;
+            productId: string | null;
+            quantity: number;
+            otherCharges: number;
+            purchasePrice: number;
+            sellingPrice: number | null;
+            purchaseInvoiceId: string;
+            discountOther: number;
+        }[];
+        purchasedProducts: {
+            category: string | null;
+            productImage: string | null;
+            name: string;
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            description: string | null;
+            sku: string;
+            brand: string | null;
+            unit: string;
             quantity: number;
             purchasePrice: number;
-            purchaseInvoiceId: string;
+            sellingPrice: number | null;
+            supplierId: string;
+            purchaseInvoiceId: string | null;
+            purchaseDate: Date;
+            movedToCatalogId: string | null;
+            movedToCategoryId: string | null;
+            movedAt: Date | null;
         }[];
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        discountPercent: number | null;
+        otherCharges: number | null;
         withGst: boolean;
         invoiceNumber: string;
         invoiceDate: Date;
         grandTotal: number;
         supplierId: string;
+        discountOther: number | null;
         businessState: string;
         gstRate: number;
         subtotal: number;
@@ -322,8 +423,8 @@ export declare class PurchaseService {
             updatedAt: Date;
             status: string;
             notes: string | null;
-            companyName: string;
-            contactPerson: string;
+            companyName: string | null;
+            contactPerson: string | null;
             gstNumber: string | null;
             address: string;
             city: string;
@@ -339,20 +440,48 @@ export declare class PurchaseService {
             unit: string;
             taxPercent: number;
             discountPercent: number;
-            productId: string;
+            productId: string | null;
+            quantity: number;
+            otherCharges: number;
+            purchasePrice: number;
+            sellingPrice: number | null;
+            purchaseInvoiceId: string;
+            discountOther: number;
+        }[];
+        purchasedProducts: {
+            category: string | null;
+            productImage: string | null;
+            name: string;
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            description: string | null;
+            sku: string;
+            brand: string | null;
+            unit: string;
             quantity: number;
             purchasePrice: number;
-            purchaseInvoiceId: string;
+            sellingPrice: number | null;
+            supplierId: string;
+            purchaseInvoiceId: string | null;
+            purchaseDate: Date;
+            movedToCatalogId: string | null;
+            movedToCategoryId: string | null;
+            movedAt: Date | null;
         }[];
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        discountPercent: number | null;
+        otherCharges: number | null;
         withGst: boolean;
         invoiceNumber: string;
         invoiceDate: Date;
         grandTotal: number;
         supplierId: string;
+        discountOther: number | null;
         businessState: string;
         gstRate: number;
         subtotal: number;
@@ -361,6 +490,103 @@ export declare class PurchaseService {
         sgstAmount: number;
         igstAmount: number;
     }) | null>;
+    updatePurchaseInvoice(id: string, dto: CreatePurchaseInvoiceDto): Promise<({
+        supplier: {
+            name: string;
+            email: string;
+            mobile: string;
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            notes: string | null;
+            companyName: string | null;
+            contactPerson: string | null;
+            gstNumber: string | null;
+            address: string;
+            city: string;
+            state: string;
+            country: string;
+            pincode: string;
+        };
+        items: {
+            name: string;
+            id: string;
+            total: number;
+            sku: string;
+            unit: string;
+            taxPercent: number;
+            discountPercent: number;
+            productId: string | null;
+            quantity: number;
+            otherCharges: number;
+            purchasePrice: number;
+            sellingPrice: number | null;
+            purchaseInvoiceId: string;
+            discountOther: number;
+        }[];
+        purchasedProducts: {
+            category: string | null;
+            productImage: string | null;
+            name: string;
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            description: string | null;
+            sku: string;
+            brand: string | null;
+            unit: string;
+            quantity: number;
+            purchasePrice: number;
+            sellingPrice: number | null;
+            supplierId: string;
+            purchaseInvoiceId: string | null;
+            purchaseDate: Date;
+            movedToCatalogId: string | null;
+            movedToCategoryId: string | null;
+            movedAt: Date | null;
+        }[];
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        discountPercent: number | null;
+        otherCharges: number | null;
+        withGst: boolean;
+        invoiceNumber: string;
+        invoiceDate: Date;
+        grandTotal: number;
+        supplierId: string;
+        discountOther: number | null;
+        businessState: string;
+        gstRate: number;
+        subtotal: number;
+        discountAmount: number;
+        cgstAmount: number;
+        sgstAmount: number;
+        igstAmount: number;
+    }) | null>;
+    removePurchaseInvoice(id: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        discountPercent: number | null;
+        otherCharges: number | null;
+        withGst: boolean;
+        invoiceNumber: string;
+        invoiceDate: Date;
+        grandTotal: number;
+        supplierId: string;
+        discountOther: number | null;
+        businessState: string;
+        gstRate: number;
+        subtotal: number;
+        discountAmount: number;
+        cgstAmount: number;
+        sgstAmount: number;
+        igstAmount: number;
+    }>;
     findAllSupplierPayments(): Promise<({
         supplier: {
             name: string;
@@ -371,8 +597,8 @@ export declare class PurchaseService {
             updatedAt: Date;
             status: string;
             notes: string | null;
-            companyName: string;
-            contactPerson: string;
+            companyName: string | null;
+            contactPerson: string | null;
             gstNumber: string | null;
             address: string;
             city: string;
@@ -380,6 +606,26 @@ export declare class PurchaseService {
             country: string;
             pincode: string;
         };
+        purchaseInvoice: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            discountPercent: number | null;
+            otherCharges: number | null;
+            withGst: boolean;
+            invoiceNumber: string;
+            invoiceDate: Date;
+            grandTotal: number;
+            supplierId: string;
+            discountOther: number | null;
+            businessState: string;
+            gstRate: number;
+            subtotal: number;
+            discountAmount: number;
+            cgstAmount: number;
+            sgstAmount: number;
+            igstAmount: number;
+        } | null;
     } & {
         id: string;
         createdAt: Date;
@@ -389,6 +635,7 @@ export declare class PurchaseService {
         paymentMode: string;
         referenceNumber: string | null;
         supplierId: string;
+        purchaseInvoiceId: string | null;
         paymentDate: Date;
     })[]>;
     createSupplierPayment(dto: CreateSupplierPaymentDto): Promise<{
@@ -401,8 +648,8 @@ export declare class PurchaseService {
             updatedAt: Date;
             status: string;
             notes: string | null;
-            companyName: string;
-            contactPerson: string;
+            companyName: string | null;
+            contactPerson: string | null;
             gstNumber: string | null;
             address: string;
             city: string;
@@ -410,6 +657,26 @@ export declare class PurchaseService {
             country: string;
             pincode: string;
         };
+        purchaseInvoice: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            discountPercent: number | null;
+            otherCharges: number | null;
+            withGst: boolean;
+            invoiceNumber: string;
+            invoiceDate: Date;
+            grandTotal: number;
+            supplierId: string;
+            discountOther: number | null;
+            businessState: string;
+            gstRate: number;
+            subtotal: number;
+            discountAmount: number;
+            cgstAmount: number;
+            sgstAmount: number;
+            igstAmount: number;
+        } | null;
     } & {
         id: string;
         createdAt: Date;
@@ -419,6 +686,58 @@ export declare class PurchaseService {
         paymentMode: string;
         referenceNumber: string | null;
         supplierId: string;
+        purchaseInvoiceId: string | null;
+        paymentDate: Date;
+    }>;
+    updateSupplierPayment(id: string, dto: UpdateSupplierPaymentDto): Promise<{
+        supplier: {
+            name: string;
+            email: string;
+            mobile: string;
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            notes: string | null;
+            companyName: string | null;
+            contactPerson: string | null;
+            gstNumber: string | null;
+            address: string;
+            city: string;
+            state: string;
+            country: string;
+            pincode: string;
+        };
+        purchaseInvoice: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            discountPercent: number | null;
+            otherCharges: number | null;
+            withGst: boolean;
+            invoiceNumber: string;
+            invoiceDate: Date;
+            grandTotal: number;
+            supplierId: string;
+            discountOther: number | null;
+            businessState: string;
+            gstRate: number;
+            subtotal: number;
+            discountAmount: number;
+            cgstAmount: number;
+            sgstAmount: number;
+            igstAmount: number;
+        } | null;
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        notes: string | null;
+        amount: number;
+        paymentMode: string;
+        referenceNumber: string | null;
+        supplierId: string;
+        purchaseInvoiceId: string | null;
         paymentDate: Date;
     }>;
     removeSupplierPayment(id: string): Promise<{
@@ -430,6 +749,7 @@ export declare class PurchaseService {
         paymentMode: string;
         referenceNumber: string | null;
         supplierId: string;
+        purchaseInvoiceId: string | null;
         paymentDate: Date;
     }>;
 }

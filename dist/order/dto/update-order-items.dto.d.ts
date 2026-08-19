@@ -2,6 +2,7 @@ export declare class UpdateOrderItemDto {
     productId: string;
     quantity: number;
     price: number;
+    taxPercent?: number;
 }
 export declare class UpdateOrderItemsDto {
     items: UpdateOrderItemDto[];

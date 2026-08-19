@@ -90,9 +90,39 @@ let ImportService = class ImportService {
                                 moq: rowData.moq ? parseInt(rowData.moq) : 1,
                                 fixQty: rowData.fixQty ? parseInt(rowData.fixQty) : null,
                                 weight: rowData.weight ? Number(rowData.weight) : null,
-                                taxPercent: rowData.taxPercent
-                                    ? Number(rowData.taxPercent)
-                                    : null,
+                                taxType: (() => {
+                                    const raw = rowData.taxType ||
+                                        rowData.gstType ||
+                                        rowData['Tax Type'] ||
+                                        rowData['GST Type'] ||
+                                        rowData.tax_type ||
+                                        rowData.gst_type;
+                                    if (!raw)
+                                        return null;
+                                    const clean = String(raw).trim().toUpperCase();
+                                    if (clean.includes('CGST') || clean.includes('SGST'))
+                                        return 'CGST_SGST';
+                                    if (clean.includes('IGST'))
+                                        return 'IGST';
+                                    return null;
+                                })(),
+                                taxPercent: (() => {
+                                    const raw = rowData.taxValue ??
+                                        rowData.taxPercent ??
+                                        rowData.gstValue ??
+                                        rowData.gstPercent ??
+                                        rowData['Tax Value'] ??
+                                        rowData['Tax Value (%)'] ??
+                                        rowData['Tax %'] ??
+                                        rowData['GST Value'] ??
+                                        rowData['GST %'];
+                                    if (raw === undefined || raw === null || String(raw).trim() === '')
+                                        return null;
+                                    const num = Number(String(raw).replace(/%/g, '').trim());
+                                    if (isNaN(num))
+                                        return null;
+                                    return num > 0 && num <= 1 ? Math.round(num * 100) : num;
+                                })(),
                                 stockQuantity: rowData.stockQuantity
                                     ? parseInt(rowData.stockQuantity)
                                     : 0,
@@ -142,9 +172,43 @@ let ImportService = class ImportService {
                                 moq: rowData.moq ? parseInt(rowData.moq) : undefined,
                                 fixQty: rowData.fixQty ? parseInt(rowData.fixQty) : undefined,
                                 weight: rowData.weight ? Number(rowData.weight) : undefined,
-                                taxPercent: rowData.taxPercent
-                                    ? Number(rowData.taxPercent)
-                                    : undefined,
+                                taxType: (() => {
+                                    const raw = rowData.taxType ??
+                                        rowData.gstType ??
+                                        rowData['Tax Type'] ??
+                                        rowData['GST Type'] ??
+                                        rowData.tax_type ??
+                                        rowData.gst_type;
+                                    if (raw === undefined)
+                                        return undefined;
+                                    if (raw === null || String(raw).trim() === '')
+                                        return null;
+                                    const clean = String(raw).trim().toUpperCase();
+                                    if (clean.includes('CGST') || clean.includes('SGST'))
+                                        return 'CGST_SGST';
+                                    if (clean.includes('IGST'))
+                                        return 'IGST';
+                                    return null;
+                                })(),
+                                taxPercent: (() => {
+                                    const raw = rowData.taxValue ??
+                                        rowData.taxPercent ??
+                                        rowData.gstValue ??
+                                        rowData.gstPercent ??
+                                        rowData['Tax Value'] ??
+                                        rowData['Tax Value (%)'] ??
+                                        rowData['Tax %'] ??
+                                        rowData['GST Value'] ??
+                                        rowData['GST %'];
+                                    if (raw === undefined)
+                                        return undefined;
+                                    if (raw === null || String(raw).trim() === '')
+                                        return null;
+                                    const num = Number(String(raw).replace(/%/g, '').trim());
+                                    if (isNaN(num))
+                                        return null;
+                                    return num > 0 && num <= 1 ? Math.round(num * 100) : num;
+                                })(),
                                 updatedBy: userId,
                             },
                         });
@@ -296,6 +360,42 @@ let ImportService = class ImportService {
             .replace(/[^\w\-]+/g, '')
             .replace(/\-\-+/g, '-');
     }
+    normalizeProductTax(p) {
+        if (!p)
+            return { taxType: '', taxValue: '' };
+        const rawType = String(p.taxType || '').trim();
+        const upperType = rawType.toUpperCase();
+        let taxType = '';
+        if (upperType === 'CGST_SGST' ||
+            upperType === 'CGST + SGST' ||
+            upperType === 'CGST+SGST' ||
+            upperType === 'CGST/SGST' ||
+            upperType === 'CGST & SGST' ||
+            upperType.includes('CGST') ||
+            upperType.includes('SGST')) {
+            taxType = 'CGST + SGST';
+        }
+        else if (upperType === 'IGST' || upperType.includes('IGST')) {
+            taxType = 'IGST';
+        }
+        let taxValue = '';
+        if (p.taxPercent !== null && p.taxPercent !== undefined && String(p.taxPercent).trim() !== '') {
+            const num = Number(p.taxPercent);
+            if (!isNaN(num)) {
+                taxValue = num > 0 && num <= 1 ? String(Math.round(num * 100)) : String(num);
+            }
+        }
+        if ((!taxValue || taxValue === '0') && rawType && !isNaN(Number(rawType))) {
+            const num = Number(rawType);
+            if (num > 0 && num <= 1) {
+                taxValue = String(Math.round(num * 100));
+            }
+            else if (num > 0) {
+                taxValue = String(num);
+            }
+        }
+        return { taxType, taxValue };
+    }
     async exportCatalog() {
         const ExcelJS = require('exceljs');
         const workbook = new ExcelJS.Workbook();
@@ -313,12 +413,15 @@ let ImportService = class ImportService {
             { header: 'Size', key: 'size', width: 15 },
             { header: 'Color', key: 'color', width: 15 },
             { header: 'Unit', key: 'unit', width: 10 },
+            { header: 'Tax Type', key: 'taxType', width: 18 },
+            { header: 'Tax Value', key: 'taxValue', width: 15 },
             { header: 'Stock Quantity', key: 'stockQuantity', width: 15 },
         ];
         const products = await this.prisma.product.findMany({
             include: { category: true },
         });
         products.forEach((p) => {
+            const { taxType: exportTaxType, taxValue: exportTaxValue } = this.normalizeProductTax(p);
             productsSheet.addRow({
                 sku: p.sku,
                 name: p.name,
@@ -332,6 +435,8 @@ let ImportService = class ImportService {
                 size: p.size,
                 color: p.color,
                 unit: p.unit,
+                taxType: exportTaxType,
+                taxValue: exportTaxValue,
                 stockQuantity: p.stockQuantity,
             });
         });

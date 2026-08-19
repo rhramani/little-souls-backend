@@ -98,7 +98,10 @@ export class ProductService {
           unit: dto.unit || 'PCS',
           hsnCode: dto.hsnCode,
           weight: dto.weight ? Number(dto.weight) : null,
-          taxPercent: dto.taxPercent ? Number(dto.taxPercent) : null,
+          taxPercent:
+            dto.taxPercent !== undefined && dto.taxPercent !== null && (dto.taxPercent as any) !== ''
+              ? Number(dto.taxPercent)
+              : null,
           stockQuantity: dto.stockQuantity || 0,
           stockStatus: dto.stockStatus || 'IN_STOCK',
           allowBackorder: dto.allowBackorder || false,
@@ -114,7 +117,7 @@ export class ProductService {
             dto.discountedPrice !== undefined
               ? Number(dto.discountedPrice)
               : null,
-          taxType: dto.taxType,
+          taxType: dto.taxType || null,
           parentProductSku: dto.parentProductSku,
           parentProductId: dto.parentProductId,
           privateNotes: dto.privateNotes,
@@ -547,7 +550,12 @@ export class ProductService {
           unit: dto.unit,
           hsnCode: dto.hsnCode,
           weight: dto.weight ? Number(dto.weight) : undefined,
-          taxPercent: dto.taxPercent ? Number(dto.taxPercent) : undefined,
+          taxPercent:
+            dto.taxPercent !== undefined
+              ? dto.taxPercent === null || (dto.taxPercent as any) === ''
+                ? null
+                : Number(dto.taxPercent)
+              : undefined,
           stockQuantity: dto.stockQuantity,
           stockStatus: dto.stockStatus,
           allowBackorder: dto.allowBackorder,
@@ -573,7 +581,12 @@ export class ProductService {
                 ? null
                 : Number(dto.discountedPrice)
               : undefined,
-          taxType: dto.taxType !== undefined ? dto.taxType : undefined,
+          taxType:
+            dto.taxType !== undefined
+              ? dto.taxType === null || (dto.taxType as any) === ''
+                ? null
+                : dto.taxType
+              : undefined,
           parentProductSku:
             dto.parentProductSku !== undefined
               ? dto.parentProductSku

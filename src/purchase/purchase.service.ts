@@ -7,6 +7,7 @@ import {
   UpdatePurchasedProductDto,
   CreatePurchaseInvoiceDto,
   CreateSupplierPaymentDto,
+  UpdateSupplierPaymentDto,
 } from './dto/purchase.dto';
 
 @Injectable()
@@ -21,6 +22,7 @@ export class PurchaseService {
     return this.prisma.supplier.findMany({
       include: {
         purchasedProducts: true,
+        purchaseInvoices: true,
         supplierPayments: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -90,7 +92,10 @@ export class PurchaseService {
 
   async findAllPurchasedProducts() {
     return this.prisma.purchasedProduct.findMany({
-      include: { supplier: true },
+      include: {
+        supplier: true,
+        purchaseInvoice: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -98,7 +103,10 @@ export class PurchaseService {
   async findOnePurchasedProduct(id: string) {
     const product = await this.prisma.purchasedProduct.findUnique({
       where: { id },
-      include: { supplier: true },
+      include: {
+        supplier: true,
+        purchaseInvoice: true,
+      },
     });
     if (!product) {
       throw new NotFoundException(`Purchased product with ID "${id}" not found.`);
@@ -109,14 +117,6 @@ export class PurchaseService {
   async createPurchasedProduct(dto: CreatePurchasedProductDto) {
     // Check if supplier exists
     await this.findOneSupplier(dto.supplierId);
-
-    // Verify SKU uniqueness
-    const skuExists = await this.prisma.purchasedProduct.findUnique({
-      where: { sku: dto.sku },
-    });
-    if (skuExists) {
-      throw new ConflictException(`A purchased product with SKU "${dto.sku}" already exists.`);
-    }
 
     return this.prisma.purchasedProduct.create({
       data: {
@@ -130,6 +130,7 @@ export class PurchaseService {
         category: dto.category,
         brand: dto.brand,
         supplierId: dto.supplierId,
+        purchaseInvoiceId: dto.purchaseInvoiceId,
         purchaseDate: new Date(dto.purchaseDate),
         description: dto.description,
         status: dto.status || 'Active',
@@ -142,16 +143,6 @@ export class PurchaseService {
 
     if (dto.supplierId) {
       await this.findOneSupplier(dto.supplierId);
-    }
-
-    // Verify SKU uniqueness if changing SKU
-    if (dto.sku) {
-      const skuExists = await this.prisma.purchasedProduct.findUnique({
-        where: { sku: dto.sku },
-      });
-      if (skuExists && skuExists.id !== id) {
-        throw new ConflictException(`SKU "${dto.sku}" is already in use by another product.`);
-      }
     }
 
     const data: any = { ...dto };
@@ -185,6 +176,7 @@ export class PurchaseService {
       include: {
         supplier: true,
         items: true,
+        purchasedProducts: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -202,10 +194,8 @@ export class PurchaseService {
       throw new ConflictException(`Invoice number "${dto.invoiceNumber}" already exists.`);
     }
 
-    // In MongoDB replica sets, transactions are supported.
-    // If not in a replica set, standard sequential writes work.
-    // Since prisma.$transaction works, we will execute it:
     return this.prisma.$transaction(async (tx) => {
+      // Create the invoice
       const invoice = await tx.purchaseInvoice.create({
         data: {
           invoiceNumber: dto.invoiceNumber,
@@ -216,6 +206,9 @@ export class PurchaseService {
           gstRate: dto.gstRate,
           subtotal: dto.subtotal,
           discountAmount: dto.discountAmount,
+          discountPercent: dto.discountPercent !== undefined ? dto.discountPercent : 0,
+          discountOther: dto.discountOther !== undefined ? dto.discountOther : 0,
+          otherCharges: dto.otherCharges !== undefined ? dto.otherCharges : 0,
           cgstAmount: dto.cgstAmount,
           sgstAmount: dto.sgstAmount,
           igstAmount: dto.igstAmount,
@@ -223,15 +216,19 @@ export class PurchaseService {
         },
       });
 
+      // Create invoice items
       const itemsData = dto.items.map((item) => ({
         purchaseInvoiceId: invoice.id,
-        productId: item.productId,
+        productId: item.productId || null,
         name: item.name,
         sku: item.sku,
         purchasePrice: item.purchasePrice,
+        sellingPrice: item.sellingPrice || null,
         quantity: item.quantity,
         unit: item.unit,
         discountPercent: item.discountPercent,
+        discountOther: item.discountOther || 0,
+        otherCharges: item.otherCharges || 0,
         taxPercent: item.taxPercent,
         total: item.total,
       }));
@@ -240,13 +237,174 @@ export class PurchaseService {
         data: itemsData,
       });
 
+      // For each item, create or update PurchasedProduct records
+      for (const item of dto.items) {
+        // Check if a product with the same SKU and supplierId already exists
+        const existingProducts = await tx.purchasedProduct.findMany({
+          where: {
+            sku: item.sku,
+            supplierId: dto.supplierId,
+          },
+        });
+
+        if (existingProducts.length > 0) {
+          // Update existing product: increment quantity, update price to latest
+          const existing = existingProducts[0];
+          await tx.purchasedProduct.update({
+            where: { id: existing.id },
+            data: {
+              quantity: existing.quantity + item.quantity,
+              purchasePrice: item.purchasePrice,
+              sellingPrice: item.sellingPrice || existing.sellingPrice,
+              purchaseDate: new Date(dto.invoiceDate),
+              purchaseInvoiceId: invoice.id,
+              name: item.name,
+              productImage: item.productImage || existing.productImage,
+              description: item.description || existing.description,
+            },
+          });
+        } else {
+          // Create new product record
+          await tx.purchasedProduct.create({
+            data: {
+              name: item.name,
+              sku: item.sku,
+              purchasePrice: item.purchasePrice,
+              sellingPrice: item.sellingPrice,
+              quantity: item.quantity,
+              unit: item.unit,
+              supplierId: dto.supplierId,
+              purchaseInvoiceId: invoice.id,
+              purchaseDate: new Date(dto.invoiceDate),
+              productImage: item.productImage,
+              description: item.description,
+              category: item.category,
+              brand: item.brand,
+              status: 'Active',
+            },
+          });
+        }
+      }
+
       // Reload the created invoice with relations
       return tx.purchaseInvoice.findUnique({
         where: { id: invoice.id },
         include: {
           supplier: true,
           items: true,
+          purchasedProducts: true,
         },
+      });
+    });
+  }
+
+  async updatePurchaseInvoice(id: string, dto: CreatePurchaseInvoiceDto) {
+    const existingInv = await this.prisma.purchaseInvoice.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!existingInv) {
+      throw new NotFoundException(`Purchase invoice with ID "${id}" not found.`);
+    }
+
+    if (dto.supplierId) {
+      await this.findOneSupplier(dto.supplierId);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Update invoice header
+      await tx.purchaseInvoice.update({
+        where: { id },
+        data: {
+          invoiceNumber: dto.invoiceNumber,
+          invoiceDate: new Date(dto.invoiceDate),
+          supplierId: dto.supplierId,
+          businessState: dto.businessState,
+          withGst: dto.withGst,
+          gstRate: dto.gstRate,
+          subtotal: dto.subtotal,
+          discountAmount: dto.discountAmount,
+          discountPercent: dto.discountPercent !== undefined ? dto.discountPercent : 0,
+          discountOther: dto.discountOther !== undefined ? dto.discountOther : 0,
+          otherCharges: dto.otherCharges !== undefined ? dto.otherCharges : 0,
+          cgstAmount: dto.cgstAmount,
+          sgstAmount: dto.sgstAmount,
+          igstAmount: dto.igstAmount,
+          grandTotal: dto.grandTotal,
+        },
+      });
+
+      // Delete existing line items
+      await tx.purchaseInvoiceItem.deleteMany({
+        where: { purchaseInvoiceId: id },
+      });
+
+      // Insert new line items
+      const itemsData = dto.items.map((item) => ({
+        purchaseInvoiceId: id,
+        productId: item.productId || null,
+        name: item.name,
+        sku: item.sku,
+        purchasePrice: item.purchasePrice,
+        sellingPrice: item.sellingPrice || null,
+        quantity: item.quantity,
+        unit: item.unit,
+        discountPercent: item.discountPercent,
+        discountOther: item.discountOther || 0,
+        otherCharges: item.otherCharges || 0,
+        taxPercent: item.taxPercent,
+        total: item.total,
+      }));
+
+      await tx.purchaseInvoiceItem.createMany({
+        data: itemsData,
+      });
+
+      return tx.purchaseInvoice.findUnique({
+        where: { id },
+        include: {
+          supplier: true,
+          items: true,
+          purchasedProducts: true,
+        },
+      });
+    });
+  }
+
+  async removePurchaseInvoice(id: string) {
+    const invoice = await this.prisma.purchaseInvoice.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!invoice) {
+      throw new NotFoundException(`Purchase invoice with ID "${id}" not found.`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Delete associated supplier payments tied to this invoice or invoice number
+      await tx.supplierPayment.deleteMany({
+        where: {
+          OR: [
+            { purchaseInvoiceId: id },
+            { referenceNumber: invoice.invoiceNumber },
+            { notes: { contains: invoice.invoiceNumber } },
+          ],
+        },
+      });
+
+      // 2. Delete purchased products linked to this invoice
+      await tx.purchasedProduct.deleteMany({
+        where: { purchaseInvoiceId: id },
+      });
+
+      // 3. Delete invoice line items
+      await tx.purchaseInvoiceItem.deleteMany({
+        where: { purchaseInvoiceId: id },
+      });
+
+      // 4. Delete the invoice
+      return tx.purchaseInvoice.delete({
+        where: { id },
       });
     });
   }
@@ -257,7 +415,7 @@ export class PurchaseService {
 
   async findAllSupplierPayments() {
     return this.prisma.supplierPayment.findMany({
-      include: { supplier: true },
+      include: { supplier: true, purchaseInvoice: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -269,13 +427,43 @@ export class PurchaseService {
     return this.prisma.supplierPayment.create({
       data: {
         supplierId: dto.supplierId,
+        purchaseInvoiceId: dto.purchaseInvoiceId || null,
         amount: dto.amount,
         paymentDate: new Date(dto.paymentDate),
         paymentMode: dto.paymentMode,
         referenceNumber: dto.referenceNumber,
         notes: dto.notes,
       },
-      include: { supplier: true },
+      include: { supplier: true, purchaseInvoice: true },
+    });
+  }
+
+  async updateSupplierPayment(id: string, dto: UpdateSupplierPaymentDto) {
+    const payment = await this.prisma.supplierPayment.findUnique({
+      where: { id },
+    });
+    if (!payment) {
+      throw new NotFoundException(`Supplier payment with ID "${id}" not found.`);
+    }
+
+    if (dto.supplierId) {
+      await this.findOneSupplier(dto.supplierId);
+    }
+
+    return this.prisma.supplierPayment.update({
+      where: { id },
+      data: {
+        supplierId: dto.supplierId,
+        purchaseInvoiceId:
+          dto.purchaseInvoiceId !== undefined ? dto.purchaseInvoiceId : payment.purchaseInvoiceId,
+        amount: dto.amount !== undefined ? dto.amount : payment.amount,
+        paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : payment.paymentDate,
+        paymentMode: dto.paymentMode || payment.paymentMode,
+        referenceNumber:
+          dto.referenceNumber !== undefined ? dto.referenceNumber : payment.referenceNumber,
+        notes: dto.notes !== undefined ? dto.notes : payment.notes,
+      },
+      include: { supplier: true, purchaseInvoice: true },
     });
   }
 
@@ -292,4 +480,3 @@ export class PurchaseService {
     });
   }
 }
-

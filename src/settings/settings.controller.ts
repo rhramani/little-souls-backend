@@ -51,20 +51,6 @@ export class SettingsController {
     return this.settingsService.updateSettings(dto);
   }
 
-  @Get('audit')
-  // TODO: Re-enable Auth Guards when frontend login is fully connected
-  // @UseGuards(JwtAuthGuard, RolesGuard)
-  // @Roles(UserType.SUPER_ADMIN)
-  @HttpCode(HttpStatus.OK)
-  async getAuditLogs(
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-  ) {
-    return this.settingsService.getAuditLogs(
-      Number(page) || 1,
-      Number(limit) || 50,
-    );
-  }
 
   @Get('backup/export')
   // TODO: Re-enable Auth Guards when frontend login is fully connected

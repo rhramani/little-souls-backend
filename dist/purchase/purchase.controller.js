@@ -61,11 +61,20 @@ let PurchaseController = class PurchaseController {
     async createPurchaseInvoice(dto) {
         return this.purchaseService.createPurchaseInvoice(dto);
     }
+    async updatePurchaseInvoice(id, dto) {
+        return this.purchaseService.updatePurchaseInvoice(id, dto);
+    }
+    async removePurchaseInvoice(id) {
+        return this.purchaseService.removePurchaseInvoice(id);
+    }
     async findAllSupplierPayments() {
         return this.purchaseService.findAllSupplierPayments();
     }
     async createSupplierPayment(dto) {
         return this.purchaseService.createSupplierPayment(dto);
+    }
+    async updateSupplierPayment(id, dto) {
+        return this.purchaseService.updateSupplierPayment(id, dto);
     }
     async removeSupplierPayment(id) {
         return this.purchaseService.removeSupplierPayment(id);
@@ -168,6 +177,23 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], PurchaseController.prototype, "createPurchaseInvoice", null);
 __decorate([
+    (0, common_1.Patch)('invoices/:id'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, purchase_dto_1.CreatePurchaseInvoiceDto]),
+    __metadata("design:returntype", Promise)
+], PurchaseController.prototype, "updatePurchaseInvoice", null);
+__decorate([
+    (0, common_1.Delete)('invoices/:id'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], PurchaseController.prototype, "removePurchaseInvoice", null);
+__decorate([
     (0, common_1.Get)('payments'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     __metadata("design:type", Function),
@@ -182,6 +208,15 @@ __decorate([
     __metadata("design:paramtypes", [purchase_dto_1.CreateSupplierPaymentDto]),
     __metadata("design:returntype", Promise)
 ], PurchaseController.prototype, "createSupplierPayment", null);
+__decorate([
+    (0, common_1.Patch)('payments/:id'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, purchase_dto_1.UpdateSupplierPaymentDto]),
+    __metadata("design:returntype", Promise)
+], PurchaseController.prototype, "updateSupplierPayment", null);
 __decorate([
     (0, common_1.Delete)('payments/:id'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),

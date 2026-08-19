@@ -19,6 +19,10 @@ export class UpdateOrderItemDto {
   @IsNumber()
   @Min(0)
   price: number;
+
+  @IsNumber()
+  @IsOptional()
+  taxPercent?: number;
 }
 
 export class UpdateOrderItemsDto {

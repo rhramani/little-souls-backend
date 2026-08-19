@@ -16,6 +16,7 @@ class PosOrderItemDto {
     productId;
     quantity;
     price;
+    taxPercent;
 }
 __decorate([
     (0, class_validator_1.IsString)(),
@@ -31,6 +32,11 @@ __decorate([
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], PosOrderItemDto.prototype, "price", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], PosOrderItemDto.prototype, "taxPercent", void 0);
 class PosCheckoutDto {
     customerId;
     walkInName;

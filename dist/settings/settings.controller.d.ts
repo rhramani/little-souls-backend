@@ -66,34 +66,6 @@ export declare class SettingsController {
         defaultTaxPercent: number | null;
         lowStockThreshold: number | null;
     }>;
-    getAuditLogs(page?: number, limit?: number): Promise<{
-        logs: ({
-            user: {
-                name: string;
-                userType: import("@prisma/client").$Enums.UserType;
-                staff: {
-                    designation: string | null;
-                } | null;
-            } | null;
-        } & {
-            id: string;
-            createdAt: Date;
-            userId: string | null;
-            ipAddress: string | null;
-            userAgent: string | null;
-            module: string;
-            action: string;
-            referenceId: string | null;
-            oldData: string | null;
-            newData: string | null;
-        })[];
-        pagination: {
-            total: number;
-            page: number;
-            limit: number;
-            totalPages: number;
-        };
-    }>;
     exportBackup(res: express.Response): Promise<void>;
     restoreBackup(file: Express.Multer.File): Promise<{
         success: boolean;

@@ -16,6 +16,7 @@ class UpdateOrderItemDto {
     productId;
     quantity;
     price;
+    taxPercent;
 }
 exports.UpdateOrderItemDto = UpdateOrderItemDto;
 __decorate([
@@ -32,6 +33,11 @@ __decorate([
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], UpdateOrderItemDto.prototype, "price", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateOrderItemDto.prototype, "taxPercent", void 0);
 class UpdateOrderItemsDto {
     items;
     discountTotal;

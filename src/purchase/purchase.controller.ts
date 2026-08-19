@@ -18,6 +18,7 @@ import {
   UpdatePurchasedProductDto,
   CreatePurchaseInvoiceDto,
   CreateSupplierPaymentDto,
+  UpdateSupplierPaymentDto,
 } from './dto/purchase.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -120,6 +121,21 @@ export class PurchaseController {
     return this.purchaseService.createPurchaseInvoice(dto);
   }
 
+  @Patch('invoices/:id')
+  @HttpCode(HttpStatus.OK)
+  async updatePurchaseInvoice(
+    @Param('id') id: string,
+    @Body() dto: CreatePurchaseInvoiceDto,
+  ) {
+    return this.purchaseService.updatePurchaseInvoice(id, dto);
+  }
+
+  @Delete('invoices/:id')
+  @HttpCode(HttpStatus.OK)
+  async removePurchaseInvoice(@Param('id') id: string) {
+    return this.purchaseService.removePurchaseInvoice(id);
+  }
+
   // =========================================================================
   // SUPPLIER PAYMENT ENDPOINTS
   // =========================================================================
@@ -134,6 +150,15 @@ export class PurchaseController {
   @HttpCode(HttpStatus.CREATED)
   async createSupplierPayment(@Body() dto: CreateSupplierPaymentDto) {
     return this.purchaseService.createSupplierPayment(dto);
+  }
+
+  @Patch('payments/:id')
+  @HttpCode(HttpStatus.OK)
+  async updateSupplierPayment(
+    @Param('id') id: string,
+    @Body() dto: UpdateSupplierPaymentDto,
+  ) {
+    return this.purchaseService.updateSupplierPayment(id, dto);
   }
 
   @Delete('payments/:id')

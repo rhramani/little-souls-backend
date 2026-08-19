@@ -22,8 +22,6 @@ import { CommonModule } from './common/common.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PurchaseModule } from './purchase/purchase.module';
 
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { ReportModule } from './report/report.module';
 import { StockModule } from './stock/stock.module';
 import { SettingsModule } from './settings/settings.module';
@@ -57,12 +55,6 @@ import { BannerModule } from './banner/banner.module';
     PurchaseModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: AuditLogInterceptor,
-    },
-  ],
+  providers: [AppService],
 })
 export class AppModule {}

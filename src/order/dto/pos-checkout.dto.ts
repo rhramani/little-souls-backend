@@ -19,6 +19,10 @@ class PosOrderItemDto {
   @IsNumber()
   @Min(0)
   price: number;
+
+  @IsOptional()
+  @IsNumber()
+  taxPercent?: number;
 }
 
 export class PosCheckoutDto {

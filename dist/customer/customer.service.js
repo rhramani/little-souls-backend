@@ -568,10 +568,6 @@ let CustomerService = class CustomerService {
                             where: { assignedTo: { in: userIds } },
                             data: { assignedTo: null },
                         }),
-                        tx.auditLog.updateMany({
-                            where: { userId: { in: userIds } },
-                            data: { userId: null },
-                        }),
                         tx.orderStatusHistory.updateMany({
                             where: { changedBy: { in: userIds } },
                             data: { changedBy: null },

@@ -584,10 +584,6 @@ let StaffService = class StaffService {
                         where: { createdBy: user.id },
                         data: { createdBy: null },
                     });
-                    await tx.auditLog.updateMany({
-                        where: { userId: user.id },
-                        data: { userId: null },
-                    });
                     await tx.user.delete({ where: { id: user.id } });
                 }
                 await tx.attendanceRecord.deleteMany({ where: { staffId } });

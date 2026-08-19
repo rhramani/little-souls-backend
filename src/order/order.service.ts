@@ -146,8 +146,13 @@ export class OrderService {
         const quantity = item.quantity;
         totalQuantity += quantity;
 
-        // Resolve tax percent (default 0 — tax is applied at invoice generation time)
-        const taxPercent = 0;
+        // Resolve product tax rate
+        const taxPercent =
+          (product as any).taxPercent !== null && (product as any).taxPercent !== undefined
+            ? Number((product as any).taxPercent)
+            : (product as any).taxValue !== null && (product as any).taxValue !== undefined
+              ? Number((product as any).taxValue)
+              : 18;
 
         // Fetch B2B product custom pricing group definition
         const customer = await tx.customer.findUnique({
@@ -349,8 +354,18 @@ export class OrderService {
           },
           customer: {
             select: {
+              id: true,
               businessName: true,
               customerCode: true,
+              mainContactNumber: true,
+              pricingGroupId: true,
+              pricingGroup: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
               billingAddressLine1: true,
               billingAddressLine2: true,
               billingCity: true,
@@ -983,10 +998,22 @@ export class OrderService {
         const quantity = itemInput.quantity;
         totalQuantity += quantity;
 
-        const taxPercent =
-          dto.taxPercent !== undefined
-            ? Number(dto.taxPercent)
-            : 0;
+        const hasGst =
+          (dto.taxAmount !== undefined && Number(dto.taxAmount) > 0) ||
+          (dto.taxPercent !== undefined && Number(dto.taxPercent) > 0) ||
+          (itemInput.taxPercent !== undefined && Number(itemInput.taxPercent) > 0);
+
+        const taxPercent = hasGst
+          ? itemInput.taxPercent !== undefined && Number(itemInput.taxPercent) > 0
+            ? Number(itemInput.taxPercent)
+            : (product as any).taxPercent !== undefined && (product as any).taxPercent !== null && Number((product as any).taxPercent) > 0
+              ? Number((product as any).taxPercent)
+              : (product as any).taxValue !== undefined && (product as any).taxValue !== null && Number((product as any).taxValue) > 0
+                ? Number((product as any).taxValue)
+                : dto.taxPercent !== undefined && Number(dto.taxPercent) > 0
+                  ? Number(dto.taxPercent)
+                  : 18
+          : 0;
 
         const price = Number(itemInput.price);
 
@@ -1252,6 +1279,7 @@ export class OrderService {
               businessName: dto.walkInName || 'Walk-in Store Customer',
               mainContactNumber: walkInMobile,
               gstin: dto.walkInGstin || null,
+              pricingGroupId: dto.walkInPricingGroupId || undefined,
               customerSource: 'Walk-in Customer',
               isActive: true,
               approvalStatus: 'APPROVED',
@@ -1308,9 +1336,15 @@ export class OrderService {
         const price = Number(itemInput.price);
 
         const taxPercent =
-          dto.withGst === true && dto.taxPercent !== undefined
-            ? Number(dto.taxPercent)
-            : 0;
+          dto.withGst === false
+            ? 0
+            : itemInput.taxPercent !== undefined && itemInput.taxPercent !== null
+              ? Number(itemInput.taxPercent)
+              : product.taxPercent !== null && product.taxPercent !== undefined
+                ? Number(product.taxPercent)
+                : dto.taxPercent !== undefined
+                  ? Number(dto.taxPercent)
+                  : 0;
 
         const lineSubTotal = price * quantity;
         subTotal = subTotal + lineSubTotal;

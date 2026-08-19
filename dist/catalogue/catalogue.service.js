@@ -210,6 +210,42 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             sku,
         };
     }
+    normalizeProductTax(p) {
+        if (!p)
+            return { taxType: '', taxValue: '' };
+        const rawType = String(p.taxType || '').trim();
+        const upperType = rawType.toUpperCase();
+        let taxType = '';
+        if (upperType === 'CGST_SGST' ||
+            upperType === 'CGST + SGST' ||
+            upperType === 'CGST+SGST' ||
+            upperType === 'CGST/SGST' ||
+            upperType === 'CGST & SGST' ||
+            upperType.includes('CGST') ||
+            upperType.includes('SGST')) {
+            taxType = 'CGST + SGST';
+        }
+        else if (upperType === 'IGST' || upperType.includes('IGST')) {
+            taxType = 'IGST';
+        }
+        let taxValue = '';
+        if (p.taxPercent !== null && p.taxPercent !== undefined && String(p.taxPercent).trim() !== '') {
+            const num = Number(p.taxPercent);
+            if (!isNaN(num)) {
+                taxValue = num > 0 && num <= 1 ? String(Math.round(num * 100)) : String(num);
+            }
+        }
+        if ((!taxValue || taxValue === '0') && rawType && !isNaN(Number(rawType))) {
+            const num = Number(rawType);
+            if (num > 0 && num <= 1) {
+                taxValue = String(Math.round(num * 100));
+            }
+            else if (num > 0) {
+                taxValue = String(num);
+            }
+        }
+        return { taxType, taxValue };
+    }
     async create(dto, userId) {
         const start = Date.now();
         let category = await this.prisma.category.findUnique({
@@ -528,6 +564,8 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             { header: 'Product Description', key: 'description', width: 50 },
             { header: 'Product Price', key: 'productPrice', width: 15 },
             { header: 'Discounted price', key: 'discountedPrice', width: 18 },
+            { header: 'Tax Type', key: 'taxType', width: 18 },
+            { header: 'Tax Value', key: 'taxValue', width: 15 },
             { header: 'Available quantity', key: 'stockQuantity', width: 18 },
             { header: 'Is Active (YES/NO)', key: 'isActive', width: 18 },
             { header: 'MOQ', key: 'moq', width: 10 },
@@ -625,6 +663,20 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 })
                     .catch((err) => this.logger.warn(`Failed to auto-clean SKU for product ${p.id}: ${err.message}`));
             }
+            const { taxType: exportTaxType, taxValue: exportTaxValue } = this.normalizeProductTax(p);
+            if (p.taxType && !isNaN(Number(p.taxType))) {
+                const num = Number(p.taxType);
+                const correctedTaxPercent = num > 0 && num <= 1 ? Math.round(num * 100) : num;
+                this.prisma.product
+                    .update({
+                    where: { id: p.id },
+                    data: {
+                        taxType: null,
+                        taxPercent: correctedTaxPercent,
+                    },
+                })
+                    .catch((err) => this.logger.warn(`Failed to auto-clean legacy tax for product ${p.id}: ${err.message}`));
+            }
             const rowData = {
                 productImage: '',
                 barcodeImage: '',
@@ -634,6 +686,8 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 description: p.description || '',
                 productPrice: p.productPrice ? p.productPrice.toString() : '',
                 discountedPrice: p.discountedPrice ? p.discountedPrice.toString() : '',
+                taxType: exportTaxType,
+                taxValue: exportTaxValue,
                 stockQuantity: p.stockQuantity,
                 isActive: p.isActive ? 'YES' : 'NO',
                 moq: p.moq,
@@ -779,10 +833,40 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
         const colorHeaderKey = headers.find((h) => h && h.toLowerCase() === 'color');
         const unitHeaderKey = headers.find((h) => h && h.toLowerCase() === 'unit');
         const taxTypeHeaderKey = headers.find((h) => h &&
-            (h.toLowerCase() === 'tax "type"' || h.toLowerCase() === 'tax type'));
+            (h.toLowerCase() === 'tax type' ||
+                h.toLowerCase() === 'tax "type"' ||
+                h.toLowerCase() === 'taxtype' ||
+                h.toLowerCase() === 'tax_type' ||
+                h.toLowerCase() === 'gst type' ||
+                h.toLowerCase() === 'gsttype' ||
+                h.toLowerCase() === 'gst_type' ||
+                h.toLowerCase() === 'tax category' ||
+                h.toLowerCase() === 'tax' ||
+                h.toLowerCase() === 'gst'));
         const taxHeaderKey = headers.find((h) => h &&
-            (h.toLowerCase() === 'tax percentage' ||
-                h.toLowerCase().includes('tax percent')));
+            (h.toLowerCase() === 'tax value' ||
+                h.toLowerCase() === 'tax percentage' ||
+                h.toLowerCase() === 'taxvalue' ||
+                h.toLowerCase() === 'tax_value' ||
+                h.toLowerCase() === 'tax percent' ||
+                h.toLowerCase() === 'taxpercent' ||
+                h.toLowerCase() === 'tax_percent' ||
+                h.toLowerCase() === 'tax %' ||
+                h.toLowerCase() === 'gst value' ||
+                h.toLowerCase() === 'gstvalue' ||
+                h.toLowerCase() === 'gst_value' ||
+                h.toLowerCase() === 'gst percent' ||
+                h.toLowerCase() === 'gstpercent' ||
+                h.toLowerCase() === 'gst_percent' ||
+                h.toLowerCase() === 'gst %' ||
+                h.toLowerCase() === 'gst percentage' ||
+                h.toLowerCase() === 'tax rate' ||
+                h.toLowerCase() === 'gst rate' ||
+                h.toLowerCase().includes('tax value') ||
+                h.toLowerCase().includes('tax percent') ||
+                h.toLowerCase().includes('tax percentage') ||
+                h.toLowerCase().includes('gst value') ||
+                h.toLowerCase().includes('gst percent')));
         const weightHeaderKey = headers.find((h) => h && h.toLowerCase() === 'weight');
         const parentProductSkuHeaderKey = headers.find((h) => h && h.toLowerCase() === 'parent product sku');
         const parentProductIdHeaderKey = headers.find((h) => h && h.toLowerCase() === 'parent product id');
@@ -968,6 +1052,51 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             const embeddedImgUrl = embeddedImageUrlMap.get(rowNumber);
             const finalImgUrl = (rawProdImg && rawProdImg.trim().length > 0 ? rawProdImg.trim() : null) || (rawProdPic && rawProdPic.trim().length > 0 ? rawProdPic.trim() : null) || embeddedImgUrl || null;
             const finalPicUrl = (rawProdPic && rawProdPic.trim().length > 0 ? rawProdPic.trim() : null) || (rawProdImg && rawProdImg.trim().length > 0 ? rawProdImg.trim() : null) || embeddedImgUrl || null;
+            let parsedTaxType = getValString(taxTypeHeaderKey) || null;
+            let parsedTaxPercent = null;
+            if (taxHeaderKey) {
+                const taxCellIdx = headers.indexOf(taxHeaderKey);
+                if (taxCellIdx !== -1) {
+                    const rawTaxStr = getCellValueString(row.getCell(taxCellIdx));
+                    if (rawTaxStr !== null && rawTaxStr !== undefined && rawTaxStr.trim() !== '') {
+                        const cleaned = rawTaxStr.replace(/%/g, '').trim();
+                        const num = parseFloat(cleaned);
+                        if (!isNaN(num)) {
+                            if (num > 0 && num <= 1) {
+                                parsedTaxPercent = Math.round(num * 100);
+                            }
+                            else {
+                                parsedTaxPercent = num;
+                            }
+                        }
+                    }
+                }
+            }
+            if (parsedTaxType) {
+                const cleanType = parsedTaxType.trim().toUpperCase();
+                if (cleanType === 'CGST_SGST' ||
+                    cleanType === 'CGST + SGST' ||
+                    cleanType === 'CGST+SGST' ||
+                    cleanType === 'CGST/SGST' ||
+                    cleanType === 'CGST & SGST' ||
+                    cleanType.includes('CGST') ||
+                    cleanType.includes('SGST')) {
+                    parsedTaxType = 'CGST_SGST';
+                }
+                else if (cleanType === 'IGST' || cleanType.includes('IGST')) {
+                    parsedTaxType = 'IGST';
+                }
+                else if (!isNaN(Number(cleanType))) {
+                    const num = Number(cleanType);
+                    if (parsedTaxPercent === null || parsedTaxPercent === 0) {
+                        parsedTaxPercent = num > 0 && num <= 1 ? Math.round(num * 100) : num;
+                    }
+                    parsedTaxType = null;
+                }
+                else {
+                    parsedTaxType = null;
+                }
+            }
             parsedRows.push({
                 rowNumber,
                 id: id || null,
@@ -986,8 +1115,8 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 size: getValString(sizeHeaderKey),
                 color: getValString(colorHeaderKey),
                 unit: getValString(unitHeaderKey) || 'PCS',
-                taxType: getValString(taxTypeHeaderKey),
-                taxPercent: getValNumber(taxHeaderKey),
+                taxType: parsedTaxType || null,
+                taxPercent: parsedTaxPercent,
                 weight: getValNumber(weightHeaderKey),
                 parentProductSku: getValString(parentProductSkuHeaderKey),
                 parentProductId: getValString(parentProductIdHeaderKey),
@@ -1292,8 +1421,8 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                             size: row.size,
                             color: row.color,
                             unit: row.unit,
-                            taxType: row.taxType,
-                            taxPercent: row.taxPercent,
+                            taxType: taxTypeHeaderKey ? row.taxType : undefined,
+                            taxPercent: taxHeaderKey ? row.taxPercent : undefined,
                             weight: row.weight,
                             parentProductSku: row.parentProductSku,
                             parentProductId: row.parentProductId,

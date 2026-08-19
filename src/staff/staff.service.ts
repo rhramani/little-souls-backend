@@ -626,10 +626,6 @@ export class StaffService {
             where: { createdBy: user.id },
             data: { createdBy: null },
           });
-          await tx.auditLog.updateMany({
-            where: { userId: user.id },
-            data: { userId: null },
-          });
 
           // Finally, delete the user
           await tx.user.delete({ where: { id: user.id } });

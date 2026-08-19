@@ -2,6 +2,7 @@ declare class PosOrderItemDto {
     productId: string;
     quantity: number;
     price: number;
+    taxPercent?: number;
 }
 export declare class PosCheckoutDto {
     customerId?: string;

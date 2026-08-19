@@ -30,8 +30,6 @@ const events_module_1 = require("./events/events.module");
 const common_module_1 = require("./common/common.module");
 const dashboard_module_1 = require("./dashboard/dashboard.module");
 const purchase_module_1 = require("./purchase/purchase.module");
-const core_1 = require("@nestjs/core");
-const audit_log_interceptor_1 = require("./common/interceptors/audit-log.interceptor");
 const report_module_1 = require("./report/report.module");
 const stock_module_1 = require("./stock/stock.module");
 const settings_module_1 = require("./settings/settings.module");
@@ -68,13 +66,7 @@ exports.AppModule = AppModule = __decorate([
             purchase_module_1.PurchaseModule,
         ],
         controllers: [app_controller_1.AppController],
-        providers: [
-            app_service_1.AppService,
-            {
-                provide: core_1.APP_INTERCEPTOR,
-                useClass: audit_log_interceptor_1.AuditLogInterceptor,
-            },
-        ],
+        providers: [app_service_1.AppService],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

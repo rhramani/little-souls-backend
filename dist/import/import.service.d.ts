@@ -55,5 +55,6 @@ export declare class ImportService {
         uploadedBy: string;
     }>;
     private slugify;
+    private normalizeProductTax;
     exportCatalog(): Promise<Buffer>;
 }

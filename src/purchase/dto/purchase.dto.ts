@@ -16,12 +16,12 @@ export class CreateSupplierDto {
   name: string;
 
   @IsString()
-  @IsNotEmpty()
-  companyName: string;
+  @IsOptional()
+  companyName?: string;
 
   @IsString()
-  @IsNotEmpty()
-  contactPerson: string;
+  @IsOptional()
+  contactPerson?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -159,6 +159,10 @@ export class CreatePurchasedProductDto {
   @IsNotEmpty()
   supplierId: string;
 
+  @IsMongoId()
+  @IsOptional()
+  purchaseInvoiceId?: string;
+
   @IsString()
   @IsNotEmpty()
   purchaseDate: string;
@@ -213,6 +217,10 @@ export class UpdatePurchasedProductDto {
   @IsOptional()
   supplierId?: string;
 
+  @IsMongoId()
+  @IsOptional()
+  purchaseInvoiceId?: string;
+
   @IsString()
   @IsOptional()
   purchaseDate?: string;
@@ -231,13 +239,17 @@ export class UpdatePurchasedProductDto {
 
   @IsString()
   @IsOptional()
+  movedToCategoryId?: string;
+
+  @IsString()
+  @IsOptional()
   movedAt?: string;
 }
 
 export class CreatePurchaseInvoiceItemDto {
   @IsMongoId()
-  @IsNotEmpty()
-  productId: string;
+  @IsOptional()
+  productId?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -252,6 +264,10 @@ export class CreatePurchaseInvoiceItemDto {
   purchasePrice: number;
 
   @IsNumber()
+  @IsOptional()
+  sellingPrice?: number;
+
+  @IsNumber()
   @IsNotEmpty()
   quantity: number;
 
@@ -264,12 +280,36 @@ export class CreatePurchaseInvoiceItemDto {
   discountPercent: number;
 
   @IsNumber()
+  @IsOptional()
+  discountOther?: number;
+
+  @IsNumber()
+  @IsOptional()
+  otherCharges?: number;
+
+  @IsNumber()
   @IsNotEmpty()
   taxPercent: number;
 
   @IsNumber()
   @IsNotEmpty()
   total: number;
+
+  @IsString()
+  @IsOptional()
+  productImage?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
+  @IsOptional()
+  category?: string;
+
+  @IsString()
+  @IsOptional()
+  brand?: string;
 }
 
 export class CreatePurchaseInvoiceDto {
@@ -306,6 +346,18 @@ export class CreatePurchaseInvoiceDto {
   discountAmount: number;
 
   @IsNumber()
+  @IsOptional()
+  discountPercent?: number;
+
+  @IsNumber()
+  @IsOptional()
+  discountOther?: number;
+
+  @IsNumber()
+  @IsOptional()
+  otherCharges?: number;
+
+  @IsNumber()
   @IsNotEmpty()
   cgstAmount: number;
 
@@ -332,6 +384,10 @@ export class CreateSupplierPaymentDto {
   @IsNotEmpty()
   supplierId: string;
 
+  @IsMongoId()
+  @IsOptional()
+  purchaseInvoiceId?: string;
+
   @IsNumber()
   @IsNotEmpty()
   amount: number;
@@ -343,6 +399,36 @@ export class CreateSupplierPaymentDto {
   @IsString()
   @IsNotEmpty()
   paymentMode: string;
+
+  @IsString()
+  @IsOptional()
+  referenceNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+}
+
+export class UpdateSupplierPaymentDto {
+  @IsMongoId()
+  @IsOptional()
+  supplierId?: string;
+
+  @IsMongoId()
+  @IsOptional()
+  purchaseInvoiceId?: string;
+
+  @IsNumber()
+  @IsOptional()
+  amount?: number;
+
+  @IsString()
+  @IsOptional()
+  paymentDate?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentMode?: string;
 
   @IsString()
   @IsOptional()

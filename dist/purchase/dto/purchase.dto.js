@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CreateSupplierPaymentDto = exports.CreatePurchaseInvoiceDto = exports.CreatePurchaseInvoiceItemDto = exports.UpdatePurchasedProductDto = exports.CreatePurchasedProductDto = exports.UpdateSupplierDto = exports.CreateSupplierDto = void 0;
+exports.UpdateSupplierPaymentDto = exports.CreateSupplierPaymentDto = exports.CreatePurchaseInvoiceDto = exports.CreatePurchaseInvoiceItemDto = exports.UpdatePurchasedProductDto = exports.CreatePurchasedProductDto = exports.UpdateSupplierDto = exports.CreateSupplierDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 class CreateSupplierDto {
@@ -35,12 +35,12 @@ __decorate([
 ], CreateSupplierDto.prototype, "name", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CreateSupplierDto.prototype, "companyName", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CreateSupplierDto.prototype, "contactPerson", void 0);
 __decorate([
@@ -185,6 +185,7 @@ class CreatePurchasedProductDto {
     category;
     brand;
     supplierId;
+    purchaseInvoiceId;
     purchaseDate;
     description;
     status;
@@ -241,6 +242,11 @@ __decorate([
     __metadata("design:type", String)
 ], CreatePurchasedProductDto.prototype, "supplierId", void 0);
 __decorate([
+    (0, class_validator_1.IsMongoId)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreatePurchasedProductDto.prototype, "purchaseInvoiceId", void 0);
+__decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
@@ -266,10 +272,12 @@ class UpdatePurchasedProductDto {
     category;
     brand;
     supplierId;
+    purchaseInvoiceId;
     purchaseDate;
     description;
     status;
     movedToCatalogId;
+    movedToCategoryId;
     movedAt;
 }
 exports.UpdatePurchasedProductDto = UpdatePurchasedProductDto;
@@ -324,6 +332,11 @@ __decorate([
     __metadata("design:type", String)
 ], UpdatePurchasedProductDto.prototype, "supplierId", void 0);
 __decorate([
+    (0, class_validator_1.IsMongoId)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdatePurchasedProductDto.prototype, "purchaseInvoiceId", void 0);
+__decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
@@ -347,22 +360,34 @@ __decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
+], UpdatePurchasedProductDto.prototype, "movedToCategoryId", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
 ], UpdatePurchasedProductDto.prototype, "movedAt", void 0);
 class CreatePurchaseInvoiceItemDto {
     productId;
     name;
     sku;
     purchasePrice;
+    sellingPrice;
     quantity;
     unit;
     discountPercent;
+    discountOther;
+    otherCharges;
     taxPercent;
     total;
+    productImage;
+    description;
+    category;
+    brand;
 }
 exports.CreatePurchaseInvoiceItemDto = CreatePurchaseInvoiceItemDto;
 __decorate([
     (0, class_validator_1.IsMongoId)(),
-    (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CreatePurchaseInvoiceItemDto.prototype, "productId", void 0);
 __decorate([
@@ -382,6 +407,11 @@ __decorate([
 ], CreatePurchaseInvoiceItemDto.prototype, "purchasePrice", void 0);
 __decorate([
     (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreatePurchaseInvoiceItemDto.prototype, "sellingPrice", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", Number)
 ], CreatePurchaseInvoiceItemDto.prototype, "quantity", void 0);
@@ -397,6 +427,16 @@ __decorate([
 ], CreatePurchaseInvoiceItemDto.prototype, "discountPercent", void 0);
 __decorate([
     (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreatePurchaseInvoiceItemDto.prototype, "discountOther", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreatePurchaseInvoiceItemDto.prototype, "otherCharges", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", Number)
 ], CreatePurchaseInvoiceItemDto.prototype, "taxPercent", void 0);
@@ -405,6 +445,26 @@ __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", Number)
 ], CreatePurchaseInvoiceItemDto.prototype, "total", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreatePurchaseInvoiceItemDto.prototype, "productImage", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreatePurchaseInvoiceItemDto.prototype, "description", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreatePurchaseInvoiceItemDto.prototype, "category", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreatePurchaseInvoiceItemDto.prototype, "brand", void 0);
 class CreatePurchaseInvoiceDto {
     invoiceNumber;
     invoiceDate;
@@ -414,6 +474,9 @@ class CreatePurchaseInvoiceDto {
     gstRate;
     subtotal;
     discountAmount;
+    discountPercent;
+    discountOther;
+    otherCharges;
     cgstAmount;
     sgstAmount;
     igstAmount;
@@ -463,6 +526,21 @@ __decorate([
 ], CreatePurchaseInvoiceDto.prototype, "discountAmount", void 0);
 __decorate([
     (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreatePurchaseInvoiceDto.prototype, "discountPercent", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreatePurchaseInvoiceDto.prototype, "discountOther", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreatePurchaseInvoiceDto.prototype, "otherCharges", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", Number)
 ], CreatePurchaseInvoiceDto.prototype, "cgstAmount", void 0);
@@ -489,6 +567,7 @@ __decorate([
 ], CreatePurchaseInvoiceDto.prototype, "items", void 0);
 class CreateSupplierPaymentDto {
     supplierId;
+    purchaseInvoiceId;
     amount;
     paymentDate;
     paymentMode;
@@ -501,6 +580,11 @@ __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
 ], CreateSupplierPaymentDto.prototype, "supplierId", void 0);
+__decorate([
+    (0, class_validator_1.IsMongoId)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreateSupplierPaymentDto.prototype, "purchaseInvoiceId", void 0);
 __decorate([
     (0, class_validator_1.IsNumber)(),
     (0, class_validator_1.IsNotEmpty)(),
@@ -526,4 +610,49 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CreateSupplierPaymentDto.prototype, "notes", void 0);
+class UpdateSupplierPaymentDto {
+    supplierId;
+    purchaseInvoiceId;
+    amount;
+    paymentDate;
+    paymentMode;
+    referenceNumber;
+    notes;
+}
+exports.UpdateSupplierPaymentDto = UpdateSupplierPaymentDto;
+__decorate([
+    (0, class_validator_1.IsMongoId)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateSupplierPaymentDto.prototype, "supplierId", void 0);
+__decorate([
+    (0, class_validator_1.IsMongoId)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateSupplierPaymentDto.prototype, "purchaseInvoiceId", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateSupplierPaymentDto.prototype, "amount", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateSupplierPaymentDto.prototype, "paymentDate", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateSupplierPaymentDto.prototype, "paymentMode", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateSupplierPaymentDto.prototype, "referenceNumber", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateSupplierPaymentDto.prototype, "notes", void 0);
 //# sourceMappingURL=purchase.dto.js.map

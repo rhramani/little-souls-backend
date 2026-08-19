@@ -120,6 +120,11 @@ export declare class OrderService {
     findAll(query: QueryOrderDto, customerId?: string): Promise<{
         orders: ({
             customer: {
+                pricingGroup: {
+                    name: string;
+                    id: string;
+                    code: string;
+                } | null;
                 businessName: string;
                 gstin: string | null;
                 billingAddressLine1: string | null;
@@ -134,7 +139,10 @@ export declare class OrderService {
                 shippingState: string | null;
                 shippingPincode: string | null;
                 shippingCountry: string | null;
+                id: string;
                 customerCode: string | null;
+                mainContactNumber: string;
+                pricingGroupId: string | null;
             } | null;
             items: ({
                 product: {

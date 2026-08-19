@@ -81,40 +81,6 @@ export class SettingsService {
     });
   }
 
-  async getAuditLogs(page: number, limit: number) {
-    const skip = (page - 1) * limit;
-
-    const [logs, total] = await Promise.all([
-      this.prisma.auditLog.findMany({
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: {
-              name: true,
-              userType: true,
-              staff: {
-                select: { designation: true },
-              },
-            },
-          },
-        },
-      }),
-      this.prisma.auditLog.count(),
-    ]);
-
-    return {
-      logs,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
   async exportBackup(res: Response) {
     const backupData: any = {
       version: '1.0',
@@ -164,7 +130,6 @@ export class SettingsService {
       'supportTicket',
       'savedReport',
       'setting',
-      'auditLog',
       'catalogue',
     ];
 
@@ -280,7 +245,6 @@ export class SettingsService {
       'supportTicket',
       'savedReport',
       'setting',
-      'auditLog',
       'catalogue',
     ];
 
