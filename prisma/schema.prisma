@@ -1101,6 +1101,7 @@ model PurchasedProduct {
   status             String    @default("Active")
   movedToCatalogId   String?   @map("moved_to_catalog_id")
   movedToCategoryId  String?   @map("moved_to_category_id")
+  movedQuantity      Int?      @default(0) @map("moved_quantity")
   movedAt            DateTime? @map("moved_at")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")

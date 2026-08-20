@@ -16,6 +16,7 @@ import {
   UpdateSupplierDto,
   CreatePurchasedProductDto,
   UpdatePurchasedProductDto,
+  RepeatPurchasedProductDto,
   CreatePurchaseInvoiceDto,
   CreateSupplierPaymentDto,
   UpdateSupplierPaymentDto,
@@ -88,6 +89,12 @@ export class PurchaseController {
   @HttpCode(HttpStatus.CREATED)
   async createPurchasedProduct(@Body() dto: CreatePurchasedProductDto) {
     return this.purchaseService.createPurchasedProduct(dto);
+  }
+
+  @Post('repeat-product')
+  @HttpCode(HttpStatus.OK)
+  async repeatPurchasedProduct(@Body() dto: RepeatPurchasedProductDto) {
+    return this.purchaseService.repeatPurchasedProduct(dto);
   }
 
   @Patch('products/:id')

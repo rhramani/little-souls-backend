@@ -134,6 +134,143 @@ let PurchaseService = class PurchaseService {
             data,
         });
     }
+    async repeatPurchasedProduct(dto) {
+        const existing = await this.prisma.purchasedProduct.findFirst({
+            where: {
+                sku: { equals: dto.sku, mode: 'insensitive' },
+                ...(dto.supplierId ? { supplierId: dto.supplierId } : {}),
+            },
+            include: {
+                supplier: true,
+            },
+        });
+        if (!existing) {
+            throw new common_1.NotFoundException(`Purchased product with SKU "${dto.sku}" not found.`);
+        }
+        const supplierId = dto.supplierId || existing.supplierId;
+        const purchasePrice = dto.purchasePrice !== undefined && dto.purchasePrice !== null
+            ? Number(dto.purchasePrice)
+            : existing.purchasePrice;
+        const qty = Number(dto.quantity);
+        const lineTotal = purchasePrice * qty;
+        const purchaseDate = new Date(dto.date);
+        return this.prisma.$transaction(async (tx) => {
+            let invoice = await tx.purchaseInvoice.findUnique({
+                where: { invoiceNumber: dto.invoiceNumber },
+                include: { items: true },
+            });
+            if (invoice) {
+                const existingItem = invoice.items?.find((it) => it.sku.toLowerCase() === dto.sku.toLowerCase());
+                if (existingItem) {
+                    await tx.purchaseInvoiceItem.update({
+                        where: { id: existingItem.id },
+                        data: {
+                            quantity: existingItem.quantity + qty,
+                            total: existingItem.total + lineTotal,
+                        },
+                    });
+                }
+                else {
+                    await tx.purchaseInvoiceItem.create({
+                        data: {
+                            purchaseInvoiceId: invoice.id,
+                            productId: existing.id,
+                            name: existing.name,
+                            sku: existing.sku,
+                            purchasePrice: purchasePrice,
+                            sellingPrice: existing.sellingPrice || null,
+                            quantity: qty,
+                            unit: existing.unit,
+                            discountPercent: 0,
+                            discountOther: 0,
+                            otherCharges: 0,
+                            taxPercent: invoice.gstRate || 0,
+                            total: lineTotal,
+                        },
+                    });
+                }
+                invoice = await tx.purchaseInvoice.update({
+                    where: { id: invoice.id },
+                    data: {
+                        subtotal: invoice.subtotal + lineTotal,
+                        grandTotal: invoice.grandTotal + lineTotal,
+                    },
+                    include: {
+                        supplier: true,
+                        items: true,
+                        purchasedProducts: true,
+                    },
+                });
+            }
+            else {
+                invoice = await tx.purchaseInvoice.create({
+                    data: {
+                        invoiceNumber: dto.invoiceNumber,
+                        invoiceDate: purchaseDate,
+                        supplierId: supplierId,
+                        businessState: existing.supplier?.state || 'Other',
+                        withGst: false,
+                        gstRate: 0,
+                        subtotal: lineTotal,
+                        discountAmount: 0,
+                        discountPercent: 0,
+                        discountOther: 0,
+                        otherCharges: 0,
+                        cgstAmount: 0,
+                        sgstAmount: 0,
+                        igstAmount: 0,
+                        grandTotal: lineTotal,
+                        items: {
+                            create: [
+                                {
+                                    productId: existing.id,
+                                    name: existing.name,
+                                    sku: existing.sku,
+                                    purchasePrice: purchasePrice,
+                                    sellingPrice: existing.sellingPrice || null,
+                                    quantity: qty,
+                                    unit: existing.unit,
+                                    discountPercent: 0,
+                                    discountOther: 0,
+                                    otherCharges: 0,
+                                    taxPercent: 0,
+                                    total: lineTotal,
+                                },
+                            ],
+                        },
+                    },
+                    include: {
+                        supplier: true,
+                        items: true,
+                        purchasedProducts: true,
+                    },
+                });
+            }
+            const currentMovedQty = existing.movedQuantity !== null && existing.movedQuantity !== undefined
+                ? existing.movedQuantity
+                : existing.movedToCatalogId
+                    ? existing.quantity
+                    : 0;
+            const updatedProduct = await tx.purchasedProduct.update({
+                where: { id: existing.id },
+                data: {
+                    quantity: existing.quantity + qty,
+                    movedQuantity: currentMovedQty,
+                    purchasePrice: purchasePrice,
+                    purchaseDate: purchaseDate,
+                    purchaseInvoiceId: invoice.id,
+                },
+                include: {
+                    supplier: true,
+                    purchaseInvoice: true,
+                },
+            });
+            return {
+                product: updatedProduct,
+                invoice,
+            };
+        });
+    }
     async removePurchasedProduct(id) {
         await this.findOnePurchasedProduct(id);
         return this.prisma.purchasedProduct.delete({
@@ -205,10 +342,16 @@ let PurchaseService = class PurchaseService {
                 });
                 if (existingProducts.length > 0) {
                     const existing = existingProducts[0];
+                    const currentMovedQty = existing.movedQuantity !== null && existing.movedQuantity !== undefined
+                        ? existing.movedQuantity
+                        : existing.movedToCatalogId
+                            ? existing.quantity
+                            : 0;
                     await tx.purchasedProduct.update({
                         where: { id: existing.id },
                         data: {
                             quantity: existing.quantity + item.quantity,
+                            movedQuantity: currentMovedQty,
                             purchasePrice: item.purchasePrice,
                             sellingPrice: item.sellingPrice || existing.sellingPrice,
                             purchaseDate: new Date(dto.invoiceDate),
@@ -326,14 +469,77 @@ let PurchaseService = class PurchaseService {
                 where: {
                     OR: [
                         { purchaseInvoiceId: id },
-                        { referenceNumber: invoice.invoiceNumber },
-                        { notes: { contains: invoice.invoiceNumber } },
+                        { referenceNumber: { equals: invoice.invoiceNumber, mode: 'insensitive' } },
+                        { referenceNumber: { equals: `INV-${invoice.invoiceNumber}`, mode: 'insensitive' } },
+                        { referenceNumber: { contains: invoice.invoiceNumber, mode: 'insensitive' } },
+                        { notes: { contains: invoice.invoiceNumber, mode: 'insensitive' } },
                     ],
                 },
             });
-            await tx.purchasedProduct.deleteMany({
+            for (const item of invoice.items) {
+                const existingProducts = await tx.purchasedProduct.findMany({
+                    where: {
+                        sku: { equals: item.sku, mode: 'insensitive' },
+                        supplierId: invoice.supplierId,
+                    },
+                });
+                for (const prod of existingProducts) {
+                    const remainingQty = prod.quantity - item.quantity;
+                    if (remainingQty > 0) {
+                        const otherInvoiceItems = await tx.purchaseInvoiceItem.findMany({
+                            where: {
+                                sku: { equals: item.sku, mode: 'insensitive' },
+                                purchaseInvoice: {
+                                    id: { not: id },
+                                    supplierId: invoice.supplierId,
+                                },
+                            },
+                            include: {
+                                purchaseInvoice: true,
+                            },
+                            orderBy: {
+                                purchaseInvoice: {
+                                    invoiceDate: 'desc',
+                                },
+                            },
+                        });
+                        const fallbackInvoiceItem = otherInvoiceItems[0];
+                        const fallbackInvoice = fallbackInvoiceItem?.purchaseInvoice;
+                        const currentMovedQty = prod.movedQuantity !== null && prod.movedQuantity !== undefined
+                            ? prod.movedQuantity
+                            : prod.movedToCatalogId
+                                ? prod.quantity
+                                : 0;
+                        await tx.purchasedProduct.update({
+                            where: { id: prod.id },
+                            data: {
+                                quantity: remainingQty,
+                                movedQuantity: Math.min(currentMovedQty, remainingQty),
+                                purchaseInvoiceId: fallbackInvoice ? fallbackInvoice.id : null,
+                                purchasePrice: fallbackInvoiceItem
+                                    ? fallbackInvoiceItem.purchasePrice
+                                    : prod.purchasePrice,
+                                purchaseDate: fallbackInvoice
+                                    ? fallbackInvoice.invoiceDate
+                                    : prod.purchaseDate,
+                            },
+                        });
+                    }
+                    else {
+                        await tx.purchasedProduct.delete({
+                            where: { id: prod.id },
+                        });
+                    }
+                }
+            }
+            const orphanedProducts = await tx.purchasedProduct.findMany({
                 where: { purchaseInvoiceId: id },
             });
+            for (const orphan of orphanedProducts) {
+                await tx.purchasedProduct.delete({
+                    where: { id: orphan.id },
+                });
+            }
             await tx.purchaseInvoiceItem.deleteMany({
                 where: { purchaseInvoiceId: id },
             });

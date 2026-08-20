@@ -241,6 +241,10 @@ export class UpdatePurchasedProductDto {
   @IsOptional()
   movedToCategoryId?: string;
 
+  @IsNumber()
+  @IsOptional()
+  movedQuantity?: number;
+
   @IsString()
   @IsOptional()
   movedAt?: string;
@@ -437,5 +441,31 @@ export class UpdateSupplierPaymentDto {
   @IsString()
   @IsOptional()
   notes?: string;
+}
+
+export class RepeatPurchasedProductDto {
+  @IsString()
+  @IsNotEmpty()
+  invoiceNumber: string;
+
+  @IsString()
+  @IsNotEmpty()
+  date: string;
+
+  @IsString()
+  @IsNotEmpty()
+  sku: string;
+
+  @IsNumber()
+  @IsNotEmpty()
+  quantity: number;
+
+  @IsMongoId()
+  @IsOptional()
+  supplierId?: string;
+
+  @IsNumber()
+  @IsOptional()
+  purchasePrice?: number;
 }
 

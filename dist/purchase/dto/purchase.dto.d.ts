@@ -61,6 +61,7 @@ export declare class UpdatePurchasedProductDto {
     status?: string;
     movedToCatalogId?: string;
     movedToCategoryId?: string;
+    movedQuantity?: number;
     movedAt?: string;
 }
 export declare class CreatePurchaseInvoiceItemDto {
@@ -116,4 +117,12 @@ export declare class UpdateSupplierPaymentDto {
     paymentMode?: string;
     referenceNumber?: string;
     notes?: string;
+}
+export declare class RepeatPurchasedProductDto {
+    invoiceNumber: string;
+    date: string;
+    sku: string;
+    quantity: number;
+    supplierId?: string;
+    purchasePrice?: number;
 }

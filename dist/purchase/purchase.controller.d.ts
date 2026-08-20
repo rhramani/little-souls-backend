@@ -1,5 +1,5 @@
 import { PurchaseService } from './purchase.service';
-import { CreateSupplierDto, UpdateSupplierDto, CreatePurchasedProductDto, UpdatePurchasedProductDto, CreatePurchaseInvoiceDto, CreateSupplierPaymentDto, UpdateSupplierPaymentDto } from './dto/purchase.dto';
+import { CreateSupplierDto, UpdateSupplierDto, CreatePurchasedProductDto, UpdatePurchasedProductDto, RepeatPurchasedProductDto, CreatePurchaseInvoiceDto, CreateSupplierPaymentDto, UpdateSupplierPaymentDto } from './dto/purchase.dto';
 export declare class PurchaseController {
     private readonly purchaseService;
     constructor(purchaseService: PurchaseService);
@@ -24,6 +24,7 @@ export declare class PurchaseController {
             purchaseDate: Date;
             movedToCatalogId: string | null;
             movedToCategoryId: string | null;
+            movedQuantity: number | null;
             movedAt: Date | null;
         }[];
         purchaseInvoices: {
@@ -207,6 +208,7 @@ export declare class PurchaseController {
         purchaseDate: Date;
         movedToCatalogId: string | null;
         movedToCategoryId: string | null;
+        movedQuantity: number | null;
         movedAt: Date | null;
     })[]>;
     findOnePurchasedProduct(id: string): Promise<{
@@ -268,6 +270,7 @@ export declare class PurchaseController {
         purchaseDate: Date;
         movedToCatalogId: string | null;
         movedToCategoryId: string | null;
+        movedQuantity: number | null;
         movedAt: Date | null;
     }>;
     createPurchasedProduct(dto: CreatePurchasedProductDto): Promise<{
@@ -290,7 +293,109 @@ export declare class PurchaseController {
         purchaseDate: Date;
         movedToCatalogId: string | null;
         movedToCategoryId: string | null;
+        movedQuantity: number | null;
         movedAt: Date | null;
+    }>;
+    repeatPurchasedProduct(dto: RepeatPurchasedProductDto): Promise<{
+        product: {
+            supplier: {
+                name: string;
+                email: string;
+                mobile: string;
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                status: string;
+                notes: string | null;
+                companyName: string | null;
+                contactPerson: string | null;
+                gstNumber: string | null;
+                address: string;
+                city: string;
+                state: string;
+                country: string;
+                pincode: string;
+            };
+            purchaseInvoice: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                discountPercent: number | null;
+                otherCharges: number | null;
+                withGst: boolean;
+                invoiceNumber: string;
+                invoiceDate: Date;
+                grandTotal: number;
+                supplierId: string;
+                discountOther: number | null;
+                businessState: string;
+                gstRate: number;
+                subtotal: number;
+                discountAmount: number;
+                cgstAmount: number;
+                sgstAmount: number;
+                igstAmount: number;
+            } | null;
+        } & {
+            category: string | null;
+            productImage: string | null;
+            name: string;
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            status: string;
+            description: string | null;
+            sku: string;
+            brand: string | null;
+            unit: string;
+            quantity: number;
+            purchasePrice: number;
+            sellingPrice: number | null;
+            supplierId: string;
+            purchaseInvoiceId: string | null;
+            purchaseDate: Date;
+            movedToCatalogId: string | null;
+            movedToCategoryId: string | null;
+            movedQuantity: number | null;
+            movedAt: Date | null;
+        };
+        invoice: {
+            items: {
+                name: string;
+                id: string;
+                total: number;
+                sku: string;
+                unit: string;
+                taxPercent: number;
+                discountPercent: number;
+                productId: string | null;
+                quantity: number;
+                otherCharges: number;
+                purchasePrice: number;
+                sellingPrice: number | null;
+                purchaseInvoiceId: string;
+                discountOther: number;
+            }[];
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            discountPercent: number | null;
+            otherCharges: number | null;
+            withGst: boolean;
+            invoiceNumber: string;
+            invoiceDate: Date;
+            grandTotal: number;
+            supplierId: string;
+            discountOther: number | null;
+            businessState: string;
+            gstRate: number;
+            subtotal: number;
+            discountAmount: number;
+            cgstAmount: number;
+            sgstAmount: number;
+            igstAmount: number;
+        };
     }>;
     updatePurchasedProduct(id: string, dto: UpdatePurchasedProductDto): Promise<{
         category: string | null;
@@ -312,6 +417,7 @@ export declare class PurchaseController {
         purchaseDate: Date;
         movedToCatalogId: string | null;
         movedToCategoryId: string | null;
+        movedQuantity: number | null;
         movedAt: Date | null;
     }>;
     removePurchasedProduct(id: string): Promise<{
@@ -334,6 +440,7 @@ export declare class PurchaseController {
         purchaseDate: Date;
         movedToCatalogId: string | null;
         movedToCategoryId: string | null;
+        movedQuantity: number | null;
         movedAt: Date | null;
     }>;
     findAllPurchaseInvoices(): Promise<({
@@ -391,6 +498,7 @@ export declare class PurchaseController {
             purchaseDate: Date;
             movedToCatalogId: string | null;
             movedToCategoryId: string | null;
+            movedQuantity: number | null;
             movedAt: Date | null;
         }[];
     } & {
@@ -468,6 +576,7 @@ export declare class PurchaseController {
             purchaseDate: Date;
             movedToCatalogId: string | null;
             movedToCategoryId: string | null;
+            movedQuantity: number | null;
             movedAt: Date | null;
         }[];
     } & {
@@ -545,6 +654,7 @@ export declare class PurchaseController {
             purchaseDate: Date;
             movedToCatalogId: string | null;
             movedToCategoryId: string | null;
+            movedQuantity: number | null;
             movedAt: Date | null;
         }[];
     } & {

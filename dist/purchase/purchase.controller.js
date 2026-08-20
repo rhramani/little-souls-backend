@@ -49,6 +49,9 @@ let PurchaseController = class PurchaseController {
     async createPurchasedProduct(dto) {
         return this.purchaseService.createPurchasedProduct(dto);
     }
+    async repeatPurchasedProduct(dto) {
+        return this.purchaseService.repeatPurchasedProduct(dto);
+    }
     async updatePurchasedProduct(id, dto) {
         return this.purchaseService.updatePurchasedProduct(id, dto);
     }
@@ -144,6 +147,14 @@ __decorate([
     __metadata("design:paramtypes", [purchase_dto_1.CreatePurchasedProductDto]),
     __metadata("design:returntype", Promise)
 ], PurchaseController.prototype, "createPurchasedProduct", null);
+__decorate([
+    (0, common_1.Post)('repeat-product'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [purchase_dto_1.RepeatPurchasedProductDto]),
+    __metadata("design:returntype", Promise)
+], PurchaseController.prototype, "repeatPurchasedProduct", null);
 __decorate([
     (0, common_1.Patch)('products/:id'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),

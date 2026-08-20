@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpdateSupplierPaymentDto = exports.CreateSupplierPaymentDto = exports.CreatePurchaseInvoiceDto = exports.CreatePurchaseInvoiceItemDto = exports.UpdatePurchasedProductDto = exports.CreatePurchasedProductDto = exports.UpdateSupplierDto = exports.CreateSupplierDto = void 0;
+exports.RepeatPurchasedProductDto = exports.UpdateSupplierPaymentDto = exports.CreateSupplierPaymentDto = exports.CreatePurchaseInvoiceDto = exports.CreatePurchaseInvoiceItemDto = exports.UpdatePurchasedProductDto = exports.CreatePurchasedProductDto = exports.UpdateSupplierDto = exports.CreateSupplierDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 class CreateSupplierDto {
@@ -278,6 +278,7 @@ class UpdatePurchasedProductDto {
     status;
     movedToCatalogId;
     movedToCategoryId;
+    movedQuantity;
     movedAt;
 }
 exports.UpdatePurchasedProductDto = UpdatePurchasedProductDto;
@@ -361,6 +362,11 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], UpdatePurchasedProductDto.prototype, "movedToCategoryId", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdatePurchasedProductDto.prototype, "movedQuantity", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsOptional)(),
@@ -655,4 +661,43 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], UpdateSupplierPaymentDto.prototype, "notes", void 0);
+class RepeatPurchasedProductDto {
+    invoiceNumber;
+    date;
+    sku;
+    quantity;
+    supplierId;
+    purchasePrice;
+}
+exports.RepeatPurchasedProductDto = RepeatPurchasedProductDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], RepeatPurchasedProductDto.prototype, "invoiceNumber", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], RepeatPurchasedProductDto.prototype, "date", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], RepeatPurchasedProductDto.prototype, "sku", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", Number)
+], RepeatPurchasedProductDto.prototype, "quantity", void 0);
+__decorate([
+    (0, class_validator_1.IsMongoId)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], RepeatPurchasedProductDto.prototype, "supplierId", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], RepeatPurchasedProductDto.prototype, "purchasePrice", void 0);
 //# sourceMappingURL=purchase.dto.js.map
