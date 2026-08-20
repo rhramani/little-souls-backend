@@ -145,12 +145,15 @@ let AuthService = class AuthService {
         if (existingUser) {
             throw new common_1.ConflictException('A user with this email or mobile number already exists');
         }
-        if (dto.gstin) {
-            const existingCustomer = await this.prisma.customer.findUnique({
-                where: { gstin: dto.gstin },
+        const cleanGstin = dto.gstin && typeof dto.gstin === 'string' && dto.gstin.trim()
+            ? dto.gstin.trim().toUpperCase()
+            : null;
+        if (cleanGstin) {
+            const existingCustomer = await this.prisma.customer.findFirst({
+                where: { gstin: { equals: cleanGstin, mode: 'insensitive' } },
             });
             if (existingCustomer) {
-                throw new common_1.ConflictException('GSTIN is already registered');
+                throw new common_1.ConflictException(`GSTIN "${cleanGstin}" is already registered with customer "${existingCustomer.businessName}"`);
             }
         }
         const passwordHash = await bcrypt.hash(dto.password, 10);
@@ -174,7 +177,7 @@ let AuthService = class AuthService {
                 data: {
                     businessName: dto.businessName,
                     businessType: dto.businessType,
-                    gstin: dto.gstin,
+                    gstin: cleanGstin,
                     billingAddressLine1: dto.billingAddressLine1,
                     billingAddressLine2: dto.billingAddressLine2,
                     billingCity: dto.billingCity,

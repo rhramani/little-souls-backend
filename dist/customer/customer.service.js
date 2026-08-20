@@ -72,12 +72,15 @@ let CustomerService = class CustomerService {
         if (existingUser) {
             throw new common_1.ConflictException('A user with this email or mobile number already exists');
         }
-        if (dto.gstin) {
-            const existingCustomer = await this.prisma.customer.findUnique({
-                where: { gstin: dto.gstin },
+        const cleanGstin = dto.gstin && typeof dto.gstin === 'string' && dto.gstin.trim()
+            ? dto.gstin.trim().toUpperCase()
+            : null;
+        if (cleanGstin) {
+            const existingCustomer = await this.prisma.customer.findFirst({
+                where: { gstin: { equals: cleanGstin, mode: 'insensitive' } },
             });
             if (existingCustomer) {
-                throw new common_1.ConflictException('GSTIN is already registered');
+                throw new common_1.ConflictException(`GSTIN "${cleanGstin}" is already registered with customer "${existingCustomer.businessName}"`);
             }
         }
         const plainPassword = crypto.randomBytes(6).toString('hex');
@@ -112,7 +115,7 @@ let CustomerService = class CustomerService {
                 data: {
                     businessName: dto.businessName,
                     businessType: dto.businessType,
-                    gstin: dto.gstin,
+                    gstin: cleanGstin,
                     billingAddressLine1: dto.billingAddressLine1,
                     billingAddressLine2: dto.billingAddressLine2,
                     billingCity: dto.billingCity,
@@ -348,7 +351,7 @@ let CustomerService = class CustomerService {
     }
     async update(id, dto) {
         const customer = await this.findOne(id);
-        const { name, email, mobile, designation, whatsapp, creditLimit, customerCode, ...customerData } = dto;
+        const { name, email, mobile, designation, whatsapp, creditLimit, customerCode, gstin, ...customerData } = dto;
         if (customerCode !== undefined && customerCode !== customer.customerCode) {
             if (customerCode) {
                 const existingCode = await this.prisma.customer.findFirst({
@@ -359,6 +362,24 @@ let CustomerService = class CustomerService {
                 });
                 if (existingCode) {
                     throw new common_1.ConflictException('Customer Code is already in use by another account');
+                }
+            }
+        }
+        let cleanGstin = undefined;
+        if (gstin !== undefined) {
+            cleanGstin =
+                gstin && typeof gstin === 'string' && gstin.trim()
+                    ? gstin.trim().toUpperCase()
+                    : null;
+            if (cleanGstin && cleanGstin !== customer.gstin) {
+                const existingGstinCustomer = await this.prisma.customer.findFirst({
+                    where: {
+                        gstin: { equals: cleanGstin, mode: 'insensitive' },
+                        id: { not: id },
+                    },
+                });
+                if (existingGstinCustomer) {
+                    throw new common_1.ConflictException(`GSTIN "${cleanGstin}" is already registered with customer "${existingGstinCustomer.businessName}" (${existingGstinCustomer.customerCode || existingGstinCustomer.id}).`);
                 }
             }
         }
@@ -379,6 +400,9 @@ let CustomerService = class CustomerService {
             }
             if (customerCode !== undefined) {
                 updatePayload.customerCode = customerCode || null;
+            }
+            if (cleanGstin !== undefined) {
+                updatePayload.gstin = cleanGstin;
             }
             const updatedCustomer = await tx.customer.update({
                 where: { id },

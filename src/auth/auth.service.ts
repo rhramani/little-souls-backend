@@ -126,13 +126,20 @@ export class AuthService {
       );
     }
 
+    const cleanGstin =
+      dto.gstin && typeof dto.gstin === 'string' && dto.gstin.trim()
+        ? dto.gstin.trim().toUpperCase()
+        : null;
+
     // Check if GSTIN is already registered
-    if (dto.gstin) {
-      const existingCustomer = await this.prisma.customer.findUnique({
-        where: { gstin: dto.gstin },
+    if (cleanGstin) {
+      const existingCustomer = await this.prisma.customer.findFirst({
+        where: { gstin: { equals: cleanGstin, mode: 'insensitive' } },
       });
       if (existingCustomer) {
-        throw new ConflictException('GSTIN is already registered');
+        throw new ConflictException(
+          `GSTIN "${cleanGstin}" is already registered with customer "${existingCustomer.businessName}"`,
+        );
       }
     }
 
@@ -163,7 +170,7 @@ export class AuthService {
         data: {
           businessName: dto.businessName,
           businessType: dto.businessType,
-          gstin: dto.gstin,
+          gstin: cleanGstin,
           billingAddressLine1: dto.billingAddressLine1,
           billingAddressLine2: dto.billingAddressLine2,
           billingCity: dto.billingCity,

@@ -46,12 +46,19 @@ export class CustomerService {
       );
     }
 
-    if (dto.gstin) {
-      const existingCustomer = await this.prisma.customer.findUnique({
-        where: { gstin: dto.gstin },
+    const cleanGstin =
+      dto.gstin && typeof dto.gstin === 'string' && dto.gstin.trim()
+        ? dto.gstin.trim().toUpperCase()
+        : null;
+
+    if (cleanGstin) {
+      const existingCustomer = await this.prisma.customer.findFirst({
+        where: { gstin: { equals: cleanGstin, mode: 'insensitive' } },
       });
       if (existingCustomer) {
-        throw new ConflictException('GSTIN is already registered');
+        throw new ConflictException(
+          `GSTIN "${cleanGstin}" is already registered with customer "${existingCustomer.businessName}"`,
+        );
       }
     }
 
@@ -94,7 +101,7 @@ export class CustomerService {
         data: {
           businessName: dto.businessName,
           businessType: dto.businessType,
-          gstin: dto.gstin,
+          gstin: cleanGstin,
           billingAddressLine1: dto.billingAddressLine1,
           billingAddressLine2: dto.billingAddressLine2,
           billingCity: dto.billingCity,
@@ -384,6 +391,7 @@ export class CustomerService {
       whatsapp,
       creditLimit,
       customerCode,
+      gstin,
       ...customerData
     } = dto;
 
@@ -398,6 +406,28 @@ export class CustomerService {
         if (existingCode) {
           throw new ConflictException(
             'Customer Code is already in use by another account',
+          );
+        }
+      }
+    }
+
+    let cleanGstin: string | null | undefined = undefined;
+    if (gstin !== undefined) {
+      cleanGstin =
+        gstin && typeof gstin === 'string' && gstin.trim()
+          ? gstin.trim().toUpperCase()
+          : null;
+
+      if (cleanGstin && cleanGstin !== customer.gstin) {
+        const existingGstinCustomer = await this.prisma.customer.findFirst({
+          where: {
+            gstin: { equals: cleanGstin, mode: 'insensitive' },
+            id: { not: id },
+          },
+        });
+        if (existingGstinCustomer) {
+          throw new ConflictException(
+            `GSTIN "${cleanGstin}" is already registered with customer "${existingGstinCustomer.businessName}" (${existingGstinCustomer.customerCode || existingGstinCustomer.id}).`,
           );
         }
       }
@@ -420,6 +450,9 @@ export class CustomerService {
       }
       if (customerCode !== undefined) {
         updatePayload.customerCode = customerCode || null;
+      }
+      if (cleanGstin !== undefined) {
+        updatePayload.gstin = cleanGstin;
       }
 
       const updatedCustomer = await tx.customer.update({

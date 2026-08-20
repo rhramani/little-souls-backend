@@ -17,11 +17,33 @@ let PrismaClientExceptionFilter = class PrismaClientExceptionFilter {
         let message = exception.message;
         let error = 'Internal Server Error';
         switch (exception.code) {
-            case 'P2002':
+            case 'P2002': {
                 status = common_1.HttpStatus.CONFLICT;
-                message = `Unique constraint failed on field: ${exception.meta?.target || 'unknown target'}`;
+                const target = String(exception.meta?.target || '');
+                if (target.includes('gstin')) {
+                    message = 'A customer with this GSTIN is already registered.';
+                }
+                else if (target.includes('mobile')) {
+                    message = 'A user or contact with this mobile number already exists.';
+                }
+                else if (target.includes('email')) {
+                    message = 'An account with this email already exists.';
+                }
+                else if (target.includes('customer_code')) {
+                    message = 'A customer with this Customer Code already exists.';
+                }
+                else if (target.includes('sku')) {
+                    message = 'A product with this SKU already exists.';
+                }
+                else if (target.includes('employee_code')) {
+                    message = 'A staff member with this Employee Code already exists.';
+                }
+                else {
+                    message = `Unique constraint failed on field: ${exception.meta?.target || 'unknown target'}`;
+                }
                 error = 'Conflict';
                 break;
+            }
             case 'P2025':
                 status = common_1.HttpStatus.NOT_FOUND;
                 message = exception.meta?.cause || 'Record not found';
