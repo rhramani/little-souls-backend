@@ -18,17 +18,6 @@ let BillingService = class BillingService {
         this.prisma = prisma;
     }
     async generateInvoice(orderId, userId) {
-        const existingInvoice = await this.prisma.invoice.findFirst({
-            where: { orderId },
-        });
-        if (existingInvoice) {
-            return this.prisma.invoice.findUnique({
-                where: { id: existingInvoice.id },
-                include: {
-                    items: true,
-                },
-            });
-        }
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
             include: {
@@ -38,6 +27,45 @@ let BillingService = class BillingService {
         });
         if (!order) {
             throw new common_1.NotFoundException(`Order with ID '${orderId}' not found.`);
+        }
+        const existingInvoice = await this.prisma.invoice.findFirst({
+            where: { orderId },
+        });
+        if (existingInvoice) {
+            if (existingInvoice.status === 'CANCELLED' ||
+                existingInvoice.grandTotal !== order.grandTotal ||
+                existingInvoice.taxTotal !== order.taxTotal) {
+                await this.prisma.invoice.update({
+                    where: { id: existingInvoice.id },
+                    data: {
+                        status: 'GENERATED',
+                        subTotal: order.subTotal,
+                        discountTotal: order.discountTotal,
+                        taxTotal: order.taxTotal,
+                        grandTotal: order.grandTotal,
+                        taxableAmount: order.subTotal,
+                    },
+                });
+                await this.prisma.ledgerEntry.updateMany({
+                    where: {
+                        OR: [
+                            { referenceId: existingInvoice.id },
+                            { referenceId: order.id },
+                        ],
+                        entryType: 'INVOICE',
+                    },
+                    data: {
+                        debit: order.grandTotal,
+                        transactionStatus: 'PENDING',
+                    },
+                });
+            }
+            return this.prisma.invoice.findUnique({
+                where: { id: existingInvoice.id },
+                include: {
+                    items: true,
+                },
+            });
         }
         const eligibleStatuses = ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'];
         if (!eligibleStatuses.includes(order.orderStatus)) {
@@ -740,6 +768,7 @@ let BillingService = class BillingService {
                             data: {
                                 ...(targetPayStatus && { paymentStatus: targetPayStatus }),
                                 ...(data.paymentMode && { notes: updatedNotes }),
+                                ...(data.amount !== undefined && { grandTotal: data.amount }),
                             },
                         });
                     }
@@ -766,8 +795,27 @@ let BillingService = class BillingService {
                     data: {
                         ...(targetPayStatus && { paymentStatus: targetPayStatus }),
                         ...(data.paymentMode && { notes: updatedNotes }),
+                        ...(data.amount !== undefined && { grandTotal: data.amount }),
                     },
                 });
+            }
+        }
+        if (data.amount !== undefined && entry.customerId) {
+            const oldAmount = entry.debit > 0 ? entry.debit : entry.credit;
+            const diff = data.amount - oldAmount;
+            if (diff !== 0) {
+                if (entry.debit > 0) {
+                    await this.prisma.customer.update({
+                        where: { id: entry.customerId },
+                        data: { currentBalance: { increment: diff } },
+                    });
+                }
+                else if (entry.credit > 0) {
+                    await this.prisma.customer.update({
+                        where: { id: entry.customerId },
+                        data: { currentBalance: { decrement: diff } },
+                    });
+                }
             }
         }
         else if (entry.referenceType === 'PAYMENT' && entry.referenceId) {

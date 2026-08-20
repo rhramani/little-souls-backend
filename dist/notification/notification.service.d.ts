@@ -4,9 +4,9 @@ export declare class NotificationService {
     constructor(prisma: PrismaService);
     getUserNotifications(userId: string, page?: number, limit?: number): Promise<{
         notifications: {
-            message: string;
             id: string;
             createdAt: Date;
+            message: string;
             userId: string;
             title: string;
             notificationType: string;
@@ -22,9 +22,9 @@ export declare class NotificationService {
         };
     }>;
     markRead(notificationId: string, userId: string): Promise<{
-        message: string;
         id: string;
         createdAt: Date;
+        message: string;
         userId: string;
         title: string;
         notificationType: string;
@@ -35,9 +35,9 @@ export declare class NotificationService {
         message: string;
     }>;
     createNotification(userId: string, title: string, message: string, type?: string): Promise<{
-        message: string;
         id: string;
         createdAt: Date;
+        message: string;
         userId: string;
         title: string;
         notificationType: string;

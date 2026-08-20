@@ -7,10 +7,10 @@ export declare class StockController {
         id: string;
         createdAt: Date;
         createdBy: string | null;
-        productId: string;
-        quantity: number;
         referenceType: string;
         referenceId: string | null;
+        productId: string;
+        quantity: number;
         note: string | null;
         movementType: string;
         stockBefore: number;
@@ -20,10 +20,10 @@ export declare class StockController {
         id: string;
         createdAt: Date;
         createdBy: string | null;
-        productId: string;
-        quantity: number;
         referenceType: string;
         referenceId: string | null;
+        productId: string;
+        quantity: number;
         note: string | null;
         movementType: string;
         stockBefore: number;
@@ -39,10 +39,10 @@ export declare class StockController {
             id: string;
             createdAt: Date;
             createdBy: string | null;
-            productId: string;
-            quantity: number;
             referenceType: string;
             referenceId: string | null;
+            productId: string;
+            quantity: number;
             note: string | null;
             movementType: string;
             stockBefore: number;

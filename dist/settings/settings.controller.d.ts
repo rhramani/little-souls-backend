@@ -21,10 +21,10 @@ export declare class SettingsController {
         defaultTaxPercent: number | null;
     }>;
     getSettings(): Promise<{
-        businessName: string | null;
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        businessName: string | null;
         businessLogoUrl: string | null;
         faviconUrl: string | null;
         contactEmail: string | null;
@@ -44,10 +44,10 @@ export declare class SettingsController {
         lowStockThreshold: number | null;
     }>;
     updateSettings(dto: UpdateSettingsDto): Promise<{
-        businessName: string | null;
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        businessName: string | null;
         businessLogoUrl: string | null;
         faviconUrl: string | null;
         contactEmail: string | null;

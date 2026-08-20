@@ -20,9 +20,9 @@ export declare class CatalogueService {
                 id: string;
                 createdAt: Date;
                 updatedAt: Date;
+                createdBy: string | null;
                 isPrimary: boolean;
                 sortOrder: number | null;
-                createdBy: string | null;
                 originalUrl: string;
                 altText: string | null;
                 productId: string;
@@ -32,15 +32,15 @@ export declare class CatalogueService {
             }[];
         } & {
             productImage: string | null;
-            name: string;
             id: string;
-            isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
+            createdBy: string | null;
             description: string | null;
+            isActive: boolean;
             slug: string;
             sortOrder: number | null;
-            createdBy: string | null;
             updatedBy: string | null;
             sku: string;
             shortDescription: string | null;
@@ -84,10 +84,10 @@ export declare class CatalogueService {
             sixToTwelveMonthsSetQuantity: number | null;
             catalogueIds: string[];
         })[];
-        name: string;
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
         imageUrl: string | null;
         isPublished: boolean;
@@ -108,17 +108,17 @@ export declare class CatalogueService {
     findOne(id: string, search?: string, page?: number, limit?: number, publishedOnly?: boolean, categoryId?: string): Promise<{
         products: ({
             category: {
-                name: string;
                 id: string;
+                name: string;
                 slug: string;
             };
             images: {
                 id: string;
                 createdAt: Date;
                 updatedAt: Date;
+                createdBy: string | null;
                 isPrimary: boolean;
                 sortOrder: number | null;
-                createdBy: string | null;
                 originalUrl: string;
                 altText: string | null;
                 productId: string;
@@ -128,24 +128,24 @@ export declare class CatalogueService {
             }[];
             pricing: ({
                 pricingGroup: {
-                    name: string;
                     id: string;
-                    isActive: boolean;
                     createdAt: Date;
                     updatedAt: Date;
+                    name: string;
                     description: string | null;
+                    isActive: boolean;
                     code: string;
                 };
             } & {
                 id: string;
+                discountPercent: number | null;
                 createdAt: Date;
                 updatedAt: Date;
-                pricingGroupId: string;
                 createdBy: string | null;
+                pricingGroupId: string;
                 updatedBy: string | null;
                 price: number;
                 mrp: number | null;
-                discountPercent: number | null;
                 minQuantity: number | null;
                 maxQuantity: number | null;
                 productId: string;
@@ -154,15 +154,15 @@ export declare class CatalogueService {
             })[];
         } & {
             productImage: string | null;
-            name: string;
             id: string;
-            isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
+            createdBy: string | null;
             description: string | null;
+            isActive: boolean;
             slug: string;
             sortOrder: number | null;
-            createdBy: string | null;
             updatedBy: string | null;
             sku: string;
             shortDescription: string | null;
@@ -212,20 +212,20 @@ export declare class CatalogueService {
             limit: number;
             totalPages: number;
         };
-        name: string;
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
         imageUrl: string | null;
         isPublished: boolean;
         productIds: string[];
     }>;
     update(id: string, dto: UpdateCatalogueDto): Promise<{
-        name: string;
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
         imageUrl: string | null;
         isPublished: boolean;

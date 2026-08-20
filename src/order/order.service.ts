@@ -548,6 +548,41 @@ export class OrderService {
             });
           }
         }
+
+        // If transitioning to CANCELLED, also cancel linked invoices, ledger entries, and decrement customer balance
+        if (newStatus === 'CANCELLED') {
+          const linkedInvoices = await tx.invoice.findMany({
+            where: { orderId: id },
+            select: { id: true },
+          });
+          const invoiceIds = linkedInvoices.map((i) => i.id);
+
+          await tx.invoice.updateMany({
+            where: { orderId: id },
+            data: { status: 'CANCELLED' },
+          });
+
+          await tx.ledgerEntry.updateMany({
+            where: {
+              OR: [
+                { referenceId: { in: invoiceIds } },
+                { referenceId: id },
+              ],
+            },
+            data: { transactionStatus: 'CANCELLED' },
+          });
+
+          if (invoiceIds.length > 0) {
+            await tx.customer.update({
+              where: { id: order.customerId },
+              data: {
+                currentBalance: {
+                  decrement: order.grandTotal,
+                },
+              },
+            });
+          }
+        }
       }
 
       const updatedOrder = await tx.order.update({
@@ -679,6 +714,39 @@ export class OrderService {
         });
 
         await Promise.all(restoreStockPromises);
+
+        // Cancel linked invoices and ledger entries and decrement customer currentBalance
+        const linkedInvoices = await tx.invoice.findMany({
+          where: { orderId: id },
+          select: { id: true },
+        });
+        const invoiceIds = linkedInvoices.map((i) => i.id);
+
+        await tx.invoice.updateMany({
+          where: { orderId: id },
+          data: { status: 'CANCELLED' },
+        });
+
+        await tx.ledgerEntry.updateMany({
+          where: {
+            OR: [
+              { referenceId: { in: invoiceIds } },
+              { referenceId: id },
+            ],
+          },
+          data: { transactionStatus: 'CANCELLED' },
+        });
+
+        if (invoiceIds.length > 0) {
+          await tx.customer.update({
+            where: { id: order.customerId },
+            data: {
+              currentBalance: {
+                decrement: order.grandTotal,
+              },
+            },
+          });
+        }
       }
 
       return updatedOrder;
@@ -1243,7 +1311,75 @@ export class OrderService {
         },
       });
 
-      // 7. Log history
+      // 7. Synchronize linked Invoice and LedgerEntry if they exist
+      const existingInvoices = await tx.invoice.findMany({
+        where: { orderId: id },
+      });
+
+      for (const invoice of existingInvoices) {
+        await tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            subTotal,
+            discountTotal: finalDiscountTotal,
+            taxTotal: finalTaxTotal,
+            grandTotal,
+            taxableAmount: subTotal,
+          },
+        });
+
+        // Recreate invoice items
+        await tx.invoiceItem.deleteMany({
+          where: { invoiceId: invoice.id },
+        });
+
+        const invoiceItemsData = orderItemsData.map((item) => ({
+          invoiceId: invoice.id,
+          productId: item.productId,
+          sku: item.sku,
+          productName: item.productName,
+          productImageUrl: item.productImageUrl || null,
+          quantity: item.quantity,
+          price: item.price,
+          taxPercent: item.taxPercent || 0,
+          lineSubTotal: item.lineSubTotal,
+          lineTaxTotal: item.lineTaxTotal,
+          lineTotal: item.lineTotal,
+        }));
+
+        await tx.invoiceItem.createMany({
+          data: invoiceItemsData,
+        });
+
+        // Update linked ledger entry debit
+        await tx.ledgerEntry.updateMany({
+          where: {
+            OR: [
+              { referenceId: invoice.id },
+              { referenceId: id },
+            ],
+            entryType: 'INVOICE',
+          },
+          data: {
+            debit: grandTotal,
+          },
+        });
+      }
+
+      // Adjust customer's currentBalance by the difference
+      const amountDiff = grandTotal - (order.grandTotal || 0);
+      if (amountDiff !== 0 && existingInvoices.length > 0) {
+        await tx.customer.update({
+          where: { id: order.customerId },
+          data: {
+            currentBalance: {
+              increment: amountDiff,
+            },
+          },
+        });
+      }
+
+      // 8. Log history
       await tx.orderStatusHistory.create({
         data: {
           orderId: id,

@@ -7,31 +7,35 @@ export declare class CustomerMeController {
     constructor(customerService: CustomerService);
     getMyProfile(customerId: string): Promise<{
         pricingGroup: {
-            name: string;
             id: string;
-            isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
             description: string | null;
+            isActive: boolean;
             code: string;
         } | null;
+        approvedByUser: {
+            id: string;
+            name: string;
+        } | null;
         users: {
+            id: string;
             name: string;
             email: string | null;
             mobile: string;
-            id: string;
             plainPassword: string | null;
         }[];
         contacts: {
+            id: string;
+            customerId: string;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
             mobile: string;
             designation: string | null;
-            id: string;
-            customerId: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             photoUrl: string | null;
             whatsappNumber: string | null;
             loginAccess: boolean;
@@ -41,19 +45,20 @@ export declare class CustomerMeController {
             canDownloadInvoice: boolean;
         }[];
         assignedSalesStaff: {
+            id: string;
             name: string;
             email: string | null;
             mobile: string;
-            id: string;
-        } | null;
-        approvedByUser: {
-            name: string;
-            id: string;
         } | null;
     } & {
+        id: string;
+        approvedBy: string | null;
+        approvedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+        gstin: string | null;
         businessName: string;
         businessType: string | null;
-        gstin: string | null;
         billingAddressLine1: string | null;
         billingAddressLine2: string | null;
         billingCity: string | null;
@@ -68,17 +73,12 @@ export declare class CustomerMeController {
         shippingCountry: string | null;
         storePhotoUrl: string | null;
         customerSource: string | null;
-        id: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         customerCode: string | null;
         mainContactNumber: string;
         pricingGroupId: string | null;
         assignedSalesStaffId: string | null;
         approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
-        approvedBy: string | null;
-        approvedAt: Date | null;
         rejectionReason: string | null;
         creditLimit: number | null;
         openingBalance: number | null;
@@ -86,9 +86,14 @@ export declare class CustomerMeController {
         lastOrderAt: Date | null;
     }>;
     updateMyProfile(customerId: string, dto: UpdateCustomerDto): Promise<{
+        id: string;
+        approvedBy: string | null;
+        approvedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+        gstin: string | null;
         businessName: string;
         businessType: string | null;
-        gstin: string | null;
         billingAddressLine1: string | null;
         billingAddressLine2: string | null;
         billingCity: string | null;
@@ -103,17 +108,12 @@ export declare class CustomerMeController {
         shippingCountry: string | null;
         storePhotoUrl: string | null;
         customerSource: string | null;
-        id: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         customerCode: string | null;
         mainContactNumber: string;
         pricingGroupId: string | null;
         assignedSalesStaffId: string | null;
         approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
-        approvedBy: string | null;
-        approvedAt: Date | null;
         rejectionReason: string | null;
         creditLimit: number | null;
         openingBalance: number | null;
@@ -121,15 +121,15 @@ export declare class CustomerMeController {
         lastOrderAt: Date | null;
     }>;
     addMyContact(customerId: string, dto: CreateContactDto): Promise<{
+        id: string;
+        customerId: string;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         email: string | null;
         mobile: string;
         designation: string | null;
-        id: string;
-        customerId: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         photoUrl: string | null;
         whatsappNumber: string | null;
         loginAccess: boolean;
@@ -139,15 +139,15 @@ export declare class CustomerMeController {
         canDownloadInvoice: boolean;
     }>;
     updateMyContact(customerId: string, contactId: string, dto: UpdateContactDto): Promise<{
+        id: string;
+        customerId: string;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         email: string | null;
         mobile: string;
         designation: string | null;
-        id: string;
-        customerId: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         photoUrl: string | null;
         whatsappNumber: string | null;
         loginAccess: boolean;
@@ -157,15 +157,15 @@ export declare class CustomerMeController {
         canDownloadInvoice: boolean;
     }>;
     removeMyContact(customerId: string, contactId: string): Promise<{
+        id: string;
+        customerId: string;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         email: string | null;
         mobile: string;
         designation: string | null;
-        id: string;
-        customerId: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         photoUrl: string | null;
         whatsappNumber: string | null;
         loginAccess: boolean;

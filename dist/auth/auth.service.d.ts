@@ -26,16 +26,16 @@ export declare class AuthService {
             userType: import("@prisma/client").$Enums.UserType;
         };
         staff: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
             mobile: string;
             employeeCode: string;
             designation: string | null;
             department: string | null;
-            id: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             photoUrl: string | null;
             joiningDate: Date | null;
             salary: number | null;
@@ -53,9 +53,14 @@ export declare class AuthService {
         };
         customer: {
             status: import("@prisma/client").$Enums.ApprovalStatus;
+            id: string;
+            approvedBy: string | null;
+            approvedAt: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
+            gstin: string | null;
             businessName: string;
             businessType: string | null;
-            gstin: string | null;
             billingAddressLine1: string | null;
             billingAddressLine2: string | null;
             billingCity: string | null;
@@ -70,17 +75,12 @@ export declare class AuthService {
             shippingCountry: string | null;
             storePhotoUrl: string | null;
             customerSource: string | null;
-            id: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             customerCode: string | null;
             mainContactNumber: string;
             pricingGroupId: string | null;
             assignedSalesStaffId: string | null;
             approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
-            approvedBy: string | null;
-            approvedAt: Date | null;
             rejectionReason: string | null;
             creditLimit: number | null;
             openingBalance: number | null;
@@ -120,10 +120,10 @@ export declare class AuthService {
     updateProfile(userId: string, dto: UpdateProfileDto): Promise<{
         message: string;
         user: {
+            id: string;
             name: string;
             email: string | null;
             mobile: string;
-            id: string;
             userType: import("@prisma/client").$Enums.UserType;
             isActive: boolean;
             isVerified: boolean;
@@ -132,9 +132,14 @@ export declare class AuthService {
     getProfile(userId: string): Promise<{
         role: import("@prisma/client").$Enums.UserType;
         customer: {
+            id: string;
+            approvedBy: string | null;
+            approvedAt: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
+            gstin: string | null;
             businessName: string;
             businessType: string | null;
-            gstin: string | null;
             billingAddressLine1: string | null;
             billingAddressLine2: string | null;
             billingCity: string | null;
@@ -149,17 +154,12 @@ export declare class AuthService {
             shippingCountry: string | null;
             storePhotoUrl: string | null;
             customerSource: string | null;
-            id: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             customerCode: string | null;
             mainContactNumber: string;
             pricingGroupId: string | null;
             assignedSalesStaffId: string | null;
             approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
-            approvedBy: string | null;
-            approvedAt: Date | null;
             rejectionReason: string | null;
             creditLimit: number | null;
             openingBalance: number | null;
@@ -167,15 +167,15 @@ export declare class AuthService {
             lastOrderAt: Date | null;
         } | null;
         customerContact: {
+            id: string;
+            customerId: string;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
             mobile: string;
             designation: string | null;
-            id: string;
-            customerId: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             photoUrl: string | null;
             whatsappNumber: string | null;
             loginAccess: boolean;
@@ -184,34 +184,34 @@ export declare class AuthService {
             canViewLedger: boolean;
             canDownloadInvoice: boolean;
         } | null;
+        id: string;
+        createdAt: Date;
         name: string;
         email: string | null;
         mobile: string;
-        id: string;
         userType: import("@prisma/client").$Enums.UserType;
         isActive: boolean;
         isVerified: boolean;
         lastLoginAt: Date | null;
-        createdAt: Date;
         staff: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
             mobile: string;
             employeeCode: string;
             designation: string | null;
             department: string | null;
-            id: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             photoUrl: string | null;
             joiningDate: Date | null;
             salary: number | null;
         } | null;
         userRoles: {
             role: {
-                name: string;
                 id: string;
+                name: string;
                 rolePermissions: {
                     permission: {
                         description: string | null;
@@ -248,9 +248,9 @@ export declare class AuthService {
         refreshToken: string;
     }>;
     getCustomerStatus(id: string): Promise<{
-        businessName: string;
-        gstin: string | null;
         id: string;
+        gstin: string | null;
+        businessName: string;
         isActive: boolean;
         approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
         rejectionReason: string | null;

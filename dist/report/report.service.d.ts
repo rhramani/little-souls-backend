@@ -22,8 +22,8 @@ export declare class ReportService {
     getOutstandingBalances(): Promise<{
         totalOutstanding: number;
         topDefaulters: {
-            businessName: string;
             id: string;
+            businessName: string;
             currentBalance: number | null;
         }[];
     }>;

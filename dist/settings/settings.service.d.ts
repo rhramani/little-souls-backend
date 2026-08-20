@@ -5,10 +5,10 @@ export declare class SettingsService {
     private readonly prisma;
     constructor(prisma: PrismaService);
     getSettings(): Promise<{
-        businessName: string | null;
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        businessName: string | null;
         businessLogoUrl: string | null;
         faviconUrl: string | null;
         contactEmail: string | null;
@@ -44,10 +44,10 @@ export declare class SettingsService {
         defaultTaxPercent: number | null;
     }>;
     updateSettings(dto: UpdateSettingsDto): Promise<{
-        businessName: string | null;
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        businessName: string | null;
         businessLogoUrl: string | null;
         faviconUrl: string | null;
         contactEmail: string | null;

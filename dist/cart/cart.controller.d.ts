@@ -11,9 +11,9 @@ export declare class CartController {
                     id: string;
                     createdAt: Date;
                     updatedAt: Date;
+                    createdBy: string | null;
                     isPrimary: boolean;
                     sortOrder: number | null;
-                    createdBy: string | null;
                     originalUrl: string;
                     altText: string | null;
                     productId: string;
@@ -23,15 +23,15 @@ export declare class CartController {
                 }[];
             } & {
                 productImage: string | null;
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
+                createdBy: string | null;
                 description: string | null;
+                isActive: boolean;
                 slug: string;
                 sortOrder: number | null;
-                createdBy: string | null;
                 updatedBy: string | null;
                 sku: string;
                 shortDescription: string | null;
@@ -87,8 +87,8 @@ export declare class CartController {
         })[];
     } & {
         id: string;
-        customerContactId: string | null;
         customerId: string;
+        customerContactId: string | null;
         createdAt: Date;
         updatedAt: Date;
         status: string;
@@ -100,9 +100,9 @@ export declare class CartController {
                     id: string;
                     createdAt: Date;
                     updatedAt: Date;
+                    createdBy: string | null;
                     isPrimary: boolean;
                     sortOrder: number | null;
-                    createdBy: string | null;
                     originalUrl: string;
                     altText: string | null;
                     productId: string;
@@ -112,15 +112,15 @@ export declare class CartController {
                 }[];
             } & {
                 productImage: string | null;
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
+                createdBy: string | null;
                 description: string | null;
+                isActive: boolean;
                 slug: string;
                 sortOrder: number | null;
-                createdBy: string | null;
                 updatedBy: string | null;
                 sku: string;
                 shortDescription: string | null;
@@ -176,8 +176,8 @@ export declare class CartController {
         })[];
     } & {
         id: string;
-        customerContactId: string | null;
         customerId: string;
+        customerContactId: string | null;
         createdAt: Date;
         updatedAt: Date;
         status: string;
@@ -189,9 +189,9 @@ export declare class CartController {
                     id: string;
                     createdAt: Date;
                     updatedAt: Date;
+                    createdBy: string | null;
                     isPrimary: boolean;
                     sortOrder: number | null;
-                    createdBy: string | null;
                     originalUrl: string;
                     altText: string | null;
                     productId: string;
@@ -201,15 +201,15 @@ export declare class CartController {
                 }[];
             } & {
                 productImage: string | null;
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
+                createdBy: string | null;
                 description: string | null;
+                isActive: boolean;
                 slug: string;
                 sortOrder: number | null;
-                createdBy: string | null;
                 updatedBy: string | null;
                 sku: string;
                 shortDescription: string | null;
@@ -265,8 +265,8 @@ export declare class CartController {
         })[];
     } & {
         id: string;
-        customerContactId: string | null;
         customerId: string;
+        customerContactId: string | null;
         createdAt: Date;
         updatedAt: Date;
         status: string;
@@ -278,9 +278,9 @@ export declare class CartController {
                     id: string;
                     createdAt: Date;
                     updatedAt: Date;
+                    createdBy: string | null;
                     isPrimary: boolean;
                     sortOrder: number | null;
-                    createdBy: string | null;
                     originalUrl: string;
                     altText: string | null;
                     productId: string;
@@ -290,15 +290,15 @@ export declare class CartController {
                 }[];
             } & {
                 productImage: string | null;
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
+                createdBy: string | null;
                 description: string | null;
+                isActive: boolean;
                 slug: string;
                 sortOrder: number | null;
-                createdBy: string | null;
                 updatedBy: string | null;
                 sku: string;
                 shortDescription: string | null;
@@ -354,8 +354,8 @@ export declare class CartController {
         })[];
     } & {
         id: string;
-        customerContactId: string | null;
         customerId: string;
+        customerContactId: string | null;
         createdAt: Date;
         updatedAt: Date;
         status: string;
@@ -367,9 +367,9 @@ export declare class CartController {
                     id: string;
                     createdAt: Date;
                     updatedAt: Date;
+                    createdBy: string | null;
                     isPrimary: boolean;
                     sortOrder: number | null;
-                    createdBy: string | null;
                     originalUrl: string;
                     altText: string | null;
                     productId: string;
@@ -379,15 +379,15 @@ export declare class CartController {
                 }[];
             } & {
                 productImage: string | null;
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
+                createdBy: string | null;
                 description: string | null;
+                isActive: boolean;
                 slug: string;
                 sortOrder: number | null;
-                createdBy: string | null;
                 updatedBy: string | null;
                 sku: string;
                 shortDescription: string | null;
@@ -443,8 +443,8 @@ export declare class CartController {
         })[];
     } & {
         id: string;
-        customerContactId: string | null;
         customerId: string;
+        customerContactId: string | null;
         createdAt: Date;
         updatedAt: Date;
         status: string;

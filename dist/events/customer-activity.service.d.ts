@@ -73,14 +73,14 @@ export declare class CustomerActivityService {
             sectionDurationsObj: any;
             activitiesList: any;
             user: {
+                id: string;
                 name: string;
                 email: string | null;
                 mobile: string;
-                id: string;
             };
             customer: {
-                businessName: string;
                 id: string;
+                businessName: string;
                 customerCode: string | null;
                 mainContactNumber: string;
             };
@@ -88,11 +88,11 @@ export declare class CustomerActivityService {
             customerId: string;
             createdAt: Date;
             updatedAt: Date;
+            status: string;
             sessionId: string | null;
             loginTime: Date;
             logoutTime: Date | null;
             totalDuration: number | null;
-            status: string;
             sectionDurations: string | null;
             activities: string | null;
             userId: string;
@@ -109,26 +109,31 @@ export declare class CustomerActivityService {
         sectionDurationsObj: any;
         activitiesList: any;
         user: {
+            id: string;
+            customerId: string | null;
+            customerContactId: string | null;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
             mobile: string;
-            id: string;
-            customerContactId: string | null;
             passwordHash: string;
             plainPassword: string | null;
             userType: import("@prisma/client").$Enums.UserType;
-            customerId: string | null;
             staffId: string | null;
             isActive: boolean;
             isVerified: boolean;
             lastLoginAt: Date | null;
-            createdAt: Date;
-            updatedAt: Date;
         };
         customer: {
+            id: string;
+            approvedBy: string | null;
+            approvedAt: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
+            gstin: string | null;
             businessName: string;
             businessType: string | null;
-            gstin: string | null;
             billingAddressLine1: string | null;
             billingAddressLine2: string | null;
             billingCity: string | null;
@@ -143,17 +148,12 @@ export declare class CustomerActivityService {
             shippingCountry: string | null;
             storePhotoUrl: string | null;
             customerSource: string | null;
-            id: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             customerCode: string | null;
             mainContactNumber: string;
             pricingGroupId: string | null;
             assignedSalesStaffId: string | null;
             approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
-            approvedBy: string | null;
-            approvedAt: Date | null;
             rejectionReason: string | null;
             creditLimit: number | null;
             openingBalance: number | null;
@@ -164,11 +164,11 @@ export declare class CustomerActivityService {
         customerId: string;
         createdAt: Date;
         updatedAt: Date;
+        status: string;
         sessionId: string | null;
         loginTime: Date;
         logoutTime: Date | null;
         totalDuration: number | null;
-        status: string;
         sectionDurations: string | null;
         activities: string | null;
         userId: string;

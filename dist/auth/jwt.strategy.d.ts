@@ -13,9 +13,14 @@ export declare class JwtStrategy extends JwtStrategy_base {
         type: string;
     }): Promise<{
         customer: {
+            id: string;
+            approvedBy: string | null;
+            approvedAt: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
+            gstin: string | null;
             businessName: string;
             businessType: string | null;
-            gstin: string | null;
             billingAddressLine1: string | null;
             billingAddressLine2: string | null;
             billingCity: string | null;
@@ -30,17 +35,12 @@ export declare class JwtStrategy extends JwtStrategy_base {
             shippingCountry: string | null;
             storePhotoUrl: string | null;
             customerSource: string | null;
-            id: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             customerCode: string | null;
             mainContactNumber: string;
             pricingGroupId: string | null;
             assignedSalesStaffId: string | null;
             approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
-            approvedBy: string | null;
-            approvedAt: Date | null;
             rejectionReason: string | null;
             creditLimit: number | null;
             openingBalance: number | null;
@@ -48,15 +48,15 @@ export declare class JwtStrategy extends JwtStrategy_base {
             lastOrderAt: Date | null;
         } | null;
         customerContact: {
+            id: string;
+            customerId: string;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
             mobile: string;
             designation: string | null;
-            id: string;
-            customerId: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             photoUrl: string | null;
             whatsappNumber: string | null;
             loginAccess: boolean;
@@ -66,16 +66,16 @@ export declare class JwtStrategy extends JwtStrategy_base {
             canDownloadInvoice: boolean;
         } | null;
         staff: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
             mobile: string;
             employeeCode: string;
             designation: string | null;
             department: string | null;
-            id: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             photoUrl: string | null;
             joiningDate: Date | null;
             salary: number | null;
@@ -98,12 +98,12 @@ export declare class JwtStrategy extends JwtStrategy_base {
                     permissionId: string;
                 })[];
             } & {
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
                 description: string | null;
+                isActive: boolean;
                 isSystemRole: boolean;
             };
         } & {
@@ -113,21 +113,21 @@ export declare class JwtStrategy extends JwtStrategy_base {
             roleId: string;
         })[];
     } & {
+        id: string;
+        customerId: string | null;
+        customerContactId: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         email: string | null;
         mobile: string;
-        id: string;
-        customerContactId: string | null;
         passwordHash: string;
         plainPassword: string | null;
         userType: import("@prisma/client").$Enums.UserType;
-        customerId: string | null;
         staffId: string | null;
         isActive: boolean;
         isVerified: boolean;
         lastLoginAt: Date | null;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
 }
 export {};

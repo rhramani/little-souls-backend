@@ -448,6 +448,36 @@ let OrderService = class OrderService {
                         });
                     }
                 }
+                if (newStatus === 'CANCELLED') {
+                    const linkedInvoices = await tx.invoice.findMany({
+                        where: { orderId: id },
+                        select: { id: true },
+                    });
+                    const invoiceIds = linkedInvoices.map((i) => i.id);
+                    await tx.invoice.updateMany({
+                        where: { orderId: id },
+                        data: { status: 'CANCELLED' },
+                    });
+                    await tx.ledgerEntry.updateMany({
+                        where: {
+                            OR: [
+                                { referenceId: { in: invoiceIds } },
+                                { referenceId: id },
+                            ],
+                        },
+                        data: { transactionStatus: 'CANCELLED' },
+                    });
+                    if (invoiceIds.length > 0) {
+                        await tx.customer.update({
+                            where: { id: order.customerId },
+                            data: {
+                                currentBalance: {
+                                    decrement: order.grandTotal,
+                                },
+                            },
+                        });
+                    }
+                }
             }
             const updatedOrder = await tx.order.update({
                 where: { id },
@@ -549,6 +579,34 @@ let OrderService = class OrderService {
                     }
                 });
                 await Promise.all(restoreStockPromises);
+                const linkedInvoices = await tx.invoice.findMany({
+                    where: { orderId: id },
+                    select: { id: true },
+                });
+                const invoiceIds = linkedInvoices.map((i) => i.id);
+                await tx.invoice.updateMany({
+                    where: { orderId: id },
+                    data: { status: 'CANCELLED' },
+                });
+                await tx.ledgerEntry.updateMany({
+                    where: {
+                        OR: [
+                            { referenceId: { in: invoiceIds } },
+                            { referenceId: id },
+                        ],
+                    },
+                    data: { transactionStatus: 'CANCELLED' },
+                });
+                if (invoiceIds.length > 0) {
+                    await tx.customer.update({
+                        where: { id: order.customerId },
+                        data: {
+                            currentBalance: {
+                                decrement: order.grandTotal,
+                            },
+                        },
+                    });
+                }
             }
             return updatedOrder;
         });
@@ -977,6 +1035,63 @@ let OrderService = class OrderService {
                     customerContact: true,
                 },
             });
+            const existingInvoices = await tx.invoice.findMany({
+                where: { orderId: id },
+            });
+            for (const invoice of existingInvoices) {
+                await tx.invoice.update({
+                    where: { id: invoice.id },
+                    data: {
+                        subTotal,
+                        discountTotal: finalDiscountTotal,
+                        taxTotal: finalTaxTotal,
+                        grandTotal,
+                        taxableAmount: subTotal,
+                    },
+                });
+                await tx.invoiceItem.deleteMany({
+                    where: { invoiceId: invoice.id },
+                });
+                const invoiceItemsData = orderItemsData.map((item) => ({
+                    invoiceId: invoice.id,
+                    productId: item.productId,
+                    sku: item.sku,
+                    productName: item.productName,
+                    productImageUrl: item.productImageUrl || null,
+                    quantity: item.quantity,
+                    price: item.price,
+                    taxPercent: item.taxPercent || 0,
+                    lineSubTotal: item.lineSubTotal,
+                    lineTaxTotal: item.lineTaxTotal,
+                    lineTotal: item.lineTotal,
+                }));
+                await tx.invoiceItem.createMany({
+                    data: invoiceItemsData,
+                });
+                await tx.ledgerEntry.updateMany({
+                    where: {
+                        OR: [
+                            { referenceId: invoice.id },
+                            { referenceId: id },
+                        ],
+                        entryType: 'INVOICE',
+                    },
+                    data: {
+                        debit: grandTotal,
+                    },
+                });
+            }
+            const amountDiff = grandTotal - (order.grandTotal || 0);
+            if (amountDiff !== 0 && existingInvoices.length > 0) {
+                await tx.customer.update({
+                    where: { id: order.customerId },
+                    data: {
+                        currentBalance: {
+                            increment: amountDiff,
+                        },
+                    },
+                });
+            }
             await tx.orderStatusHistory.create({
                 data: {
                     orderId: id,

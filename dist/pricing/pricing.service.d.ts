@@ -7,12 +7,12 @@ export declare class PricingService {
     private readonly prisma;
     constructor(prisma: PrismaService);
     createGroup(dto: CreatePricingGroupDto): Promise<{
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
+        isActive: boolean;
         code: string;
     }>;
     findAllGroups(): Promise<({
@@ -21,36 +21,36 @@ export declare class PricingService {
             customers: number;
         };
     } & {
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
+        isActive: boolean;
         code: string;
     })[]>;
     findOneGroup(id: string): Promise<{
         customers: {
-            businessName: string;
             id: string;
+            businessName: string;
             customerCode: string | null;
         }[];
     } & {
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
+        isActive: boolean;
         code: string;
     }>;
     updateGroup(id: string, dto: UpdatePricingGroupDto): Promise<{
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
+        isActive: boolean;
         code: string;
     }>;
     removeGroup(id: string): Promise<{
@@ -58,29 +58,29 @@ export declare class PricingService {
     }>;
     setProductPrice(dto: SetProductPricingDto, userId: string): Promise<{
         pricingGroup: {
-            name: string;
             id: string;
-            isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
             description: string | null;
+            isActive: boolean;
             code: string;
         };
         product: {
-            name: string;
             id: string;
+            name: string;
             sku: string;
         };
     } & {
         id: string;
+        discountPercent: number | null;
         createdAt: Date;
         updatedAt: Date;
-        pricingGroupId: string;
         createdBy: string | null;
+        pricingGroupId: string;
         updatedBy: string | null;
         price: number;
         mrp: number | null;
-        discountPercent: number | null;
         minQuantity: number | null;
         maxQuantity: number | null;
         productId: string;

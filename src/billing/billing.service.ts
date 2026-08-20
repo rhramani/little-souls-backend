@@ -15,20 +15,7 @@ export class BillingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async generateInvoice(orderId: string, userId: string) {
-    // 1. Check if invoice already exists for this order
-    const existingInvoice = await this.prisma.invoice.findFirst({
-      where: { orderId },
-    });
-    if (existingInvoice) {
-      return this.prisma.invoice.findUnique({
-        where: { id: existingInvoice.id },
-        include: {
-          items: true,
-        },
-      });
-    }
-
-    // 2. Fetch the order details
+    // 1. Fetch the order details
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -39,6 +26,51 @@ export class BillingService {
 
     if (!order) {
       throw new NotFoundException(`Order with ID '${orderId}' not found.`);
+    }
+
+    // 2. Check if invoice already exists for this order
+    const existingInvoice = await this.prisma.invoice.findFirst({
+      where: { orderId },
+    });
+    if (existingInvoice) {
+      if (
+        existingInvoice.status === 'CANCELLED' ||
+        existingInvoice.grandTotal !== order.grandTotal ||
+        existingInvoice.taxTotal !== order.taxTotal
+      ) {
+        await this.prisma.invoice.update({
+          where: { id: existingInvoice.id },
+          data: {
+            status: 'GENERATED',
+            subTotal: order.subTotal,
+            discountTotal: order.discountTotal,
+            taxTotal: order.taxTotal,
+            grandTotal: order.grandTotal,
+            taxableAmount: order.subTotal,
+          },
+        });
+
+        await this.prisma.ledgerEntry.updateMany({
+          where: {
+            OR: [
+              { referenceId: existingInvoice.id },
+              { referenceId: order.id },
+            ],
+            entryType: 'INVOICE',
+          },
+          data: {
+            debit: order.grandTotal,
+            transactionStatus: 'PENDING',
+          },
+        });
+      }
+
+      return this.prisma.invoice.findUnique({
+        where: { id: existingInvoice.id },
+        include: {
+          items: true,
+        },
+      });
     }
 
     // Invoice generation eligibility check
@@ -874,6 +906,7 @@ export class BillingService {
               data: {
                 ...(targetPayStatus && { paymentStatus: targetPayStatus }),
                 ...(data.paymentMode && { notes: updatedNotes }),
+                ...(data.amount !== undefined && { grandTotal: data.amount }),
               },
             });
           }
@@ -898,8 +931,28 @@ export class BillingService {
           data: {
             ...(targetPayStatus && { paymentStatus: targetPayStatus }),
             ...(data.paymentMode && { notes: updatedNotes }),
+            ...(data.amount !== undefined && { grandTotal: data.amount }),
           },
         });
+      }
+    }
+
+    // Adjust customer's currentBalance if amount changed
+    if (data.amount !== undefined && entry.customerId) {
+      const oldAmount = entry.debit > 0 ? entry.debit : entry.credit;
+      const diff = data.amount - oldAmount;
+      if (diff !== 0) {
+        if (entry.debit > 0) {
+          await this.prisma.customer.update({
+            where: { id: entry.customerId },
+            data: { currentBalance: { increment: diff } },
+          });
+        } else if (entry.credit > 0) {
+          await this.prisma.customer.update({
+            where: { id: entry.customerId },
+            data: { currentBalance: { decrement: diff } },
+          });
+        }
       }
     } else if (entry.referenceType === 'PAYMENT' && entry.referenceId) {
       const payment = await this.prisma.payment.findFirst({

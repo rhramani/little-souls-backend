@@ -4,9 +4,9 @@ export declare class NotificationController {
     constructor(notificationService: NotificationService);
     getMyNotifications(userId: string, page?: number, limit?: number): Promise<{
         notifications: {
-            message: string;
             id: string;
             createdAt: Date;
+            message: string;
             userId: string;
             title: string;
             notificationType: string;
@@ -25,9 +25,9 @@ export declare class NotificationController {
         message: string;
     }>;
     markRead(id: string, userId: string): Promise<{
-        message: string;
         id: string;
         createdAt: Date;
+        message: string;
         userId: string;
         title: string;
         notificationType: string;

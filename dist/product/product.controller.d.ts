@@ -10,28 +10,28 @@ export declare class ProductController {
     constructor(productService: ProductService);
     create(createProductDto: CreateProductDto, userId: string): Promise<({
         category: {
-            name: string;
             id: string;
-            isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
+            createdBy: string | null;
             description: string | null;
+            isActive: boolean;
             slug: string;
             parentCategoryId: string | null;
             imageUrl: string | null;
             bannerUrl: string | null;
             catalogueId: string | null;
             sortOrder: number | null;
-            createdBy: string | null;
             updatedBy: string | null;
         };
         images: {
             id: string;
             createdAt: Date;
             updatedAt: Date;
+            createdBy: string | null;
             isPrimary: boolean;
             sortOrder: number | null;
-            createdBy: string | null;
             originalUrl: string;
             altText: string | null;
             productId: string;
@@ -41,24 +41,24 @@ export declare class ProductController {
         }[];
         pricing: ({
             pricingGroup: {
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
                 description: string | null;
+                isActive: boolean;
                 code: string;
             };
         } & {
             id: string;
+            discountPercent: number | null;
             createdAt: Date;
             updatedAt: Date;
-            pricingGroupId: string;
             createdBy: string | null;
+            pricingGroupId: string;
             updatedBy: string | null;
             price: number;
             mrp: number | null;
-            discountPercent: number | null;
             minQuantity: number | null;
             maxQuantity: number | null;
             productId: string;
@@ -67,15 +67,15 @@ export declare class ProductController {
         })[];
     } & {
         productImage: string | null;
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
+        createdBy: string | null;
         description: string | null;
+        isActive: boolean;
         slug: string;
         sortOrder: number | null;
-        createdBy: string | null;
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
@@ -123,28 +123,28 @@ export declare class ProductController {
         products: {
             activePrice: any;
             category: {
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
+                createdBy: string | null;
                 description: string | null;
+                isActive: boolean;
                 slug: string;
                 parentCategoryId: string | null;
                 imageUrl: string | null;
                 bannerUrl: string | null;
                 catalogueId: string | null;
                 sortOrder: number | null;
-                createdBy: string | null;
                 updatedBy: string | null;
             };
             images: {
                 id: string;
                 createdAt: Date;
                 updatedAt: Date;
+                createdBy: string | null;
                 isPrimary: boolean;
                 sortOrder: number | null;
-                createdBy: string | null;
                 originalUrl: string;
                 altText: string | null;
                 productId: string;
@@ -154,24 +154,24 @@ export declare class ProductController {
             }[];
             pricing: ({
                 pricingGroup: {
-                    name: string;
                     id: string;
-                    isActive: boolean;
                     createdAt: Date;
                     updatedAt: Date;
+                    name: string;
                     description: string | null;
+                    isActive: boolean;
                     code: string;
                 };
             } & {
                 id: string;
+                discountPercent: number | null;
                 createdAt: Date;
                 updatedAt: Date;
-                pricingGroupId: string;
                 createdBy: string | null;
+                pricingGroupId: string;
                 updatedBy: string | null;
                 price: number;
                 mrp: number | null;
-                discountPercent: number | null;
                 minQuantity: number | null;
                 maxQuantity: number | null;
                 productId: string;
@@ -179,15 +179,15 @@ export declare class ProductController {
                 effectiveTo: Date | null;
             })[];
             productImage: string | null;
-            name: string;
             id: string;
-            isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
+            createdBy: string | null;
             description: string | null;
+            isActive: boolean;
             slug: string;
             sortOrder: number | null;
-            createdBy: string | null;
             updatedBy: string | null;
             sku: string;
             shortDescription: string | null;
@@ -241,28 +241,28 @@ export declare class ProductController {
     findOne(id: string, user?: any): Promise<{
         activePrice: any;
         category: {
-            name: string;
             id: string;
-            isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
+            createdBy: string | null;
             description: string | null;
+            isActive: boolean;
             slug: string;
             parentCategoryId: string | null;
             imageUrl: string | null;
             bannerUrl: string | null;
             catalogueId: string | null;
             sortOrder: number | null;
-            createdBy: string | null;
             updatedBy: string | null;
         };
         images: {
             id: string;
             createdAt: Date;
             updatedAt: Date;
+            createdBy: string | null;
             isPrimary: boolean;
             sortOrder: number | null;
-            createdBy: string | null;
             originalUrl: string;
             altText: string | null;
             productId: string;
@@ -272,24 +272,24 @@ export declare class ProductController {
         }[];
         pricing: ({
             pricingGroup: {
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
                 description: string | null;
+                isActive: boolean;
                 code: string;
             };
         } & {
             id: string;
+            discountPercent: number | null;
             createdAt: Date;
             updatedAt: Date;
-            pricingGroupId: string;
             createdBy: string | null;
+            pricingGroupId: string;
             updatedBy: string | null;
             price: number;
             mrp: number | null;
-            discountPercent: number | null;
             minQuantity: number | null;
             maxQuantity: number | null;
             productId: string;
@@ -297,15 +297,15 @@ export declare class ProductController {
             effectiveTo: Date | null;
         })[];
         productImage: string | null;
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
+        createdBy: string | null;
         description: string | null;
+        isActive: boolean;
         slug: string;
         sortOrder: number | null;
-        createdBy: string | null;
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
@@ -352,28 +352,28 @@ export declare class ProductController {
     findOneBySlug(slug: string, user?: any): Promise<{
         activePrice: any;
         category: {
-            name: string;
             id: string;
-            isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
+            createdBy: string | null;
             description: string | null;
+            isActive: boolean;
             slug: string;
             parentCategoryId: string | null;
             imageUrl: string | null;
             bannerUrl: string | null;
             catalogueId: string | null;
             sortOrder: number | null;
-            createdBy: string | null;
             updatedBy: string | null;
         };
         images: {
             id: string;
             createdAt: Date;
             updatedAt: Date;
+            createdBy: string | null;
             isPrimary: boolean;
             sortOrder: number | null;
-            createdBy: string | null;
             originalUrl: string;
             altText: string | null;
             productId: string;
@@ -383,24 +383,24 @@ export declare class ProductController {
         }[];
         pricing: ({
             pricingGroup: {
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
                 description: string | null;
+                isActive: boolean;
                 code: string;
             };
         } & {
             id: string;
+            discountPercent: number | null;
             createdAt: Date;
             updatedAt: Date;
-            pricingGroupId: string;
             createdBy: string | null;
+            pricingGroupId: string;
             updatedBy: string | null;
             price: number;
             mrp: number | null;
-            discountPercent: number | null;
             minQuantity: number | null;
             maxQuantity: number | null;
             productId: string;
@@ -408,15 +408,15 @@ export declare class ProductController {
             effectiveTo: Date | null;
         })[];
         productImage: string | null;
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
+        createdBy: string | null;
         description: string | null;
+        isActive: boolean;
         slug: string;
         sortOrder: number | null;
-        createdBy: string | null;
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
@@ -462,28 +462,28 @@ export declare class ProductController {
     }>;
     update(id: string, updateProductDto: UpdateProductDto, userId: string): Promise<({
         category: {
-            name: string;
             id: string;
-            isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
+            name: string;
+            createdBy: string | null;
             description: string | null;
+            isActive: boolean;
             slug: string;
             parentCategoryId: string | null;
             imageUrl: string | null;
             bannerUrl: string | null;
             catalogueId: string | null;
             sortOrder: number | null;
-            createdBy: string | null;
             updatedBy: string | null;
         };
         images: {
             id: string;
             createdAt: Date;
             updatedAt: Date;
+            createdBy: string | null;
             isPrimary: boolean;
             sortOrder: number | null;
-            createdBy: string | null;
             originalUrl: string;
             altText: string | null;
             productId: string;
@@ -493,24 +493,24 @@ export declare class ProductController {
         }[];
         pricing: ({
             pricingGroup: {
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
                 description: string | null;
+                isActive: boolean;
                 code: string;
             };
         } & {
             id: string;
+            discountPercent: number | null;
             createdAt: Date;
             updatedAt: Date;
-            pricingGroupId: string;
             createdBy: string | null;
+            pricingGroupId: string;
             updatedBy: string | null;
             price: number;
             mrp: number | null;
-            discountPercent: number | null;
             minQuantity: number | null;
             maxQuantity: number | null;
             productId: string;
@@ -519,15 +519,15 @@ export declare class ProductController {
         })[];
     } & {
         productImage: string | null;
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
+        createdBy: string | null;
         description: string | null;
+        isActive: boolean;
         slug: string;
         sortOrder: number | null;
-        createdBy: string | null;
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
@@ -583,8 +583,8 @@ export declare class ProductController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        title: string;
         createdBy: string | null;
+        title: string;
         productId: string;
         thumbnailUrl: string | null;
         videoUrl: string;
@@ -594,8 +594,8 @@ export declare class ProductController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        title: string;
         createdBy: string | null;
+        title: string;
         productId: string;
         fileType: string;
         fileUrl: string;
@@ -607,9 +607,9 @@ export declare class ProductController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        createdBy: string | null;
         isPrimary: boolean;
         sortOrder: number | null;
-        createdBy: string | null;
         originalUrl: string;
         altText: string | null;
         productId: string;

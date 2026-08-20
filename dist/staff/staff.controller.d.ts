@@ -24,12 +24,12 @@ export declare class StaffController {
             permissionId: string;
         })[];
     } & {
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
+        isActive: boolean;
         isSystemRole: boolean;
     })[]>;
     updateRolePermissions(roleId: string, permissions: {
@@ -43,46 +43,46 @@ export declare class StaffController {
         name: string;
         description?: string;
     }): Promise<{
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
+        isActive: boolean;
         isSystemRole: boolean;
     }>;
     updateRole(roleId: string, data: {
         name?: string;
         description?: string;
     }): Promise<{
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
+        isActive: boolean;
         isSystemRole: boolean;
     }>;
     deleteRole(roleId: string): Promise<{
-        name: string;
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
+        isActive: boolean;
         isSystemRole: boolean;
     }>;
     createStaff(dto: CreateStaffDto): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         email: string | null;
         mobile: string;
         employeeCode: string;
         designation: string | null;
         department: string | null;
-        id: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         photoUrl: string | null;
         joiningDate: Date | null;
         salary: number | null;
@@ -90,20 +90,20 @@ export declare class StaffController {
     findAll(page?: number, limit?: number): Promise<{
         staff: ({
             users: {
+                id: string;
                 email: string | null;
                 mobile: string;
-                id: string;
                 userType: import("@prisma/client").$Enums.UserType;
                 isActive: boolean;
                 lastLoginAt: Date | null;
                 userRoles: ({
                     role: {
-                        name: string;
                         id: string;
-                        isActive: boolean;
                         createdAt: Date;
                         updatedAt: Date;
+                        name: string;
                         description: string | null;
+                        isActive: boolean;
                         isSystemRole: boolean;
                     };
                 } & {
@@ -114,16 +114,16 @@ export declare class StaffController {
                 })[];
             }[];
         } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
             mobile: string;
             employeeCode: string;
             designation: string | null;
             department: string | null;
-            id: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             photoUrl: string | null;
             joiningDate: Date | null;
             salary: number | null;
@@ -139,20 +139,20 @@ export declare class StaffController {
     }>;
     findOneStaff(staffId: string): Promise<{
         users: {
+            id: string;
             email: string | null;
             mobile: string;
-            id: string;
             userType: import("@prisma/client").$Enums.UserType;
             isActive: boolean;
             lastLoginAt: Date | null;
             userRoles: ({
                 role: {
-                    name: string;
                     id: string;
-                    isActive: boolean;
                     createdAt: Date;
                     updatedAt: Date;
+                    name: string;
                     description: string | null;
+                    isActive: boolean;
                     isSystemRole: boolean;
                 };
             } & {
@@ -163,31 +163,31 @@ export declare class StaffController {
             })[];
         }[];
     } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         email: string | null;
         mobile: string;
         employeeCode: string;
         designation: string | null;
         department: string | null;
-        id: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         photoUrl: string | null;
         joiningDate: Date | null;
         salary: number | null;
     }>;
     updateStaff(staffId: string, dto: UpdateStaffDto): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         email: string | null;
         mobile: string;
         employeeCode: string;
         designation: string | null;
         department: string | null;
-        id: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         photoUrl: string | null;
         joiningDate: Date | null;
         salary: number | null;
@@ -199,30 +199,35 @@ export declare class StaffController {
         message: string;
     }>;
     deleteStaff(staffId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         email: string | null;
         mobile: string;
         employeeCode: string;
         designation: string | null;
         department: string | null;
-        id: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         photoUrl: string | null;
         joiningDate: Date | null;
         salary: number | null;
     }>;
     assignCustomer(dto: AssignCustomerDto): Promise<{
         assignedSalesStaff: {
+            id: string;
             name: string;
             email: string | null;
-            id: string;
         } | null;
     } & {
+        id: string;
+        approvedBy: string | null;
+        approvedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+        gstin: string | null;
         businessName: string;
         businessType: string | null;
-        gstin: string | null;
         billingAddressLine1: string | null;
         billingAddressLine2: string | null;
         billingCity: string | null;
@@ -237,17 +242,12 @@ export declare class StaffController {
         shippingCountry: string | null;
         storePhotoUrl: string | null;
         customerSource: string | null;
-        id: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         customerCode: string | null;
         mainContactNumber: string;
         pricingGroupId: string | null;
         assignedSalesStaffId: string | null;
         approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
-        approvedBy: string | null;
-        approvedAt: Date | null;
         rejectionReason: string | null;
         creditLimit: number | null;
         openingBalance: number | null;
@@ -256,15 +256,15 @@ export declare class StaffController {
     }>;
     getMyCustomers(userId: string): Promise<({
         contacts: {
+            id: string;
+            customerId: string;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             email: string | null;
             mobile: string;
             designation: string | null;
-            id: string;
-            customerId: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             photoUrl: string | null;
             whatsappNumber: string | null;
             loginAccess: boolean;
@@ -274,9 +274,14 @@ export declare class StaffController {
             canDownloadInvoice: boolean;
         }[];
     } & {
+        id: string;
+        approvedBy: string | null;
+        approvedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+        gstin: string | null;
         businessName: string;
         businessType: string | null;
-        gstin: string | null;
         billingAddressLine1: string | null;
         billingAddressLine2: string | null;
         billingCity: string | null;
@@ -291,17 +296,12 @@ export declare class StaffController {
         shippingCountry: string | null;
         storePhotoUrl: string | null;
         customerSource: string | null;
-        id: string;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         customerCode: string | null;
         mainContactNumber: string;
         pricingGroupId: string | null;
         assignedSalesStaffId: string | null;
         approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
-        approvedBy: string | null;
-        approvedAt: Date | null;
         rejectionReason: string | null;
         creditLimit: number | null;
         openingBalance: number | null;
@@ -356,11 +356,11 @@ export declare class StaffController {
             };
         } & {
             id: string;
-            staffId: string;
+            approvedBy: string | null;
             createdAt: Date;
             updatedAt: Date;
-            approvedBy: string | null;
             status: string;
+            staffId: string;
             note: string | null;
             attendanceDate: Date;
             checkInTime: Date | null;
@@ -377,11 +377,11 @@ export declare class StaffController {
     }>;
     markAttendance(dto: MarkAttendanceDto, userId: string): Promise<{
         id: string;
-        staffId: string;
+        approvedBy: string | null;
         createdAt: Date;
         updatedAt: Date;
-        approvedBy: string | null;
         status: string;
+        staffId: string;
         note: string | null;
         attendanceDate: Date;
         checkInTime: Date | null;
@@ -391,11 +391,11 @@ export declare class StaffController {
     }>;
     checkIn(userId: string, note?: string): Promise<{
         id: string;
-        staffId: string;
+        approvedBy: string | null;
         createdAt: Date;
         updatedAt: Date;
-        approvedBy: string | null;
         status: string;
+        staffId: string;
         note: string | null;
         attendanceDate: Date;
         checkInTime: Date | null;
@@ -405,11 +405,11 @@ export declare class StaffController {
     }>;
     checkOut(userId: string): Promise<{
         id: string;
-        staffId: string;
+        approvedBy: string | null;
         createdAt: Date;
         updatedAt: Date;
-        approvedBy: string | null;
         status: string;
+        staffId: string;
         note: string | null;
         attendanceDate: Date;
         checkInTime: Date | null;
@@ -419,12 +419,12 @@ export declare class StaffController {
     }>;
     createLeave(dto: CreateLeaveRequestDto, userId: string): Promise<{
         id: string;
-        staffId: string;
-        createdAt: Date;
-        updatedAt: Date;
         approvedBy: string | null;
         approvedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
         status: string;
+        staffId: string;
         startDate: Date;
         endDate: Date;
         reason: string | null;
@@ -439,12 +439,12 @@ export declare class StaffController {
             };
         } & {
             id: string;
-            staffId: string;
-            createdAt: Date;
-            updatedAt: Date;
             approvedBy: string | null;
             approvedAt: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
             status: string;
+            staffId: string;
             startDate: Date;
             endDate: Date;
             reason: string | null;
@@ -460,12 +460,12 @@ export declare class StaffController {
     }>;
     approveLeave(id: string, userId: string): Promise<{
         id: string;
-        staffId: string;
-        createdAt: Date;
-        updatedAt: Date;
         approvedBy: string | null;
         approvedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
         status: string;
+        staffId: string;
         startDate: Date;
         endDate: Date;
         reason: string | null;
@@ -474,12 +474,12 @@ export declare class StaffController {
     }>;
     rejectLeave(id: string, userId: string): Promise<{
         id: string;
-        staffId: string;
-        createdAt: Date;
-        updatedAt: Date;
         approvedBy: string | null;
         approvedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
         status: string;
+        staffId: string;
         startDate: Date;
         endDate: Date;
         reason: string | null;
@@ -495,10 +495,10 @@ export declare class StaffController {
             };
         } & {
             id: string;
-            staffId: string;
+            paymentStatus: string;
             createdAt: Date;
             updatedAt: Date;
-            paymentStatus: string;
+            staffId: string;
             salaryMonth: number;
             salaryYear: number;
             daysWorked: number | null;
@@ -519,10 +519,10 @@ export declare class StaffController {
     }>;
     markPayrollPaid(id: string, userId: string): Promise<{
         id: string;
-        staffId: string;
+        paymentStatus: string;
         createdAt: Date;
         updatedAt: Date;
-        paymentStatus: string;
+        staffId: string;
         salaryMonth: number;
         salaryYear: number;
         daysWorked: number | null;
@@ -536,10 +536,10 @@ export declare class StaffController {
     }>;
     calculatePayroll(staffId: string, dto: any, userId: string): Promise<{
         id: string;
-        staffId: string;
+        paymentStatus: string;
         createdAt: Date;
         updatedAt: Date;
-        paymentStatus: string;
+        staffId: string;
         salaryMonth: number;
         salaryYear: number;
         daysWorked: number | null;
@@ -553,10 +553,10 @@ export declare class StaffController {
     }>;
     updatePayroll(id: string, dto: any, userId: string): Promise<{
         id: string;
-        staffId: string;
+        paymentStatus: string;
         createdAt: Date;
         updatedAt: Date;
-        paymentStatus: string;
+        staffId: string;
         salaryMonth: number;
         salaryYear: number;
         daysWorked: number | null;
@@ -570,10 +570,10 @@ export declare class StaffController {
     }>;
     deletePayroll(id: string): Promise<{
         id: string;
-        staffId: string;
+        paymentStatus: string;
         createdAt: Date;
         updatedAt: Date;
-        paymentStatus: string;
+        staffId: string;
         salaryMonth: number;
         salaryYear: number;
         daysWorked: number | null;

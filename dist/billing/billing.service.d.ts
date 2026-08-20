@@ -21,40 +21,40 @@ export declare class BillingService {
             invoiceId: string;
         }[];
     } & {
-        gstin: string | null;
         id: string;
         customerId: string;
+        subTotal: number;
+        discountTotal: number;
+        taxTotal: number;
+        shippingCharge: number;
+        grandTotal: number;
+        paymentStatus: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
-        createdBy: string | null;
-        orderId: string;
-        shippingCharge: number;
-        discountTotal: number;
-        paymentStatus: string;
         invoiceNumber: string;
+        orderId: string;
         invoiceDate: Date;
         dueDate: Date;
-        subTotal: number;
-        taxTotal: number;
-        grandTotal: number;
         pdfUrl: string | null;
+        status: string;
         billingAddress: string | null;
         shippingAddress: string | null;
+        gstin: string | null;
         taxableAmount: number;
+        createdBy: string | null;
     }) | null>;
     recordPayment(dto: RecordPaymentDto, userId: string, isVerified?: boolean): Promise<{
         id: string;
         customerId: string;
+        paymentStatus: string;
+        notes: string | null;
         createdAt: Date;
         updatedAt: Date;
-        notes: string | null;
         amount: number;
         paymentMode: string;
         transactionDate: Date;
         referenceNumber: string | null;
         attachmentUrl: string | null;
-        paymentStatus: string;
         paymentNumber: string;
         verifiedAt: Date | null;
         verifiedBy: string | null;
@@ -63,15 +63,15 @@ export declare class BillingService {
     verifyPayment(paymentId: string, userId: string): Promise<{
         id: string;
         customerId: string;
+        paymentStatus: string;
+        notes: string | null;
         createdAt: Date;
         updatedAt: Date;
-        notes: string | null;
         amount: number;
         paymentMode: string;
         transactionDate: Date;
         referenceNumber: string | null;
         attachmentUrl: string | null;
-        paymentStatus: string;
         paymentNumber: string;
         verifiedAt: Date | null;
         verifiedBy: string | null;
@@ -80,15 +80,15 @@ export declare class BillingService {
     rejectPayment(paymentId: string, userId: string): Promise<{
         id: string;
         customerId: string;
+        paymentStatus: string;
+        notes: string | null;
         createdAt: Date;
         updatedAt: Date;
-        notes: string | null;
         amount: number;
         paymentMode: string;
         transactionDate: Date;
         referenceNumber: string | null;
         attachmentUrl: string | null;
-        paymentStatus: string;
         paymentNumber: string;
         verifiedAt: Date | null;
         verifiedBy: string | null;
@@ -97,8 +97,9 @@ export declare class BillingService {
     findAllInvoices(query: QueryBillingDto, customerId?: string): Promise<{
         invoices: {
             customer: {
-                businessName: string;
+                id: string;
                 gstin: string | null;
+                businessName: string;
                 billingAddressLine1: string | null;
                 billingAddressLine2: string | null;
                 billingCity: string | null;
@@ -111,34 +112,33 @@ export declare class BillingService {
                 shippingState: string | null;
                 shippingPincode: string | null;
                 shippingCountry: string | null;
-                id: string;
                 customerCode: string | null;
                 mainContactNumber: string;
             } | null;
             order: {
                 orderNumber: string;
             };
-            gstin: string | null;
             id: string;
             customerId: string;
+            subTotal: number;
+            discountTotal: number;
+            taxTotal: number;
+            shippingCharge: number;
+            grandTotal: number;
+            paymentStatus: string;
             createdAt: Date;
             updatedAt: Date;
-            status: string;
-            createdBy: string | null;
-            orderId: string;
-            shippingCharge: number;
-            discountTotal: number;
-            paymentStatus: string;
             invoiceNumber: string;
+            orderId: string;
             invoiceDate: Date;
             dueDate: Date;
-            subTotal: number;
-            taxTotal: number;
-            grandTotal: number;
             pdfUrl: string | null;
+            status: string;
             billingAddress: string | null;
             shippingAddress: string | null;
+            gstin: string | null;
             taxableAmount: number;
+            createdBy: string | null;
         }[];
         meta: {
             total: number;
@@ -149,9 +149,14 @@ export declare class BillingService {
     }>;
     findOneInvoice(id: string, customerId?: string): Promise<{
         customer: {
+            id: string;
+            approvedBy: string | null;
+            approvedAt: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
+            gstin: string | null;
             businessName: string;
             businessType: string | null;
-            gstin: string | null;
             billingAddressLine1: string | null;
             billingAddressLine2: string | null;
             billingCity: string | null;
@@ -166,17 +171,12 @@ export declare class BillingService {
             shippingCountry: string | null;
             storePhotoUrl: string | null;
             customerSource: string | null;
-            id: string;
             isActive: boolean;
-            createdAt: Date;
-            updatedAt: Date;
             customerCode: string | null;
             mainContactNumber: string;
             pricingGroupId: string | null;
             assignedSalesStaffId: string | null;
             approvalStatus: import("@prisma/client").$Enums.ApprovalStatus;
-            approvedBy: string | null;
-            approvedAt: Date | null;
             rejectionReason: string | null;
             creditLimit: number | null;
             openingBalance: number | null;
@@ -190,9 +190,9 @@ export declare class BillingService {
                         id: string;
                         createdAt: Date;
                         updatedAt: Date;
+                        createdBy: string | null;
                         isPrimary: boolean;
                         sortOrder: number | null;
-                        createdBy: string | null;
                         originalUrl: string;
                         altText: string | null;
                         productId: string;
@@ -202,15 +202,15 @@ export declare class BillingService {
                     }[];
                 } & {
                     productImage: string | null;
-                    name: string;
                     id: string;
-                    isActive: boolean;
                     createdAt: Date;
                     updatedAt: Date;
+                    name: string;
+                    createdBy: string | null;
                     description: string | null;
+                    isActive: boolean;
                     slug: string;
                     sortOrder: number | null;
-                    createdBy: string | null;
                     updatedBy: string | null;
                     sku: string;
                     shortDescription: string | null;
@@ -256,16 +256,16 @@ export declare class BillingService {
                 };
             } & {
                 id: string;
+                discountPercent: number | null;
                 createdAt: Date;
                 updatedAt: Date;
+                orderId: string;
                 sku: string;
                 moq: number;
                 taxPercent: number | null;
                 price: number;
                 mrp: number | null;
-                discountPercent: number | null;
                 productId: string;
-                orderId: string;
                 productName: string;
                 productImageUrl: string | null;
                 quantity: number;
@@ -282,18 +282,25 @@ export declare class BillingService {
             })[];
         } & {
             id: string;
-            customerContactId: string | null;
+            orderNumber: string;
             customerId: string;
-            createdAt: Date;
-            updatedAt: Date;
-            approvedBy: string | null;
-            approvedAt: Date | null;
-            discountPercent: number | null;
-            deliveryAddress: string | null;
-            notes: string | null;
+            customerContactId: string | null;
+            orderStatus: string;
             orderSource: string;
-            shippingCharge: number;
+            deliveryAddress: string | null;
+            cancelledBy: string | null;
+            cancelledAt: Date | null;
+            cancelReason: string | null;
+            totalQuantity: number;
+            subTotal: number;
             discountTotal: number;
+            taxTotal: number;
+            shippingCharge: number;
+            grandTotal: number;
+            paymentStatus: string;
+            notes: string | null;
+            transportName: string | null;
+            ctn: string | null;
             packingCharges: number | null;
             packingCtnNote: string | null;
             otherCharges: number | null;
@@ -301,20 +308,13 @@ export declare class BillingService {
             otherDeduction: number | null;
             otherDeductionNote: string | null;
             discountType: string | null;
-            transportName: string | null;
-            ctn: string | null;
-            paymentStatus: string;
-            subTotal: number;
-            taxTotal: number;
-            grandTotal: number;
-            orderNumber: string;
-            orderStatus: string;
-            cancelledBy: string | null;
-            cancelledAt: Date | null;
-            cancelReason: string | null;
-            totalQuantity: number;
+            discountPercent: number | null;
             submittedAt: Date | null;
+            approvedBy: string | null;
+            approvedAt: Date | null;
             handledBySalesStaffId: string | null;
+            createdAt: Date;
+            updatedAt: Date;
         };
         items: ({
             product: ({
@@ -322,9 +322,9 @@ export declare class BillingService {
                     id: string;
                     createdAt: Date;
                     updatedAt: Date;
+                    createdBy: string | null;
                     isPrimary: boolean;
                     sortOrder: number | null;
-                    createdBy: string | null;
                     originalUrl: string;
                     altText: string | null;
                     productId: string;
@@ -334,15 +334,15 @@ export declare class BillingService {
                 }[];
             } & {
                 productImage: string | null;
-                name: string;
                 id: string;
-                isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
+                createdBy: string | null;
                 description: string | null;
+                isActive: boolean;
                 slug: string;
                 sortOrder: number | null;
-                createdBy: string | null;
                 updatedBy: string | null;
                 sku: string;
                 shortDescription: string | null;
@@ -402,33 +402,34 @@ export declare class BillingService {
             invoiceId: string;
         })[];
     } & {
-        gstin: string | null;
         id: string;
         customerId: string;
+        subTotal: number;
+        discountTotal: number;
+        taxTotal: number;
+        shippingCharge: number;
+        grandTotal: number;
+        paymentStatus: string;
         createdAt: Date;
         updatedAt: Date;
-        status: string;
-        createdBy: string | null;
-        orderId: string;
-        shippingCharge: number;
-        discountTotal: number;
-        paymentStatus: string;
         invoiceNumber: string;
+        orderId: string;
         invoiceDate: Date;
         dueDate: Date;
-        subTotal: number;
-        taxTotal: number;
-        grandTotal: number;
         pdfUrl: string | null;
+        status: string;
         billingAddress: string | null;
         shippingAddress: string | null;
+        gstin: string | null;
         taxableAmount: number;
+        createdBy: string | null;
     }>;
     findAllPayments(query: QueryBillingDto, customerId?: string): Promise<{
         payments: {
             customer: {
-                businessName: string;
+                id: string;
                 gstin: string | null;
+                businessName: string;
                 billingAddressLine1: string | null;
                 billingAddressLine2: string | null;
                 billingCity: string | null;
@@ -441,21 +442,20 @@ export declare class BillingService {
                 shippingState: string | null;
                 shippingPincode: string | null;
                 shippingCountry: string | null;
-                id: string;
                 customerCode: string | null;
                 mainContactNumber: string;
             } | null;
             id: string;
             customerId: string;
+            paymentStatus: string;
+            notes: string | null;
             createdAt: Date;
             updatedAt: Date;
-            notes: string | null;
             amount: number;
             paymentMode: string;
             transactionDate: Date;
             referenceNumber: string | null;
             attachmentUrl: string | null;
-            paymentStatus: string;
             paymentNumber: string;
             verifiedAt: Date | null;
             verifiedBy: string | null;
@@ -471,8 +471,9 @@ export declare class BillingService {
     findAllLedgerEntries(query: QueryBillingDto, customerId?: string): Promise<{
         ledgerEntries: {
             customer: {
-                businessName: string;
+                id: string;
                 gstin: string | null;
+                businessName: string;
                 billingAddressLine1: string | null;
                 billingAddressLine2: string | null;
                 billingCity: string | null;
@@ -485,7 +486,6 @@ export declare class BillingService {
                 shippingState: string | null;
                 shippingPincode: string | null;
                 shippingCountry: string | null;
-                id: string;
                 customerCode: string | null;
                 mainContactNumber: string;
             } | null;
@@ -500,15 +500,15 @@ export declare class BillingService {
             customerId: string;
             createdAt: Date;
             updatedAt: Date;
-            description: string | null;
             createdBy: string | null;
-            entryType: string;
-            debit: number;
-            credit: number;
             entryDate: Date;
+            entryType: string;
             referenceType: string;
             referenceId: string | null;
+            debit: number;
+            credit: number;
             balanceAfterEntry: number;
+            description: string | null;
             transactionStatus: string | null;
         }[];
         meta: {
@@ -539,15 +539,15 @@ export declare class BillingService {
         customerId: string;
         createdAt: Date;
         updatedAt: Date;
-        description: string | null;
         createdBy: string | null;
-        entryType: string;
-        debit: number;
-        credit: number;
         entryDate: Date;
+        entryType: string;
         referenceType: string;
         referenceId: string | null;
+        debit: number;
+        credit: number;
         balanceAfterEntry: number;
+        description: string | null;
         transactionStatus: string | null;
     }>;
     deleteLedgerEntry(id: string): Promise<{
@@ -563,15 +563,15 @@ export declare class BillingService {
     }): Promise<{
         id: string;
         customerId: string;
+        paymentStatus: string;
+        notes: string | null;
         createdAt: Date;
         updatedAt: Date;
-        notes: string | null;
         amount: number;
         paymentMode: string;
         transactionDate: Date;
         referenceNumber: string | null;
         attachmentUrl: string | null;
-        paymentStatus: string;
         paymentNumber: string;
         verifiedAt: Date | null;
         verifiedBy: string | null;

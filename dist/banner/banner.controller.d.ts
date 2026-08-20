@@ -5,13 +5,13 @@ export declare class BannerController {
     constructor(bannerService: BannerService);
     create(dto: CreateBannerDto): Promise<{
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        createdBy: string | null;
+        isActive: boolean;
         title: string;
         imageUrl: string;
         sortOrder: number | null;
-        createdBy: string | null;
         label: string | null;
         bannerType: string;
         linkType: string;
@@ -19,13 +19,13 @@ export declare class BannerController {
     }>;
     findAll(bannerType?: string, activeOnly?: string): Promise<{
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        createdBy: string | null;
+        isActive: boolean;
         title: string;
         imageUrl: string;
         sortOrder: number | null;
-        createdBy: string | null;
         label: string | null;
         bannerType: string;
         linkType: string;
@@ -33,13 +33,13 @@ export declare class BannerController {
     }[]>;
     findOne(id: string): Promise<{
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        createdBy: string | null;
+        isActive: boolean;
         title: string;
         imageUrl: string;
         sortOrder: number | null;
-        createdBy: string | null;
         label: string | null;
         bannerType: string;
         linkType: string;
@@ -47,13 +47,13 @@ export declare class BannerController {
     }>;
     update(id: string, dto: Partial<CreateBannerDto>): Promise<{
         id: string;
-        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
+        createdBy: string | null;
+        isActive: boolean;
         title: string;
         imageUrl: string;
         sortOrder: number | null;
-        createdBy: string | null;
         label: string | null;
         bannerType: string;
         linkType: string;
