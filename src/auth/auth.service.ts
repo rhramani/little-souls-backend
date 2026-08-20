@@ -997,8 +997,8 @@ export class AuthService {
     if (!formatted) {
       return { exists: false };
     }
-    const existingCustomer = await this.prisma.customer.findUnique({
-      where: { gstin: formatted },
+    const existingCustomer = await this.prisma.customer.findFirst({
+      where: { gstin: { equals: formatted, mode: 'insensitive' } },
     });
     if (existingCustomer) {
       return { exists: true, message: 'GSTIN is already registered' };

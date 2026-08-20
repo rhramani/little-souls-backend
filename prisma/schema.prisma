@@ -234,7 +234,7 @@ model Customer {
   customerCode         String?        @unique @map("customer_code")
   businessName         String         @map("business_name")
   businessType         String?        @map("business_type")
-  gstin                String?        @unique
+  gstin                String?
   billingAddressLine1  String?        @map("billing_address_line1")
   billingAddressLine2  String?        @map("billing_address_line2")
   billingCity          String?        @map("billing_city")
