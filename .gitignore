@@ -1,9 +1,6 @@
 # Dependencies
 node_modules/
 
-# Build Output
-dist/
-build/
 
 # Temporary / Log files
 logs/
