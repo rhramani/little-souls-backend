@@ -128,10 +128,6 @@ export class ProductService {
           sizesSetQuantity: dto.sizesSetQuantity,
           colors: dto.colors,
           colorsSetQuantity: dto.colorsSetQuantity,
-          nt11_48: dto.nt11_48,
-          nt11_48SetQuantity: dto.nt11_48SetQuantity,
-          sixToTwelveMonths: dto.sixToTwelveMonths,
-          sixToTwelveMonthsSetQuantity: dto.sixToTwelveMonthsSetQuantity,
           isActive: dto.isActive !== undefined ? dto.isActive : true,
           isFeatured: dto.isFeatured !== undefined ? dto.isFeatured : false,
           sortOrder: dto.sortOrder || 0,
@@ -608,19 +604,6 @@ export class ProductService {
           colorsSetQuantity:
             dto.colorsSetQuantity !== undefined
               ? dto.colorsSetQuantity
-              : undefined,
-          nt11_48: dto.nt11_48 !== undefined ? dto.nt11_48 : undefined,
-          nt11_48SetQuantity:
-            dto.nt11_48SetQuantity !== undefined
-              ? dto.nt11_48SetQuantity
-              : undefined,
-          sixToTwelveMonths:
-            dto.sixToTwelveMonths !== undefined
-              ? dto.sixToTwelveMonths
-              : undefined,
-          sixToTwelveMonthsSetQuantity:
-            dto.sixToTwelveMonthsSetQuantity !== undefined
-              ? dto.sixToTwelveMonthsSetQuantity
               : undefined,
           isActive: dto.isActive,
           isFeatured: dto.isFeatured,

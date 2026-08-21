@@ -24,5 +24,6 @@ export declare class UpdateCustomerDto {
     designation?: string;
     whatsapp?: string;
     creditLimit?: string | number | null;
+    password?: string;
     customerCode?: string;
 }

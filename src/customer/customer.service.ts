@@ -62,7 +62,10 @@ export class CustomerService {
       }
     }
 
-    const plainPassword = crypto.randomBytes(6).toString('hex');
+    const hasCustomPassword = Boolean(dto.password && dto.password.trim().length >= 6);
+    const plainPassword = hasCustomPassword
+      ? dto.password!.trim()
+      : crypto.randomBytes(6).toString('hex');
     const passwordHash = await bcrypt.hash(plainPassword, 10);
 
     let parsedCreditLimit: number | null = null;
@@ -389,6 +392,7 @@ export class CustomerService {
       mobile,
       designation,
       whatsapp,
+      password,
       creditLimit,
       customerCode,
       gstin,
@@ -481,27 +485,36 @@ export class CustomerService {
               whatsappNumber: whatsapp !== undefined ? whatsapp : undefined,
             },
           });
+        }
+      }
 
-          // Also update the User record to keep email/mobile in sync for login and password resets
-          if (
-            name !== undefined ||
-            email !== undefined ||
-            mobile !== undefined
-          ) {
-            const user = await tx.user.findFirst({ where: { customerId: id } });
-            if (user) {
-              await tx.user.update({
-                where: { id: user.id },
-                data: {
-                  name: name !== undefined ? name : undefined,
-                  email: email !== undefined ? email : undefined,
-                  mobile: mobile !== undefined ? mobile : undefined,
-                },
-              });
-            }
+      // Also update the User record to keep email/mobile and password in sync
+      if (
+        name !== undefined ||
+        email !== undefined ||
+        mobile !== undefined ||
+        (password && password.trim().length >= 6)
+      ) {
+        const user = await tx.user.findFirst({ where: { customerId: id } });
+        if (user) {
+          const userDataToUpdate: Record<string, any> = {};
+          if (name !== undefined) userDataToUpdate.name = name;
+          if (email !== undefined) userDataToUpdate.email = email;
+          if (mobile !== undefined) userDataToUpdate.mobile = mobile;
+          if (password && password.trim().length >= 6) {
+            const newPlainPassword = password.trim();
+            userDataToUpdate.plainPassword = newPlainPassword;
+            userDataToUpdate.passwordHash = await bcrypt.hash(newPlainPassword, 10);
+          }
+          if (Object.keys(userDataToUpdate).length > 0) {
+            await tx.user.update({
+              where: { id: user.id },
+              data: userDataToUpdate,
+            });
           }
         }
       }
+
       return updatedCustomer;
     });
     return this.findOne(id);
@@ -513,8 +526,18 @@ export class CustomerService {
       return customer;
     }
 
-    const plainPassword = crypto.randomBytes(6).toString('hex');
-    const passwordHash = await bcrypt.hash(plainPassword, 10);
+    const existingUser = await this.prisma.user.findFirst({
+      where: { customerId: id },
+    });
+
+    let plainPassword = existingUser?.plainPassword;
+    let passwordHash = existingUser?.passwordHash;
+
+    // Only auto-generate password if customer did not provide one at registration
+    if (!plainPassword) {
+      plainPassword = crypto.randomBytes(6).toString('hex');
+      passwordHash = await bcrypt.hash(plainPassword, 10);
+    }
 
     await this.prisma.$transaction(async (tx) => {
       // Auto-generate customerCode if not present
@@ -551,10 +574,9 @@ export class CustomerService {
       });
 
       // 2. Update user credentials
-      const user = await tx.user.findFirst({ where: { customerId: id } });
-      if (user) {
+      if (existingUser) {
         await tx.user.update({
-          where: { id: user.id },
+          where: { id: existingUser.id },
           data: {
             isActive: true,
             passwordHash: passwordHash,

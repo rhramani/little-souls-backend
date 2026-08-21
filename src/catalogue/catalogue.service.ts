@@ -586,7 +586,7 @@ export class CatalogueService {
     catalogueId: string,
     productIds?: string,
     categoryId?: string,
-  ): Promise<Buffer> {
+  ): Promise<{ buffer: Buffer; filename: string }> {
     const start = Date.now();
     const catalogue = await this.prisma.catalogue.findUnique({
       where: { id: catalogueId },
@@ -613,6 +613,7 @@ export class CatalogueService {
     const products = await this.prisma.product.findMany({
       where: productWhere,
       include: {
+        category: true,
         images: { orderBy: { sortOrder: 'asc' } },
         pricing: { include: { pricingGroup: true } },
       },
@@ -626,19 +627,19 @@ export class CatalogueService {
     // Fetch active pricing groups to generate dynamic pricing columns
     const pricingGroups = await this.prisma.pricingGroup.findMany({
       where: { isActive: true },
-      orderBy: { code: 'asc' },
+      orderBy: { name: 'asc' },
     });
 
-    // Define main columns
+    // Define main columns matching Product Master fields
     const columns = [
       { header: 'Product Image', key: 'productImage', width: 22 },
       { header: 'Barcode Image', key: 'barcodeImage', width: 35 },
       { header: 'Product ID (System ID - Do Not Edit)', key: 'id', width: 36 },
       { header: 'SKU', key: 'sku', width: 20 },
       { header: 'Product Name', key: 'name', width: 40 },
+      { header: 'Category', key: 'categoryName', width: 20 },
       { header: 'Product Description', key: 'description', width: 50 },
       { header: 'Product Price', key: 'productPrice', width: 15 },
-      { header: 'Discounted price', key: 'discountedPrice', width: 18 },
       { header: 'Tax Type', key: 'taxType', width: 18 },
       { header: 'Tax Value', key: 'taxValue', width: 15 },
       { header: 'Available quantity', key: 'stockQuantity', width: 18 },
@@ -649,10 +650,6 @@ export class CatalogueService {
       { header: 'Size', key: 'size', width: 12 },
       { header: 'Color', key: 'color', width: 12 },
       { header: 'Unit', key: 'unit', width: 10 },
-      { header: 'Weight', key: 'weight', width: 12 },
-      { header: 'Parent product sku', key: 'parentProductSku', width: 20 },
-      { header: 'Parent product id', key: 'parentProductId', width: 36 },
-      { header: 'Private notes', key: 'privateNotes', width: 30 },
       { header: 'Set Name', key: 'setName', width: 20 },
       { header: 'Set Quantity', key: 'setQuantity', width: 15 },
       { header: 'Set Type', key: 'setType', width: 15 },
@@ -660,31 +657,16 @@ export class CatalogueService {
       { header: 'Sizes Set Quantity', key: 'sizesSetQuantity', width: 18 },
       { header: 'colors', key: 'colors', width: 15 },
       { header: 'Colors Set Quantity', key: 'colorsSetQuantity', width: 18 },
-      { header: 'nt11-48', key: 'nt11_48', width: 15 },
-      { header: 'Nt11-48 Set Quantity', key: 'nt11_48SetQuantity', width: 20 },
-      { header: '6-12 months', key: 'sixToTwelveMonths', width: 15 },
-      {
-        header: '6-12 months Set Quantity',
-        key: 'sixToTwelveMonthsSetQuantity',
-        width: 25,
-      },
     ];
 
-    // Add pricing columns for each group
+    // Add pricing columns for each active group (only Price exists in Product Master)
     pricingGroups.forEach((group) => {
-      columns.push(
-        {
-          header: `Price - ${group.code}`,
-          key: `price_${group.code}`,
-          width: 18,
-        },
-        { header: `MRP - ${group.code}`, key: `mrp_${group.code}`, width: 18 },
-        {
-          header: `Discount % - ${group.code}`,
-          key: `discount_${group.code}`,
-          width: 18,
-        },
-      );
+      const groupDisplayName = group.name || group.code;
+      columns.push({
+        header: `Price - ${groupDisplayName}`,
+        key: `price_${group.id}`,
+        width: 18,
+      });
     });
 
     sheet.columns = columns;
@@ -804,9 +786,9 @@ export class CatalogueService {
         id: p.id,
         sku: formattedSku,
         name: p.name,
+        categoryName: p.category?.name || '',
         description: p.description || '',
         productPrice: p.productPrice ? p.productPrice.toString() : '',
-        discountedPrice: p.discountedPrice ? p.discountedPrice.toString() : '',
         taxType: exportTaxType,
         taxValue: exportTaxValue,
         stockQuantity: p.stockQuantity,
@@ -820,10 +802,6 @@ export class CatalogueService {
         size: p.size || '',
         color: p.color || '',
         unit: p.unit || 'PCS',
-        weight: p.weight ? p.weight.toString() : '',
-        parentProductSku: p.parentProductSku || '',
-        parentProductId: p.parentProductId || '',
-        privateNotes: p.privateNotes || '',
         setName: p.setName || '',
         setQuantity:
           p.setQuantity !== null && p.setQuantity !== undefined
@@ -840,30 +818,13 @@ export class CatalogueService {
           p.colorsSetQuantity !== null && p.colorsSetQuantity !== undefined
             ? p.colorsSetQuantity
             : '',
-        nt11_48: p.nt11_48 || '',
-        nt11_48SetQuantity:
-          p.nt11_48SetQuantity !== null && p.nt11_48SetQuantity !== undefined
-            ? p.nt11_48SetQuantity
-            : '',
-        sixToTwelveMonths: p.sixToTwelveMonths || '',
-        sixToTwelveMonthsSetQuantity:
-          p.sixToTwelveMonthsSetQuantity !== null &&
-          p.sixToTwelveMonthsSetQuantity !== undefined
-            ? p.sixToTwelveMonthsSetQuantity
-            : '',
       };
 
       pricingGroups.forEach((group) => {
         const pricing = p.pricing.find((pr) => pr.pricingGroupId === group.id);
-        rowData[`price_${group.code}`] = pricing
+        rowData[`price_${group.id}`] = pricing
           ? pricing.price.toString()
           : '';
-        rowData[`mrp_${group.code}`] =
-          pricing && pricing.mrp ? pricing.mrp.toString() : '';
-        rowData[`discount_${group.code}`] =
-          pricing && pricing.discountPercent
-            ? pricing.discountPercent.toString()
-            : '';
       });
 
       sheet.addRow(rowData);
@@ -898,11 +859,30 @@ export class CatalogueService {
       }
     }
 
+    let categoryName = '';
+    if (categoryId) {
+      const category = await this.prisma.category.findUnique({
+        where: { id: categoryId },
+      });
+      if (category) categoryName = category.name;
+    }
+
+    const cleanCatalogueName = (catalogue.name || 'Catalogue')
+      .replace(/[^\w\s-]/gi, '')
+      .trim()
+      .replace(/\s+/g, '_');
+    const cleanCategoryName = categoryName
+      ? categoryName.replace(/[^\w\s-]/gi, '').trim().replace(/\s+/g, '_')
+      : '';
+    const filename = cleanCategoryName
+      ? `${cleanCatalogueName}_${cleanCategoryName}.xlsx`
+      : `${cleanCatalogueName}.xlsx`;
+
     const buffer = await workbook.xlsx.writeBuffer();
     this.logger.log(
       `Export completed for ${products.length} products in ${Date.now() - start}ms`,
     );
-    return buffer as Buffer;
+    return { buffer: Buffer.from(buffer), filename };
   }
 
   async importCatalogue(
@@ -1081,18 +1061,6 @@ export class CatalogueService {
     );
     const colorsSetQuantityHeaderKey = headers.find(
       (h) => h && h.toLowerCase() === 'colors set quantity',
-    );
-    const nt11_48HeaderKey = headers.find(
-      (h) => h && h.toLowerCase() === 'nt11-48',
-    );
-    const nt11_48SetQuantityHeaderKey = headers.find(
-      (h) => h && h.toLowerCase() === 'nt11-48 set quantity',
-    );
-    const sixToTwelveMonthsHeaderKey = headers.find(
-      (h) => h && h.toLowerCase() === '6-12 months',
-    );
-    const sixToTwelveMonthsSetQuantityHeaderKey = headers.find(
-      (h) => h && h.toLowerCase() === '6-12 months set quantity',
     );
 
     const pricingHeaderMap: {
@@ -1290,10 +1258,6 @@ export class CatalogueService {
       const setQuantity = getValNumber(setQuantityHeaderKey);
       const sizesSetQuantity = getValNumber(sizesSetQuantityHeaderKey);
       const colorsSetQuantity = getValNumber(colorsSetQuantityHeaderKey);
-      const nt11_48SetQuantity = getValNumber(nt11_48SetQuantityHeaderKey);
-      const sixToTwelveMonthsSetQuantity = getValNumber(
-        sixToTwelveMonthsSetQuantityHeaderKey,
-      );
 
       const rawProdImg = getValString(productImageHeaderKey);
       const rawProdPic = getValString(productPictureUrlHeaderKey);
@@ -1379,13 +1343,6 @@ export class CatalogueService {
         sizesSetQuantity: roundVal(sizesSetQuantity, null),
         colors: getValString(colorsHeaderKey),
         colorsSetQuantity: roundVal(colorsSetQuantity, null),
-        nt11_48: getValString(nt11_48HeaderKey),
-        nt11_48SetQuantity: roundVal(nt11_48SetQuantity, null),
-        sixToTwelveMonths: getValString(sixToTwelveMonthsHeaderKey),
-        sixToTwelveMonthsSetQuantity: roundVal(
-          sixToTwelveMonthsSetQuantity,
-          null,
-        ),
         isActive,
         pricingData,
       });
@@ -1479,13 +1436,15 @@ export class CatalogueService {
     }
 
     // --- OPTIMIZATION: Pre-fetch all pricing groups in one query ---
-    const allGroupCodes = [
+    const allGroupIdentifiers = [
       ...new Set(parsedRows.flatMap((r) => Object.keys(r.pricingData))),
     ];
-    const pricingGroups = await this.prisma.pricingGroup.findMany({
-      where: { code: { in: allGroupCodes } },
-    });
-    const pricingGroupMap = new Map(pricingGroups.map((g) => [g.code, g]));
+    const allDbPricingGroups = await this.prisma.pricingGroup.findMany();
+    const pricingGroupMap = new Map<string, any>();
+    for (const g of allDbPricingGroups) {
+      if (g.name) pricingGroupMap.set(g.name.trim().toUpperCase(), g);
+      if (g.code) pricingGroupMap.set(g.code.trim().toUpperCase(), g);
+    }
 
     // Execute updates inside Transaction
     await this.prisma.$transaction(
@@ -1514,25 +1473,45 @@ export class CatalogueService {
         }
 
         // 1b. Resolve or create all missing pricing groups sequentially to avoid race conditions
-        for (const groupCode of allGroupCodes) {
-          let pricingGroup = pricingGroupMap.get(groupCode);
+        for (const identifier of allGroupIdentifiers) {
+          const upperIdentifier = identifier.toUpperCase();
+          let pricingGroup = pricingGroupMap.get(upperIdentifier);
           if (!pricingGroup) {
-            const dbGroup = await tx.pricingGroup.findUnique({
-              where: { code: groupCode },
+            const dbGroup = await tx.pricingGroup.findFirst({
+              where: {
+                OR: [
+                  { name: { equals: identifier, mode: 'insensitive' } },
+                  { code: { equals: identifier, mode: 'insensitive' } },
+                ],
+              },
             });
             if (dbGroup) {
               pricingGroup = dbGroup;
             } else {
+              const code = identifier
+                .toUpperCase()
+                .replace(/[^A-Z0-9]/g, '_')
+                .slice(0, 10);
               pricingGroup = await tx.pricingGroup.create({
                 data: {
-                  name: groupCode.charAt(0) + groupCode.slice(1).toLowerCase(),
-                  code: groupCode,
+                  name: identifier,
+                  code: code || `PG_${Date.now().toString().slice(-4)}`,
                   description: `Automatically created during catalog import`,
                   isActive: true,
                 },
               });
             }
-            pricingGroupMap.set(groupCode, pricingGroup);
+            pricingGroupMap.set(upperIdentifier, pricingGroup);
+            if (pricingGroup.name)
+              pricingGroupMap.set(
+                pricingGroup.name.trim().toUpperCase(),
+                pricingGroup,
+              );
+            if (pricingGroup.code)
+              pricingGroupMap.set(
+                pricingGroup.code.trim().toUpperCase(),
+                pricingGroup,
+              );
           }
         }
 
@@ -1641,10 +1620,6 @@ export class CatalogueService {
                 sizesSetQuantity: row.sizesSetQuantity,
                 colors: row.colors,
                 colorsSetQuantity: row.colorsSetQuantity,
-                nt11_48: row.nt11_48,
-                nt11_48SetQuantity: row.nt11_48SetQuantity,
-                sixToTwelveMonths: row.sixToTwelveMonths,
-                sixToTwelveMonthsSetQuantity: row.sixToTwelveMonthsSetQuantity,
                 isActive: row.isActive,
                 barcode: row.sku,
                 barcodeUrl: row.barcodeUrl,
@@ -1678,18 +1653,20 @@ export class CatalogueService {
           // Product Pricing createMany for new products
           const newProductPricingData: any[] = [];
           for (const row of newRows) {
-            Object.keys(row.pricingData).forEach((groupCode) => {
-              const groupPricing = row.pricingData[groupCode];
+            Object.keys(row.pricingData).forEach((groupIdentifier) => {
+              const groupPricing = row.pricingData[groupIdentifier];
               if (groupPricing.price !== undefined && groupPricing.price !== null) {
-                const pricingGroup = pricingGroupMap.get(groupCode)!;
-                newProductPricingData.push({
-                  productId: row.id,
-                  pricingGroupId: pricingGroup.id,
-                  price: groupPricing.price,
-                  mrp: groupPricing.mrp,
-                  discountPercent: groupPricing.discountPercent,
-                  createdBy: userId,
-                });
+                const pricingGroup = pricingGroupMap.get(groupIdentifier.toUpperCase())!;
+                if (pricingGroup) {
+                  newProductPricingData.push({
+                    productId: row.id,
+                    pricingGroupId: pricingGroup.id,
+                    price: groupPricing.price,
+                    mrp: groupPricing.mrp,
+                    discountPercent: groupPricing.discountPercent,
+                    createdBy: userId,
+                  });
+                }
               }
             });
           }
@@ -1744,10 +1721,6 @@ export class CatalogueService {
                     sizesSetQuantity: row.sizesSetQuantity,
                     colors: row.colors,
                     colorsSetQuantity: row.colorsSetQuantity,
-                    nt11_48: row.nt11_48,
-                    nt11_48SetQuantity: row.nt11_48SetQuantity,
-                    sixToTwelveMonths: row.sixToTwelveMonths,
-                    sixToTwelveMonthsSetQuantity: row.sixToTwelveMonthsSetQuantity,
                     isActive: row.isActive,
                     barcode: row.sku,
                     barcodeUrl: row.barcodeUrl,
@@ -1796,12 +1769,14 @@ export class CatalogueService {
 
                 // Pricing upserts
                 await Promise.all(
-                  Object.keys(row.pricingData).map(async (groupCode) => {
-                    const groupPricing = row.pricingData[groupCode];
+                  Object.keys(row.pricingData).map(async (groupIdentifier) => {
+                    const groupPricing = row.pricingData[groupIdentifier];
                     if (groupPricing.price === undefined || groupPricing.price === null)
                       return;
 
-                    const pricingGroup = pricingGroupMap.get(groupCode)!;
+                    const pricingGroup = pricingGroupMap.get(groupIdentifier.toUpperCase())!;
+                    if (!pricingGroup) return;
+
                     await tx.productPricing.upsert({
                       where: {
                         productId_pricingGroupId: {

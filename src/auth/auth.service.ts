@@ -143,8 +143,12 @@ export class AuthService {
       }
     }
 
-    // 2. Hash Password
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    // 2. Hash Password (if provided) or prepare plainPassword
+    const hasCustomPassword = Boolean(dto.password && dto.password.trim().length >= 6);
+    const plainPassword = hasCustomPassword ? dto.password!.trim() : null;
+    const passwordHash = hasCustomPassword
+      ? await bcrypt.hash(plainPassword!, 10)
+      : await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
 
     // 3. Perform atomic transaction to create Customer, Contact and User
     const result = await this.prisma.$transaction(async (tx) => {
@@ -225,6 +229,7 @@ export class AuthService {
           email: dto.email,
           mobile: dto.mobile,
           passwordHash,
+          plainPassword,
           userType: UserType.CUSTOMER,
           customerId: customer.id,
           customerContactId: contact.id,
@@ -286,16 +291,58 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, userAgent?: string, ipAddress?: string) {
-    // 1. Find User by mobile or email
-    const user = await this.prisma.user.findFirst({
+    const cleanIdentifier = dto.email ? dto.email.trim() : '';
+    const cleanDigits = cleanIdentifier.replace(/\D/g, '');
+
+    const orConditions: any[] = [
+      { email: { equals: cleanIdentifier, mode: 'insensitive' } },
+      { mobile: cleanIdentifier },
+      { name: { equals: cleanIdentifier, mode: 'insensitive' } },
+    ];
+
+    if (cleanDigits.length >= 10) {
+      orConditions.push({ mobile: { endsWith: cleanDigits.slice(-10) } });
+    }
+
+    orConditions.push({
+      customerContact: {
+        name: { equals: cleanIdentifier, mode: 'insensitive' },
+      },
+    });
+
+    orConditions.push({
+      customer: {
+        businessName: { equals: cleanIdentifier, mode: 'insensitive' },
+      },
+    });
+
+    // 1. Find candidate users matching identifier
+    const candidates = await this.prisma.user.findMany({
       where: {
-        OR: [{ mobile: dto.email }, { email: dto.email }],
+        OR: orConditions,
       },
       include: {
         customer: true,
         customerContact: true,
       },
     });
+
+    if (!candidates || candidates.length === 0) {
+      throw new UnauthorizedException('Invalid login credentials');
+    }
+
+    // 2. Match candidate by password
+    let user: (typeof candidates)[0] | null = null;
+    for (const candidate of candidates) {
+      const isMatch = await bcrypt.compare(
+        dto.password,
+        candidate.passwordHash,
+      );
+      if (isMatch) {
+        user = candidate;
+        break;
+      }
+    }
 
     if (!user) {
       throw new UnauthorizedException('Invalid login credentials');
@@ -314,15 +361,6 @@ export class AuthService {
       throw new UnauthorizedException(
         'Your account is pending admin approval.',
       );
-    }
-
-    // 2. Compare passwords
-    const isPasswordValid = await bcrypt.compare(
-      dto.password,
-      user.passwordHash,
-    );
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid login credentials');
     }
 
     // 3. Create UserSession

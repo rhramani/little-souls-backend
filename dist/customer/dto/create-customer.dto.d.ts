@@ -24,5 +24,6 @@ export declare class CreateCustomerDto {
     whatsapp?: string;
     creditLimit?: string | number | null;
     customerCode?: string;
+    password?: string;
     mainContactNumber?: string;
 }

@@ -69,10 +69,6 @@ export declare class CartController {
                 sizesSetQuantity: number | null;
                 colors: string | null;
                 colorsSetQuantity: number | null;
-                nt11_48: string | null;
-                nt11_48SetQuantity: number | null;
-                sixToTwelveMonths: string | null;
-                sixToTwelveMonthsSetQuantity: number | null;
                 catalogueIds: string[];
             };
         } & {
@@ -158,10 +154,6 @@ export declare class CartController {
                 sizesSetQuantity: number | null;
                 colors: string | null;
                 colorsSetQuantity: number | null;
-                nt11_48: string | null;
-                nt11_48SetQuantity: number | null;
-                sixToTwelveMonths: string | null;
-                sixToTwelveMonthsSetQuantity: number | null;
                 catalogueIds: string[];
             };
         } & {
@@ -247,10 +239,6 @@ export declare class CartController {
                 sizesSetQuantity: number | null;
                 colors: string | null;
                 colorsSetQuantity: number | null;
-                nt11_48: string | null;
-                nt11_48SetQuantity: number | null;
-                sixToTwelveMonths: string | null;
-                sixToTwelveMonthsSetQuantity: number | null;
                 catalogueIds: string[];
             };
         } & {
@@ -336,10 +324,6 @@ export declare class CartController {
                 sizesSetQuantity: number | null;
                 colors: string | null;
                 colorsSetQuantity: number | null;
-                nt11_48: string | null;
-                nt11_48SetQuantity: number | null;
-                sixToTwelveMonths: string | null;
-                sixToTwelveMonthsSetQuantity: number | null;
                 catalogueIds: string[];
             };
         } & {
@@ -425,10 +409,6 @@ export declare class CartController {
                 sizesSetQuantity: number | null;
                 colors: string | null;
                 colorsSetQuantity: number | null;
-                nt11_48: string | null;
-                nt11_48SetQuantity: number | null;
-                sixToTwelveMonths: string | null;
-                sixToTwelveMonthsSetQuantity: number | null;
                 catalogueIds: string[];
             };
         } & {

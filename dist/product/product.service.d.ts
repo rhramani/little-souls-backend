@@ -111,10 +111,6 @@ export declare class ProductService {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
-        nt11_48: string | null;
-        nt11_48SetQuantity: number | null;
-        sixToTwelveMonths: string | null;
-        sixToTwelveMonthsSetQuantity: number | null;
         catalogueIds: string[];
     }) | null>;
     findAll(query: QueryProductDto, userPricingGroupId?: string): Promise<{
@@ -223,10 +219,6 @@ export declare class ProductService {
             sizesSetQuantity: number | null;
             colors: string | null;
             colorsSetQuantity: number | null;
-            nt11_48: string | null;
-            nt11_48SetQuantity: number | null;
-            sixToTwelveMonths: string | null;
-            sixToTwelveMonthsSetQuantity: number | null;
             catalogueIds: string[];
         }[];
         meta: {
@@ -341,10 +333,6 @@ export declare class ProductService {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
-        nt11_48: string | null;
-        nt11_48SetQuantity: number | null;
-        sixToTwelveMonths: string | null;
-        sixToTwelveMonthsSetQuantity: number | null;
         catalogueIds: string[];
     }>;
     findOneBySlug(slug: string, userPricingGroupId?: string): Promise<{
@@ -452,10 +440,6 @@ export declare class ProductService {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
-        nt11_48: string | null;
-        nt11_48SetQuantity: number | null;
-        sixToTwelveMonths: string | null;
-        sixToTwelveMonthsSetQuantity: number | null;
         catalogueIds: string[];
     }>;
     update(id: string, dto: UpdateProductDto, userId: string): Promise<({
@@ -563,10 +547,6 @@ export declare class ProductService {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
-        nt11_48: string | null;
-        nt11_48SetQuantity: number | null;
-        sixToTwelveMonths: string | null;
-        sixToTwelveMonthsSetQuantity: number | null;
         catalogueIds: string[];
     }) | null>;
     remove(id: string): Promise<{

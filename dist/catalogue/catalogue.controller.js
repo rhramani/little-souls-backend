@@ -49,10 +49,11 @@ let CatalogueController = class CatalogueController {
         return this.catalogueService.remove(id);
     }
     async exportCatalogue(id, productIds, categoryId, res) {
-        const buffer = await this.catalogueService.exportCatalogue(id, productIds, categoryId);
+        const { buffer, filename } = await this.catalogueService.exportCatalogue(id, productIds, categoryId);
         res.set({
             'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition': `attachment; filename="catalogue-products-${id}-${Date.now()}.xlsx"`,
+            'Content-Disposition': `attachment; filename="${filename}"`,
+            'Access-Control-Expose-Headers': 'Content-Disposition',
             'Content-Length': buffer.length,
         });
         res.end(buffer);

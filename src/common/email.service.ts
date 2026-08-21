@@ -185,7 +185,7 @@ export class EmailService {
             <td style="padding: 4px 0;">${details.mobile}</td>
           </tr>` : ''}
           <tr>
-            <td style="padding: 6px 0 4px 0; font-weight: 600;">Temporary Password:</td>
+            <td style="padding: 6px 0 4px 0; font-weight: 600;">Account Password:</td>
             <td style="padding: 6px 0 4px 0;"><code style="background: #ffffff; border: 1px solid #E2D9D2; padding: 4px 10px; border-radius: 6px; font-family: monospace; font-size: 14px; color: #9C5E43; font-weight: 700; letter-spacing: 0.5px;">${plainPassword}</code></td>
           </tr>
           <tr>
@@ -199,7 +199,7 @@ export class EmailService {
         <a href="${loginUrl}" style="display: inline-block; background-color: #9C5E43; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 10px; font-weight: 700; font-size: 14px; box-shadow: 0 3px 8px rgba(156, 94, 67, 0.25);">Login to Partner Portal &rarr;</a>
       </div>
 
-      <p style="margin: 0 0 8px 0; font-size: 13px; line-height: 20px; color: #8C827A;">For security purposes, please change your temporary password immediately upon your first login.</p>
+      <p style="margin: 0 0 8px 0; font-size: 13px; line-height: 20px; color: #8C827A;">For security purposes, you can update your password anytime from your account settings.</p>
     `;
     const html = await this.getEmailTemplate(content);
 

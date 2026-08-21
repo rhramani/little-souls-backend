@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, MinLength } from 'class-validator';
 
 export class UpdateCustomerDto {
   @IsOptional()
@@ -99,6 +99,11 @@ export class UpdateCustomerDto {
 
   @IsOptional()
   creditLimit?: string | number | null;
+
+  @IsString()
+  @IsOptional()
+  @MinLength(6, { message: 'Password must be at least 6 characters' })
+  password?: string;
 
   @IsString()
   @IsOptional()

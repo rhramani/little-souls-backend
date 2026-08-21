@@ -54,7 +54,7 @@ __decorate([
 ], RegisterCustomerDto.prototype, "mobile", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.MinLength)(6, { message: 'Password must be at least 6 characters' }),
     __metadata("design:type", String)
 ], RegisterCustomerDto.prototype, "password", void 0);

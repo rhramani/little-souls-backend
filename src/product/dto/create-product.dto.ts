@@ -209,22 +209,6 @@ export class CreateProductDto {
   @IsOptional()
   colorsSetQuantity?: number;
 
-  @IsString()
-  @IsOptional()
-  nt11_48?: string;
-
-  @IsInt()
-  @IsOptional()
-  nt11_48SetQuantity?: number;
-
-  @IsString()
-  @IsOptional()
-  sixToTwelveMonths?: string;
-
-  @IsInt()
-  @IsOptional()
-  sixToTwelveMonthsSetQuantity?: number;
-
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;

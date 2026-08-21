@@ -37,6 +37,7 @@ class CreateCustomerDto {
     whatsapp;
     creditLimit;
     customerCode;
+    password;
     mainContactNumber;
 }
 exports.CreateCustomerDto = CreateCustomerDto;
@@ -165,6 +166,12 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CreateCustomerDto.prototype, "customerCode", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.MinLength)(6, { message: 'Password must be at least 6 characters' }),
+    __metadata("design:type", String)
+], CreateCustomerDto.prototype, "password", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsOptional)(),

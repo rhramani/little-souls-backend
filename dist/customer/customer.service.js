@@ -83,7 +83,10 @@ let CustomerService = class CustomerService {
                 throw new common_1.ConflictException(`GSTIN "${cleanGstin}" is already registered with customer "${existingCustomer.businessName}"`);
             }
         }
-        const plainPassword = crypto.randomBytes(6).toString('hex');
+        const hasCustomPassword = Boolean(dto.password && dto.password.trim().length >= 6);
+        const plainPassword = hasCustomPassword
+            ? dto.password.trim()
+            : crypto.randomBytes(6).toString('hex');
         const passwordHash = await bcrypt.hash(plainPassword, 10);
         let parsedCreditLimit = null;
         if (dto.creditLimit !== undefined &&
@@ -351,7 +354,7 @@ let CustomerService = class CustomerService {
     }
     async update(id, dto) {
         const customer = await this.findOne(id);
-        const { name, email, mobile, designation, whatsapp, creditLimit, customerCode, gstin, ...customerData } = dto;
+        const { name, email, mobile, designation, whatsapp, password, creditLimit, customerCode, gstin, ...customerData } = dto;
         if (customerCode !== undefined && customerCode !== customer.customerCode) {
             if (customerCode) {
                 const existingCode = await this.prisma.customer.findFirst({
@@ -425,20 +428,31 @@ let CustomerService = class CustomerService {
                             whatsappNumber: whatsapp !== undefined ? whatsapp : undefined,
                         },
                     });
-                    if (name !== undefined ||
-                        email !== undefined ||
-                        mobile !== undefined) {
-                        const user = await tx.user.findFirst({ where: { customerId: id } });
-                        if (user) {
-                            await tx.user.update({
-                                where: { id: user.id },
-                                data: {
-                                    name: name !== undefined ? name : undefined,
-                                    email: email !== undefined ? email : undefined,
-                                    mobile: mobile !== undefined ? mobile : undefined,
-                                },
-                            });
-                        }
+                }
+            }
+            if (name !== undefined ||
+                email !== undefined ||
+                mobile !== undefined ||
+                (password && password.trim().length >= 6)) {
+                const user = await tx.user.findFirst({ where: { customerId: id } });
+                if (user) {
+                    const userDataToUpdate = {};
+                    if (name !== undefined)
+                        userDataToUpdate.name = name;
+                    if (email !== undefined)
+                        userDataToUpdate.email = email;
+                    if (mobile !== undefined)
+                        userDataToUpdate.mobile = mobile;
+                    if (password && password.trim().length >= 6) {
+                        const newPlainPassword = password.trim();
+                        userDataToUpdate.plainPassword = newPlainPassword;
+                        userDataToUpdate.passwordHash = await bcrypt.hash(newPlainPassword, 10);
+                    }
+                    if (Object.keys(userDataToUpdate).length > 0) {
+                        await tx.user.update({
+                            where: { id: user.id },
+                            data: userDataToUpdate,
+                        });
                     }
                 }
             }
@@ -451,8 +465,15 @@ let CustomerService = class CustomerService {
         if (customer.approvalStatus === client_1.ApprovalStatus.APPROVED) {
             return customer;
         }
-        const plainPassword = crypto.randomBytes(6).toString('hex');
-        const passwordHash = await bcrypt.hash(plainPassword, 10);
+        const existingUser = await this.prisma.user.findFirst({
+            where: { customerId: id },
+        });
+        let plainPassword = existingUser?.plainPassword;
+        let passwordHash = existingUser?.passwordHash;
+        if (!plainPassword) {
+            plainPassword = crypto.randomBytes(6).toString('hex');
+            passwordHash = await bcrypt.hash(plainPassword, 10);
+        }
         await this.prisma.$transaction(async (tx) => {
             let codeToAssign = customer.customerCode;
             if (!codeToAssign) {
@@ -483,10 +504,9 @@ let CustomerService = class CustomerService {
                     customerCode: codeToAssign,
                 },
             });
-            const user = await tx.user.findFirst({ where: { customerId: id } });
-            if (user) {
+            if (existingUser) {
                 await tx.user.update({
-                    where: { id: user.id },
+                    where: { id: existingUser.id },
                     data: {
                         isActive: true,
                         passwordHash: passwordHash,

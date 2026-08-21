@@ -2,7 +2,7 @@ export declare class RegisterCustomerDto {
     name: string;
     email?: string;
     mobile: string;
-    password: string;
+    password?: string;
     businessName: string;
     businessType?: string;
     gstin?: string;

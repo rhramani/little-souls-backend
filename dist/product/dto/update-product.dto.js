@@ -124,10 +124,6 @@ class UpdateProductDto {
     sizesSetQuantity;
     colors;
     colorsSetQuantity;
-    nt11_48;
-    nt11_48SetQuantity;
-    sixToTwelveMonths;
-    sixToTwelveMonthsSetQuantity;
     isActive;
     isFeatured;
     sortOrder;
@@ -321,26 +317,6 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Number)
 ], UpdateProductDto.prototype, "colorsSetQuantity", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], UpdateProductDto.prototype, "nt11_48", void 0);
-__decorate([
-    (0, class_validator_1.IsInt)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Number)
-], UpdateProductDto.prototype, "nt11_48SetQuantity", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], UpdateProductDto.prototype, "sixToTwelveMonths", void 0);
-__decorate([
-    (0, class_validator_1.IsInt)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Number)
-], UpdateProductDto.prototype, "sixToTwelveMonthsSetQuantity", void 0);
 __decorate([
     (0, class_validator_1.IsBoolean)(),
     (0, class_validator_1.IsOptional)(),

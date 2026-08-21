@@ -78,10 +78,6 @@ export declare class CatalogueService {
             sizesSetQuantity: number | null;
             colors: string | null;
             colorsSetQuantity: number | null;
-            nt11_48: string | null;
-            nt11_48SetQuantity: number | null;
-            sixToTwelveMonths: string | null;
-            sixToTwelveMonthsSetQuantity: number | null;
             catalogueIds: string[];
         })[];
         id: string;
@@ -200,10 +196,6 @@ export declare class CatalogueService {
             sizesSetQuantity: number | null;
             colors: string | null;
             colorsSetQuantity: number | null;
-            nt11_48: string | null;
-            nt11_48SetQuantity: number | null;
-            sixToTwelveMonths: string | null;
-            sixToTwelveMonthsSetQuantity: number | null;
             catalogueIds: string[];
         })[];
         productsMeta: {
@@ -234,7 +226,10 @@ export declare class CatalogueService {
     remove(id: string): Promise<{
         message: string;
     }>;
-    exportCatalogue(catalogueId: string, productIds?: string, categoryId?: string): Promise<Buffer>;
+    exportCatalogue(catalogueId: string, productIds?: string, categoryId?: string): Promise<{
+        buffer: Buffer;
+        filename: string;
+    }>;
     importCatalogue(catalogueId: string, fileBuffer: Buffer, userId: string, targetCategoryId?: string): Promise<{
         message: string;
     }>;

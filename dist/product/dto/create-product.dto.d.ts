@@ -52,10 +52,6 @@ export declare class CreateProductDto {
     sizesSetQuantity?: number;
     colors?: string;
     colorsSetQuantity?: number;
-    nt11_48?: string;
-    nt11_48SetQuantity?: number;
-    sixToTwelveMonths?: string;
-    sixToTwelveMonthsSetQuantity?: number;
     isActive?: boolean;
     isFeatured?: boolean;
     sortOrder?: number;

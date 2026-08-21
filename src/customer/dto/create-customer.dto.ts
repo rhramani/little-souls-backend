@@ -109,5 +109,10 @@ export class CreateCustomerDto {
 
   @IsString()
   @IsOptional()
+  @MinLength(6, { message: 'Password must be at least 6 characters' })
+  password?: string;
+
+  @IsString()
+  @IsOptional()
   mainContactNumber?: string;
 }
