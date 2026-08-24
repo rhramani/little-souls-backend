@@ -360,15 +360,22 @@ export class CatalogueService {
 
     return Promise.all(
       catalogues.map(async (c) => {
+        const catalogueProductWhere = {
+          OR: [
+            { catalogueIds: { has: c.id } },
+            { category: { catalogueId: c.id } },
+          ],
+        };
+
         const [productsCount, categoriesCount, previewProducts] = await Promise.all([
           this.prisma.product.count({
-            where: { catalogueIds: { has: c.id } },
+            where: catalogueProductWhere,
           }),
           this.prisma.category.count({
             where: { catalogueId: c.id },
           }),
           this.prisma.product.findMany({
-            where: { catalogueIds: { has: c.id } },
+            where: catalogueProductWhere,
             take: 4,
             select: {
               productImage: true,
@@ -415,17 +422,50 @@ export class CatalogueService {
       throw new BadRequestException(`Invalid catalogue ID format: ${id}`);
     }
 
-    const productWhere: any = {};
+    const andConditions: any[] = [
+      {
+        OR: [
+          { catalogueIds: { has: id } },
+          { category: { catalogueId: id } },
+        ],
+      },
+    ];
+
     if (typeof search === 'string' && search.trim()) {
-      productWhere.OR = [
-        { name: { contains: search, mode: 'insensitive' as const } },
-        { sku: { contains: search, mode: 'insensitive' as const } },
-        { barcode: { contains: search, mode: 'insensitive' as const } },
-      ];
+      andConditions.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' as const } },
+          { sku: { contains: search, mode: 'insensitive' as const } },
+          { barcode: { contains: search, mode: 'insensitive' as const } },
+        ],
+      });
     }
+
     if (categoryId) {
-      productWhere.categoryId = categoryId;
+      if (
+        categoryId.toLowerCase() === 'uncategorized' ||
+        categoryId.toLowerCase() === 'direct'
+      ) {
+        andConditions.push({
+          OR: [
+            { category: { slug: 'uncategorized' } },
+            { category: { name: { equals: 'Uncategorized', mode: 'insensitive' as const } } },
+          ],
+        });
+      } else {
+        andConditions.push({
+          categoryId: categoryId,
+        });
+      }
     }
+
+    if (publishedOnly) {
+      andConditions.push({ isActive: true });
+    }
+
+    const whereClause: any = {
+      AND: andConditions,
+    };
 
     const validPage = typeof page === 'number' && page > 0 ? page : 1;
     const validLimit =
@@ -436,10 +476,7 @@ export class CatalogueService {
         where: { id },
       }),
       this.prisma.product.findMany({
-        where: {
-          catalogueIds: { has: id },
-          ...productWhere,
-        },
+        where: whereClause,
         include: {
           category: { select: { id: true, name: true, slug: true } },
           images: { orderBy: { sortOrder: 'asc' } },
@@ -450,10 +487,7 @@ export class CatalogueService {
         take: validLimit,
       }),
       this.prisma.product.count({
-        where: {
-          catalogueIds: { has: id },
-          ...productWhere,
-        },
+        where: whereClause,
       }),
     ]);
 
@@ -479,7 +513,7 @@ export class CatalogueService {
       throw new NotFoundException(`Catalogue with ID '${id}' not found.`);
     }
 
-    return this.prisma.catalogue.update({
+    const updatedCatalogue = await this.prisma.catalogue.update({
       where: { id },
       data: {
         name: dto.name,
@@ -488,6 +522,51 @@ export class CatalogueService {
         isPublished: dto.isPublished,
       },
     });
+
+    // Cascade isPublished changes to categories and products
+    if (dto.isPublished !== undefined) {
+      // 1. Find all categories linked to this catalogue
+      const directCategories = await this.prisma.category.findMany({
+        where: { catalogueId: id },
+        select: { id: true },
+      });
+      const directCategoryIds = directCategories.map((c) => c.id);
+
+      // Find all descendant categories of those categories
+      const allCategoryIds = [...directCategoryIds];
+      let currentLevel = [...directCategoryIds];
+      while (currentLevel.length > 0) {
+        const children = await this.prisma.category.findMany({
+          where: { parentCategoryId: { in: currentLevel } },
+          select: { id: true },
+        });
+        const childIds = children.map((c) => c.id);
+        if (childIds.length === 0) break;
+        allCategoryIds.push(...childIds);
+        currentLevel = childIds;
+      }
+
+      // Update all categories under this catalogue
+      if (allCategoryIds.length > 0) {
+        await this.prisma.category.updateMany({
+          where: { id: { in: allCategoryIds } },
+          data: { isActive: dto.isPublished },
+        });
+      }
+
+      // Update all products in this catalogue (both directly via catalogueIds and via categoryId)
+      const productOrConditions: any[] = [{ catalogueIds: { has: id } }];
+      if (allCategoryIds.length > 0) {
+        productOrConditions.push({ categoryId: { in: allCategoryIds } });
+      }
+
+      await this.prisma.product.updateMany({
+        where: { OR: productOrConditions },
+        data: { isActive: dto.isPublished },
+      });
+    }
+
+    return updatedCatalogue;
   }
 
   async remove(id: string) {

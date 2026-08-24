@@ -185,7 +185,7 @@ export class CategoryService {
       }
     }
 
-    return this.prisma.category.update({
+    const updatedCategory = await this.prisma.category.update({
       where: { id },
       data: {
         name: dto.name,
@@ -201,6 +201,48 @@ export class CategoryService {
         updatedBy: userId,
       },
     });
+
+    // Cascade isActive changes to child categories and products
+    if (dto.isActive !== undefined) {
+      const descendantIds = await this.getAllDescendantCategoryIds(id);
+      const allCategoryIds = [id, ...descendantIds];
+
+      if (descendantIds.length > 0) {
+        await this.prisma.category.updateMany({
+          where: { id: { in: descendantIds } },
+          data: {
+            isActive: dto.isActive,
+            updatedBy: userId,
+          },
+        });
+      }
+
+      await this.prisma.product.updateMany({
+        where: { categoryId: { in: allCategoryIds } },
+        data: {
+          isActive: dto.isActive,
+          updatedBy: userId,
+        },
+      });
+    }
+
+    return updatedCategory;
+  }
+
+  async getAllDescendantCategoryIds(categoryId: string): Promise<string[]> {
+    const result: string[] = [];
+    let currentLevel = [categoryId];
+    while (currentLevel.length > 0) {
+      const children = await this.prisma.category.findMany({
+        where: { parentCategoryId: { in: currentLevel } },
+        select: { id: true },
+      });
+      const childIds = children.map((c) => c.id);
+      if (childIds.length === 0) break;
+      result.push(...childIds);
+      currentLevel = childIds;
+    }
+    return result;
   }
 
   async remove(id: string) {

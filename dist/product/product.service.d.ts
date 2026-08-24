@@ -77,7 +77,6 @@ export declare class ProductService {
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
-        categoryId: string;
         moq: number;
         fixQty: number | null;
         barcode: string | null;
@@ -111,6 +110,7 @@ export declare class ProductService {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
+        categoryId: string;
         catalogueIds: string[];
     }) | null>;
     findAll(query: QueryProductDto, userPricingGroupId?: string): Promise<{
@@ -185,7 +185,6 @@ export declare class ProductService {
             updatedBy: string | null;
             sku: string;
             shortDescription: string | null;
-            categoryId: string;
             moq: number;
             fixQty: number | null;
             barcode: string | null;
@@ -219,6 +218,7 @@ export declare class ProductService {
             sizesSetQuantity: number | null;
             colors: string | null;
             colorsSetQuantity: number | null;
+            categoryId: string;
             catalogueIds: string[];
         }[];
         meta: {
@@ -299,7 +299,6 @@ export declare class ProductService {
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
-        categoryId: string;
         moq: number;
         fixQty: number | null;
         barcode: string | null;
@@ -333,6 +332,7 @@ export declare class ProductService {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
+        categoryId: string;
         catalogueIds: string[];
     }>;
     findOneBySlug(slug: string, userPricingGroupId?: string): Promise<{
@@ -406,7 +406,6 @@ export declare class ProductService {
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
-        categoryId: string;
         moq: number;
         fixQty: number | null;
         barcode: string | null;
@@ -440,6 +439,7 @@ export declare class ProductService {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
+        categoryId: string;
         catalogueIds: string[];
     }>;
     update(id: string, dto: UpdateProductDto, userId: string): Promise<({
@@ -513,7 +513,6 @@ export declare class ProductService {
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
-        categoryId: string;
         moq: number;
         fixQty: number | null;
         barcode: string | null;
@@ -547,6 +546,7 @@ export declare class ProductService {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
+        categoryId: string;
         catalogueIds: string[];
     }) | null>;
     remove(id: string): Promise<{

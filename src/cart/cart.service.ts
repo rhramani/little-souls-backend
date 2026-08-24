@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddToCartDto } from './dto/add-to-cart.dto';
@@ -12,6 +13,10 @@ export class CartService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getOrCreateCart(customerId: string, contactId?: string) {
+    if (!customerId) {
+      throw new UnauthorizedException('Customer authentication required to access cart.');
+    }
+
     let cart = await this.prisma.cart.findFirst({
       where: {
         customerId,

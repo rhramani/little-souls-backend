@@ -156,6 +156,7 @@ export declare class CategoryService {
         sortOrder: number | null;
         updatedBy: string | null;
     }>;
+    getAllDescendantCategoryIds(categoryId: string): Promise<string[]>;
     remove(id: string): Promise<{
         message: string;
     }>;

@@ -155,7 +155,7 @@ let CategoryService = class CategoryService {
                 throw new common_1.NotFoundException(`Parent category with ID '${dto.parentCategoryId}' not found.`);
             }
         }
-        return this.prisma.category.update({
+        const updatedCategory = await this.prisma.category.update({
             where: { id },
             data: {
                 name: dto.name,
@@ -169,6 +169,43 @@ let CategoryService = class CategoryService {
                 updatedBy: userId,
             },
         });
+        if (dto.isActive !== undefined) {
+            const descendantIds = await this.getAllDescendantCategoryIds(id);
+            const allCategoryIds = [id, ...descendantIds];
+            if (descendantIds.length > 0) {
+                await this.prisma.category.updateMany({
+                    where: { id: { in: descendantIds } },
+                    data: {
+                        isActive: dto.isActive,
+                        updatedBy: userId,
+                    },
+                });
+            }
+            await this.prisma.product.updateMany({
+                where: { categoryId: { in: allCategoryIds } },
+                data: {
+                    isActive: dto.isActive,
+                    updatedBy: userId,
+                },
+            });
+        }
+        return updatedCategory;
+    }
+    async getAllDescendantCategoryIds(categoryId) {
+        const result = [];
+        let currentLevel = [categoryId];
+        while (currentLevel.length > 0) {
+            const children = await this.prisma.category.findMany({
+                where: { parentCategoryId: { in: currentLevel } },
+                select: { id: true },
+            });
+            const childIds = children.map((c) => c.id);
+            if (childIds.length === 0)
+                break;
+            result.push(...childIds);
+            currentLevel = childIds;
+        }
+        return result;
     }
     async remove(id) {
         await this.findOne(id);

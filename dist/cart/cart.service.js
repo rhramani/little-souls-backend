@@ -18,6 +18,9 @@ let CartService = class CartService {
         this.prisma = prisma;
     }
     async getOrCreateCart(customerId, contactId) {
+        if (!customerId) {
+            throw new common_1.UnauthorizedException('Customer authentication required to access cart.');
+        }
         let cart = await this.prisma.cart.findFirst({
             where: {
                 customerId,

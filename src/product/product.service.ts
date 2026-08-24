@@ -79,6 +79,17 @@ export class ProductService {
 
     // 4. Create Product with relations inside Transaction
     const product = await this.prisma.$transaction(async (tx) => {
+      let initialCatalogueIds: string[] = dto.catalogueId ? [dto.catalogueId] : [];
+      if (categoryId) {
+        const cat = await tx.category.findUnique({
+          where: { id: categoryId },
+          select: { catalogueId: true },
+        });
+        if (cat?.catalogueId && !initialCatalogueIds.includes(cat.catalogueId)) {
+          initialCatalogueIds.push(cat.catalogueId);
+        }
+      }
+
       const product = await tx.product.create({
         data: {
           sku: dto.sku,
@@ -87,7 +98,7 @@ export class ProductService {
           shortDescription: dto.shortDescription,
           description: dto.description,
           categoryId: categoryId,
-          catalogueIds: dto.catalogueId ? [dto.catalogueId] : [],
+          catalogueIds: initialCatalogueIds,
           moq: dto.moq || 1,
           fixQty: dto.fixQty || null,
           barcode: dto.barcode || dto.sku,
@@ -522,6 +533,23 @@ export class ProductService {
 
     // 4. Update in Transaction
     const updatedProduct = await this.prisma.$transaction(async (tx) => {
+      let nextCatalogueIds: string[] | undefined = undefined;
+      if (dto.catalogueId) {
+        nextCatalogueIds = Array.from(
+          new Set([...(product.catalogueIds || []), dto.catalogueId]),
+        );
+      } else if (dto.categoryId) {
+        const cat = await tx.category.findUnique({
+          where: { id: dto.categoryId },
+          select: { catalogueId: true },
+        });
+        if (cat?.catalogueId) {
+          nextCatalogueIds = Array.from(
+            new Set([...(product.catalogueIds || []), cat.catalogueId]),
+          );
+        }
+      }
+
       await tx.product.update({
         where: { id },
         data: {
@@ -531,6 +559,7 @@ export class ProductService {
           shortDescription: dto.shortDescription,
           description: dto.description,
           categoryId: dto.categoryId,
+          catalogueIds: nextCatalogueIds,
           moq: dto.moq,
           fixQty: dto.fixQty !== undefined ? dto.fixQty : undefined,
           barcode:

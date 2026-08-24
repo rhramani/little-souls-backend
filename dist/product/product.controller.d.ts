@@ -79,7 +79,6 @@ export declare class ProductController {
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
-        categoryId: string;
         moq: number;
         fixQty: number | null;
         barcode: string | null;
@@ -113,6 +112,7 @@ export declare class ProductController {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
+        categoryId: string;
         catalogueIds: string[];
     }) | null>;
     findAll(query: QueryProductDto, user?: any): Promise<{
@@ -187,7 +187,6 @@ export declare class ProductController {
             updatedBy: string | null;
             sku: string;
             shortDescription: string | null;
-            categoryId: string;
             moq: number;
             fixQty: number | null;
             barcode: string | null;
@@ -221,6 +220,7 @@ export declare class ProductController {
             sizesSetQuantity: number | null;
             colors: string | null;
             colorsSetQuantity: number | null;
+            categoryId: string;
             catalogueIds: string[];
         }[];
         meta: {
@@ -301,7 +301,6 @@ export declare class ProductController {
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
-        categoryId: string;
         moq: number;
         fixQty: number | null;
         barcode: string | null;
@@ -335,6 +334,7 @@ export declare class ProductController {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
+        categoryId: string;
         catalogueIds: string[];
     }>;
     findOneBySlug(slug: string, user?: any): Promise<{
@@ -408,7 +408,6 @@ export declare class ProductController {
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
-        categoryId: string;
         moq: number;
         fixQty: number | null;
         barcode: string | null;
@@ -442,6 +441,7 @@ export declare class ProductController {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
+        categoryId: string;
         catalogueIds: string[];
     }>;
     update(id: string, updateProductDto: UpdateProductDto, userId: string): Promise<({
@@ -515,7 +515,6 @@ export declare class ProductController {
         updatedBy: string | null;
         sku: string;
         shortDescription: string | null;
-        categoryId: string;
         moq: number;
         fixQty: number | null;
         barcode: string | null;
@@ -549,6 +548,7 @@ export declare class ProductController {
         sizesSetQuantity: number | null;
         colors: string | null;
         colorsSetQuantity: number | null;
+        categoryId: string;
         catalogueIds: string[];
     }) | null>;
     remove(id: string): Promise<{

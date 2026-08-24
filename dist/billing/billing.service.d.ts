@@ -214,7 +214,6 @@ export declare class BillingService {
                     updatedBy: string | null;
                     sku: string;
                     shortDescription: string | null;
-                    categoryId: string;
                     moq: number;
                     fixQty: number | null;
                     barcode: string | null;
@@ -248,6 +247,7 @@ export declare class BillingService {
                     sizesSetQuantity: number | null;
                     colors: string | null;
                     colorsSetQuantity: number | null;
+                    categoryId: string;
                     catalogueIds: string[];
                 };
             } & {
@@ -342,7 +342,6 @@ export declare class BillingService {
                 updatedBy: string | null;
                 sku: string;
                 shortDescription: string | null;
-                categoryId: string;
                 moq: number;
                 fixQty: number | null;
                 barcode: string | null;
@@ -376,6 +375,7 @@ export declare class BillingService {
                 sizesSetQuantity: number | null;
                 colors: string | null;
                 colorsSetQuantity: number | null;
+                categoryId: string;
                 catalogueIds: string[];
             }) | null;
         } & {

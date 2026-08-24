@@ -37,7 +37,6 @@ export declare class CatalogueController {
             updatedBy: string | null;
             sku: string;
             shortDescription: string | null;
-            categoryId: string;
             moq: number;
             fixQty: number | null;
             barcode: string | null;
@@ -71,6 +70,7 @@ export declare class CatalogueController {
             sizesSetQuantity: number | null;
             colors: string | null;
             colorsSetQuantity: number | null;
+            categoryId: string;
             catalogueIds: string[];
         })[];
         id: string;
@@ -155,7 +155,6 @@ export declare class CatalogueController {
             updatedBy: string | null;
             sku: string;
             shortDescription: string | null;
-            categoryId: string;
             moq: number;
             fixQty: number | null;
             barcode: string | null;
@@ -189,6 +188,7 @@ export declare class CatalogueController {
             sizesSetQuantity: number | null;
             colors: string | null;
             colorsSetQuantity: number | null;
+            categoryId: string;
             catalogueIds: string[];
         })[];
         productsMeta: {
