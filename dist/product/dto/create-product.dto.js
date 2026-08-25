@@ -88,6 +88,7 @@ class CreateProductDto {
     categoryId;
     catalogueId;
     moq;
+    wholesalerMoq;
     fixQty;
     barcode;
     brand;
@@ -165,6 +166,11 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Number)
 ], CreateProductDto.prototype, "moq", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreateProductDto.prototype, "wholesalerMoq", void 0);
 __decorate([
     (0, class_validator_1.IsInt)(),
     (0, class_validator_1.IsOptional)(),

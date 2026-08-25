@@ -88,6 +88,15 @@ let ImportService = class ImportService {
                                 unit: rowData.unit || 'PCS',
                                 hsnCode: rowData.hsnCode || null,
                                 moq: rowData.moq ? parseInt(rowData.moq) : 1,
+                                wholesalerMoq: (() => {
+                                    const raw = rowData.wholesalerMoq ??
+                                        rowData.wholesaler_moq ??
+                                        rowData['Wholesaler MOQ'] ??
+                                        rowData['Wholesale MOQ'] ??
+                                        rowData['W-MOQ'] ??
+                                        rowData.wmoq;
+                                    return raw ? parseInt(raw) : null;
+                                })(),
                                 fixQty: rowData.fixQty ? parseInt(rowData.fixQty) : null,
                                 weight: rowData.weight ? Number(rowData.weight) : null,
                                 taxType: (() => {
@@ -170,6 +179,19 @@ let ImportService = class ImportService {
                                 unit: rowData.unit || undefined,
                                 hsnCode: rowData.hsnCode || undefined,
                                 moq: rowData.moq ? parseInt(rowData.moq) : undefined,
+                                wholesalerMoq: (() => {
+                                    const raw = rowData.wholesalerMoq ??
+                                        rowData.wholesaler_moq ??
+                                        rowData['Wholesaler MOQ'] ??
+                                        rowData['Wholesale MOQ'] ??
+                                        rowData['W-MOQ'] ??
+                                        rowData.wmoq;
+                                    if (raw === undefined)
+                                        return undefined;
+                                    if (raw === null || String(raw).trim() === '')
+                                        return null;
+                                    return parseInt(raw);
+                                })(),
                                 fixQty: rowData.fixQty ? parseInt(rowData.fixQty) : undefined,
                                 weight: rowData.weight ? Number(rowData.weight) : undefined,
                                 taxType: (() => {
@@ -407,6 +429,7 @@ let ImportService = class ImportService {
             { header: 'Category ID', key: 'categoryId', width: 30 },
             { header: 'Category Name', key: 'categoryName', width: 30 },
             { header: 'MOQ', key: 'moq', width: 10 },
+            { header: 'Wholesaler MOQ', key: 'wholesalerMoq', width: 16 },
             { header: 'Fix Qty', key: 'fixQty', width: 12 },
             { header: 'Barcode', key: 'barcode', width: 20 },
             { header: 'Brand', key: 'brand', width: 20 },
@@ -429,6 +452,7 @@ let ImportService = class ImportService {
                 categoryId: p.categoryId,
                 categoryName: p.category.name,
                 moq: p.moq,
+                wholesalerMoq: p.wholesalerMoq ?? '',
                 fixQty: p.fixQty,
                 barcode: p.barcode,
                 brand: p.brand,

@@ -95,6 +95,10 @@ export class CreateProductDto {
 
   @IsInt()
   @IsOptional()
+  wholesalerMoq?: number;
+
+  @IsInt()
+  @IsOptional()
   fixQty?: number;
 
   @IsString()

@@ -710,7 +710,7 @@ export class CatalogueService {
     });
 
     // Define main columns matching Product Master fields
-    const columns = [
+    const columns: any[] = [
       { header: 'Product Image', key: 'productImage', width: 22 },
       { header: 'Barcode Image', key: 'barcodeImage', width: 35 },
       { header: 'Product ID (System ID - Do Not Edit)', key: 'id', width: 36 },
@@ -738,7 +738,8 @@ export class CatalogueService {
       { header: 'Colors Set Quantity', key: 'colorsSetQuantity', width: 18 },
     ];
 
-    // Add pricing columns for each active group (only Price exists in Product Master)
+    // Add pricing columns for each active group and place Wholesaler MOQ next to WHOLESALER pricing
+    let addedWholesalerMoq = false;
     pricingGroups.forEach((group) => {
       const groupDisplayName = group.name || group.code;
       columns.push({
@@ -746,7 +747,29 @@ export class CatalogueService {
         key: `price_${group.id}`,
         width: 18,
       });
+
+      const isWholesaler =
+        group.name?.trim().toUpperCase() === 'WHOLESALER' ||
+        group.code?.trim().toUpperCase() === 'WHOLESALER' ||
+        group.name?.trim().toUpperCase()?.includes('WHOLESALE');
+
+      if (isWholesaler && !addedWholesalerMoq) {
+        columns.push({
+          header: 'Wholesaler MOQ',
+          key: 'wholesalerMoq',
+          width: 16,
+        });
+        addedWholesalerMoq = true;
+      }
     });
+
+    if (!addedWholesalerMoq) {
+      columns.push({
+        header: 'Wholesaler MOQ',
+        key: 'wholesalerMoq',
+        width: 16,
+      });
+    }
 
     sheet.columns = columns;
 
@@ -873,6 +896,10 @@ export class CatalogueService {
         stockQuantity: p.stockQuantity,
         isActive: p.isActive ? 'YES' : 'NO',
         moq: p.moq,
+        wholesalerMoq:
+          p.wholesalerMoq !== null && p.wholesalerMoq !== undefined
+            ? p.wholesalerMoq
+            : '',
         fixQty:
           p.fixQty !== null && p.fixQty !== undefined
             ? p.fixQty
@@ -1063,6 +1090,18 @@ export class CatalogueService {
         (h.toLowerCase().includes('is active') || h.toLowerCase() === 'active'),
     );
     const moqHeaderKey = headers.find((h) => h && h.toLowerCase() === 'moq');
+    const wholesalerMoqHeaderKey = headers.find(
+      (h) =>
+        h &&
+        (h.toLowerCase() === 'wholesaler moq' ||
+          h.toLowerCase() === 'wholesalermoq' ||
+          h.toLowerCase() === 'wholesaler_moq' ||
+          h.toLowerCase() === 'wholesale moq' ||
+          h.toLowerCase() === 'wholesale_moq' ||
+          h.toLowerCase() === 'w-moq' ||
+          h.toLowerCase() === 'w_moq' ||
+          h.toLowerCase() === 'wmoq'),
+    );
     const fixQtyHeaderKey = headers.find(
       (h) =>
         h &&
@@ -1369,6 +1408,7 @@ export class CatalogueService {
 
       const stockQuantity = getValNumber(stockHeaderKey);
       const moq = getValNumber(moqHeaderKey);
+      const wholesalerMoq = getValNumber(wholesalerMoqHeaderKey);
       const fixQty = getValNumber(fixQtyHeaderKey);
       const setQuantity = getValNumber(setQuantityHeaderKey);
       const sizesSetQuantity = getValNumber(sizesSetQuantityHeaderKey);
@@ -1441,6 +1481,7 @@ export class CatalogueService {
         discountedPrice: getValNumber(discountedPriceHeaderKey),
         stockQuantity: roundVal(stockQuantity, 0),
         moq: roundVal(moq, 1),
+        wholesalerMoq: roundVal(wholesalerMoq, null),
         fixQty: roundVal(fixQty, null),
         brand: getValString(brandHeaderKey),
         size: getValString(sizeHeaderKey),
@@ -1654,6 +1695,7 @@ export class CatalogueService {
                 discountedPrice: row.discountedPrice,
                 stockQuantity: row.stockQuantity,
                 moq: row.moq,
+                wholesalerMoq: row.wholesalerMoq,
                 fixQty: row.fixQty,
                 brand: row.brand,
                 size: row.size,
@@ -1755,6 +1797,7 @@ export class CatalogueService {
                     discountedPrice: row.discountedPrice,
                     stockQuantity: row.stockQuantity,
                     moq: row.moq,
+                    wholesalerMoq: wholesalerMoqHeaderKey ? row.wholesalerMoq : undefined,
                     fixQty: row.fixQty,
                     brand: row.brand,
                     size: row.size,

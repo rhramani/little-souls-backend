@@ -94,6 +94,7 @@ class UpdateProductDto {
     categoryId;
     catalogueId;
     moq;
+    wholesalerMoq;
     fixQty;
     barcode;
     brand;
@@ -171,6 +172,11 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Number)
 ], UpdateProductDto.prototype, "moq", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateProductDto.prototype, "wholesalerMoq", void 0);
 __decorate([
     (0, class_validator_1.IsInt)(),
     (0, class_validator_1.IsOptional)(),

@@ -86,6 +86,9 @@ let ProductService = class ProductService {
                     categoryId: categoryId,
                     catalogueIds: initialCatalogueIds,
                     moq: dto.moq || 1,
+                    wholesalerMoq: dto.wholesalerMoq !== undefined && dto.wholesalerMoq !== null
+                        ? Number(dto.wholesalerMoq) || null
+                        : null,
                     fixQty: dto.fixQty || null,
                     barcode: dto.barcode || dto.sku,
                     brand: dto.brand,
@@ -466,6 +469,11 @@ let ProductService = class ProductService {
                     categoryId: dto.categoryId,
                     catalogueIds: nextCatalogueIds,
                     moq: dto.moq,
+                    wholesalerMoq: dto.wholesalerMoq !== undefined
+                        ? dto.wholesalerMoq === null || dto.wholesalerMoq === ''
+                            ? null
+                            : Number(dto.wholesalerMoq)
+                        : undefined,
                     fixQty: dto.fixQty !== undefined ? dto.fixQty : undefined,
                     barcode: dto.barcode !== undefined
                         ? dto.barcode || dto.sku || product.sku

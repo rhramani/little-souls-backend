@@ -98,6 +98,10 @@ export class UpdateProductDto {
 
   @IsInt()
   @IsOptional()
+  wholesalerMoq?: number;
+
+  @IsInt()
+  @IsOptional()
   fixQty?: number;
 
   @IsString()

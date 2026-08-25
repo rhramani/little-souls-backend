@@ -157,14 +157,29 @@ export class OrderService {
         // Fetch B2B product custom pricing group definition
         const customer = await tx.customer.findUnique({
           where: { id: customerId },
-          select: { pricingGroupId: true },
+          include: { pricingGroup: true },
         });
+
+        const isWholesaler =
+          customer?.pricingGroup?.name?.toUpperCase() === 'WHOLESALER' ||
+          customer?.pricingGroup?.code?.toUpperCase() === 'WHOLESALER' ||
+          customer?.pricingGroup?.code?.toUpperCase() === 'VIP' ||
+          customer?.businessType?.toUpperCase() === 'WHOLESALER' ||
+          customer?.businessType?.toUpperCase()?.includes('WHOLESALE');
+
+        const effectiveMoq =
+          isWholesaler &&
+          product.wholesalerMoq !== null &&
+          product.wholesalerMoq !== undefined &&
+          product.wholesalerMoq > 0
+            ? product.wholesalerMoq
+            : product.moq;
 
         let price = product.productPrice ? Number(product.productPrice) : 0;
         let mrp: number | null = null;
         let discountPercent = 0;
 
-        if (customer?.pricingGroupId) {
+        if (customer && customer.pricingGroupId) {
           const pricing = await tx.productPricing.findUnique({
             where: {
               productId_pricingGroupId: {
@@ -208,7 +223,7 @@ export class OrderService {
           productName: product.name,
           productImageUrl: getProductImageUrl(product),
           quantity,
-          moq: product.moq,
+          moq: effectiveMoq,
           availableStock: product.stockQuantity,
           shortageQuantity: null,
           backorderQuantity: null,

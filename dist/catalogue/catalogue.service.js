@@ -646,6 +646,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             { header: 'colors', key: 'colors', width: 15 },
             { header: 'Colors Set Quantity', key: 'colorsSetQuantity', width: 18 },
         ];
+        let addedWholesalerMoq = false;
         pricingGroups.forEach((group) => {
             const groupDisplayName = group.name || group.code;
             columns.push({
@@ -653,7 +654,25 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 key: `price_${group.id}`,
                 width: 18,
             });
+            const isWholesaler = group.name?.trim().toUpperCase() === 'WHOLESALER' ||
+                group.code?.trim().toUpperCase() === 'WHOLESALER' ||
+                group.name?.trim().toUpperCase()?.includes('WHOLESALE');
+            if (isWholesaler && !addedWholesalerMoq) {
+                columns.push({
+                    header: 'Wholesaler MOQ',
+                    key: 'wholesalerMoq',
+                    width: 16,
+                });
+                addedWholesalerMoq = true;
+            }
         });
+        if (!addedWholesalerMoq) {
+            columns.push({
+                header: 'Wholesaler MOQ',
+                key: 'wholesalerMoq',
+                width: 16,
+            });
+        }
         sheet.columns = columns;
         const headerRow = sheet.getRow(1);
         headerRow.height = 30;
@@ -740,6 +759,9 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 stockQuantity: p.stockQuantity,
                 isActive: p.isActive ? 'YES' : 'NO',
                 moq: p.moq,
+                wholesalerMoq: p.wholesalerMoq !== null && p.wholesalerMoq !== undefined
+                    ? p.wholesalerMoq
+                    : '',
                 fixQty: p.fixQty !== null && p.fixQty !== undefined
                     ? p.fixQty
                     : '',
@@ -880,6 +902,15 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
         const activeHeaderKey = headers.find((h) => h &&
             (h.toLowerCase().includes('is active') || h.toLowerCase() === 'active'));
         const moqHeaderKey = headers.find((h) => h && h.toLowerCase() === 'moq');
+        const wholesalerMoqHeaderKey = headers.find((h) => h &&
+            (h.toLowerCase() === 'wholesaler moq' ||
+                h.toLowerCase() === 'wholesalermoq' ||
+                h.toLowerCase() === 'wholesaler_moq' ||
+                h.toLowerCase() === 'wholesale moq' ||
+                h.toLowerCase() === 'wholesale_moq' ||
+                h.toLowerCase() === 'w-moq' ||
+                h.toLowerCase() === 'w_moq' ||
+                h.toLowerCase() === 'wmoq'));
         const fixQtyHeaderKey = headers.find((h) => h &&
             (h.toLowerCase() === 'fix qty' ||
                 h.toLowerCase() === 'fix_qty' ||
@@ -1117,6 +1148,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             });
             const stockQuantity = getValNumber(stockHeaderKey);
             const moq = getValNumber(moqHeaderKey);
+            const wholesalerMoq = getValNumber(wholesalerMoqHeaderKey);
             const fixQty = getValNumber(fixQtyHeaderKey);
             const setQuantity = getValNumber(setQuantityHeaderKey);
             const sizesSetQuantity = getValNumber(sizesSetQuantityHeaderKey);
@@ -1185,6 +1217,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 discountedPrice: getValNumber(discountedPriceHeaderKey),
                 stockQuantity: roundVal(stockQuantity, 0),
                 moq: roundVal(moq, 1),
+                wholesalerMoq: roundVal(wholesalerMoq, null),
                 fixQty: roundVal(fixQty, null),
                 brand: getValString(brandHeaderKey),
                 size: getValString(sizeHeaderKey),
@@ -1362,6 +1395,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                             discountedPrice: row.discountedPrice,
                             stockQuantity: row.stockQuantity,
                             moq: row.moq,
+                            wholesalerMoq: row.wholesalerMoq,
                             fixQty: row.fixQty,
                             brand: row.brand,
                             size: row.size,
@@ -1453,6 +1487,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                             discountedPrice: row.discountedPrice,
                             stockQuantity: row.stockQuantity,
                             moq: row.moq,
+                            wholesalerMoq: wholesalerMoqHeaderKey ? row.wholesalerMoq : undefined,
                             fixQty: row.fixQty,
                             brand: row.brand,
                             size: row.size,

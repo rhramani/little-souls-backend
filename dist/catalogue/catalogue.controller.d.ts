@@ -38,6 +38,7 @@ export declare class CatalogueController {
             sku: string;
             shortDescription: string | null;
             moq: number;
+            wholesalerMoq: number | null;
             fixQty: number | null;
             barcode: string | null;
             barcodeUrl: string | null;
@@ -156,6 +157,7 @@ export declare class CatalogueController {
             sku: string;
             shortDescription: string | null;
             moq: number;
+            wholesalerMoq: number | null;
             fixQty: number | null;
             barcode: string | null;
             barcodeUrl: string | null;
