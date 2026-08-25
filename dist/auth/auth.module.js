@@ -24,7 +24,7 @@ exports.AuthModule = AuthModule = __decorate([
             passport_1.PassportModule.register({ defaultStrategy: 'jwt' }),
             jwt_1.JwtModule.register({
                 secret: process.env.JWT_SECRET || 'little-souls-secret-key-2026',
-                signOptions: { expiresIn: '15m' },
+                signOptions: { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') },
             }),
             events_module_1.EventsModule,
             common_module_1.CommonModule,

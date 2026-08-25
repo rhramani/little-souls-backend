@@ -222,6 +222,10 @@ export declare class CatalogueController {
     exportCatalogue(id: string, productIds: string | undefined, categoryId: string | undefined, res: Response): Promise<void>;
     uploadCatalogue(id: string, file: Express.Multer.File, userId: string, categoryId?: string): Promise<{
         message: string;
+        createdCount: number;
+        updatedCount: number;
+    } | {
+        message: string;
     }>;
     shareImagesMeta(id: string, body: {
         phone: string;

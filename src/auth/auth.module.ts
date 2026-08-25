@@ -12,7 +12,7 @@ import { CommonModule } from '../common/common.module';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'little-souls-secret-key-2026',
-      signOptions: { expiresIn: '15m' },
+      signOptions: { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any },
     }),
     EventsModule,
     CommonModule,

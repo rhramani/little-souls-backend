@@ -336,7 +336,7 @@ let AuthService = class AuthService {
                 refreshToken: sessionToken,
                 ipAddress,
                 userAgent,
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             },
         });
         await this.prisma.user.update({
@@ -788,7 +788,7 @@ let AuthService = class AuthService {
                 refreshToken: sessionToken,
                 ipAddress,
                 userAgent,
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             },
         });
         await this.prisma.user.update({
@@ -831,8 +831,30 @@ let AuthService = class AuthService {
             },
             include: { user: true },
         });
-        if (!session || session.revokedAt !== null || !session.user.isActive) {
+        if (!session || !session.user || !session.user.isActive) {
             throw new common_1.UnauthorizedException('Invalid or expired refresh token');
+        }
+        if (session.revokedAt !== null) {
+            const gracePeriodMs = 60 * 1000;
+            const timeSinceRevocation = Date.now() - new Date(session.revokedAt).getTime();
+            if (timeSinceRevocation > gracePeriodMs) {
+                throw new common_1.UnauthorizedException('Session has expired or been revoked');
+            }
+            const payload = {
+                sub: session.user.id,
+                email: session.user.email,
+                mobile: session.user.mobile,
+                type: session.user.userType,
+                customerId: session.user.customerId,
+                contactId: session.user.customerContactId,
+                sessionId: session.id,
+            };
+            const accessToken = this.jwtService.sign(payload);
+            return {
+                accessToken,
+                token: accessToken,
+                refreshToken: session.refreshToken,
+            };
         }
         await this.prisma.userSession.update({
             where: { id: session.id },
@@ -845,7 +867,7 @@ let AuthService = class AuthService {
                 refreshToken: newRefreshToken,
                 ipAddress,
                 userAgent,
-                expiresAt: session.expiresAt,
+                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             },
         });
         const payload = {

@@ -232,6 +232,8 @@ export declare class CatalogueService {
     }>;
     importCatalogue(catalogueId: string, fileBuffer: Buffer, userId: string, targetCategoryId?: string): Promise<{
         message: string;
+        createdCount: number;
+        updatedCount: number;
     }>;
     bulkAddProducts(catalogueId: string, files: Express.Multer.File[], userId: string, targetCategoryId?: string): Promise<{
         message: string;

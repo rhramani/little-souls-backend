@@ -371,7 +371,7 @@ export class AuthService {
         refreshToken: sessionToken,
         ipAddress,
         userAgent,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
       },
     });
 
@@ -916,7 +916,7 @@ export class AuthService {
         refreshToken: sessionToken,
         ipAddress,
         userAgent,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
       },
     });
 
@@ -969,8 +969,36 @@ export class AuthService {
       include: { user: true },
     });
 
-    if (!session || session.revokedAt !== null || !session.user.isActive) {
+    if (!session || !session.user || !session.user.isActive) {
       throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    // Grace period for concurrent requests: if session was revoked within the last 60 seconds,
+    // allow issuing a new access token rather than failing with 401
+    if (session.revokedAt !== null) {
+      const gracePeriodMs = 60 * 1000;
+      const timeSinceRevocation = Date.now() - new Date(session.revokedAt).getTime();
+      if (timeSinceRevocation > gracePeriodMs) {
+        throw new UnauthorizedException('Session has expired or been revoked');
+      }
+
+      // Within grace period: generate new access token for the user with existing or latest session
+      const payload = {
+        sub: session.user.id,
+        email: session.user.email,
+        mobile: session.user.mobile,
+        type: session.user.userType,
+        customerId: session.user.customerId,
+        contactId: session.user.customerContactId,
+        sessionId: session.id,
+      };
+      const accessToken = this.jwtService.sign(payload);
+
+      return {
+        accessToken,
+        token: accessToken,
+        refreshToken: session.refreshToken,
+      };
     }
 
     // Revoke old session
@@ -987,7 +1015,7 @@ export class AuthService {
         refreshToken: newRefreshToken,
         ipAddress,
         userAgent,
-        expiresAt: session.expiresAt, // Maintain the original session expiration time (24h limit)
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
       },
     });
 

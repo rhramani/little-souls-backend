@@ -617,7 +617,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
         const sheet = workbook.addWorksheet('Catalogue Products');
         const pricingGroups = await this.prisma.pricingGroup.findMany({
             where: { isActive: true },
-            orderBy: { name: 'asc' },
+            orderBy: { code: 'asc' },
         });
         const columns = [
             { header: 'Product Image', key: 'productImage', width: 22 },
@@ -819,7 +819,12 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
     }
     async importCatalogue(catalogueId, fileBuffer, userId, targetCategoryId) {
         const start = Date.now();
-        const catalogue = await this.findOne(catalogueId);
+        const catalogue = await this.prisma.catalogue.findUnique({
+            where: { id: catalogueId },
+        });
+        if (!catalogue) {
+            throw new common_1.NotFoundException(`Catalogue with ID '${catalogueId}' not found.`);
+        }
         const ExcelJS = require('exceljs');
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(fileBuffer);
@@ -836,6 +841,12 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             (h.toLowerCase().includes('product id') || h.toLowerCase() === 'id'));
         const skuHeaderKey = headers.find((h) => h && h.toLowerCase() === 'sku');
         const nameHeaderKey = headers.find((h) => h && (h.toLowerCase() === 'product name' || h.toLowerCase() === 'name'));
+        const categoryHeaderKey = headers.find((h) => h &&
+            (h.toLowerCase() === 'category' ||
+                h.toLowerCase() === 'category name' ||
+                h.toLowerCase() === 'categoryname' ||
+                h.toLowerCase() === 'category id' ||
+                h.toLowerCase() === 'categoryid'));
         const descHeaderKey = headers.find((h) => h &&
             (h.toLowerCase() === 'product description' ||
                 h.toLowerCase() === 'description'));
@@ -1021,6 +1032,16 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
         catch (err) {
             this.logger.warn(`Could not parse embedded images from Excel sheet: ${err.message}`);
         }
+        const allDbCategories = await this.prisma.category.findMany({
+            select: { id: true, name: true, slug: true },
+        });
+        const categoryByNameMap = new Map();
+        const categoryByIdMap = new Map();
+        for (const cat of allDbCategories) {
+            if (cat.name)
+                categoryByNameMap.set(cat.name.trim().toLowerCase(), cat.id);
+            categoryByIdMap.set(cat.id, cat.id);
+        }
         const parsedRows = [];
         sheet.eachRow((row, rowNumber) => {
             if (rowNumber === 1)
@@ -1055,6 +1076,17 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             if (!rawSku && !name)
                 return;
             const formattedSku = rawSku ? this.formatSku(rawSku, id || undefined) : null;
+            const rawCategory = getValString(categoryHeaderKey);
+            let resolvedCategoryId = undefined;
+            if (rawCategory) {
+                const cleanCat = rawCategory.trim();
+                if (categoryByIdMap.has(cleanCat)) {
+                    resolvedCategoryId = cleanCat;
+                }
+                else if (categoryByNameMap.has(cleanCat.toLowerCase())) {
+                    resolvedCategoryId = categoryByNameMap.get(cleanCat.toLowerCase());
+                }
+            }
             const isActiveStr = getValString(activeHeaderKey);
             let isActive = undefined;
             if (activeHeaderKey) {
@@ -1145,6 +1177,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 rawSku: rawSku || null,
                 sku: formattedSku,
                 name: name ? name.trim() : null,
+                resolvedCategoryId,
                 description: getValString(descHeaderKey)?.trim() ?? null,
                 productImage: finalImgUrl,
                 productPictureUrl: finalPicUrl,
@@ -1253,18 +1286,18 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 pricingGroupMap.set(g.code.trim().toUpperCase(), g);
         }
         await this.prisma.$transaction(async (tx) => {
-            let category = null;
+            let defaultCategory = null;
             if (targetCategoryId) {
-                category = await tx.category.findUnique({
+                defaultCategory = await tx.category.findUnique({
                     where: { id: targetCategoryId },
                 });
             }
-            if (!category) {
-                category = await tx.category.findUnique({
+            if (!defaultCategory) {
+                defaultCategory = await tx.category.findUnique({
                     where: { slug: 'uncategorized' },
                 });
-                if (!category) {
-                    category = await tx.category.create({
+                if (!defaultCategory) {
+                    defaultCategory = await tx.category.create({
                         data: {
                             name: 'Uncategorized',
                             slug: 'uncategorized',
@@ -1310,63 +1343,13 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                         pricingGroupMap.set(pricingGroup.code.trim().toUpperCase(), pricingGroup);
                 }
             }
-            const uploadedExistingIds = new Set(parsedRows.filter((r) => !r.isNew).map((r) => r.id));
-            const omittedProducts = catalogue.products.filter((p) => !uploadedExistingIds.has(p.id));
-            for (const product of omittedProducts) {
-                const belongsToOtherCatalogues = product.catalogueIds.some((cid) => cid !== catalogueId);
-                const orderItemCount = await tx.orderItem.count({
-                    where: { productId: product.id },
-                });
-                const backorderApprovalCount = await tx.backorderApproval.count({
-                    where: { productId: product.id },
-                });
-                const isReferenced = orderItemCount > 0 ||
-                    backorderApprovalCount > 0;
-                if (isReferenced || belongsToOtherCatalogues) {
-                    await tx.product.update({
-                        where: { id: product.id },
-                        data: {
-                            catalogueIds: {
-                                set: product.catalogueIds.filter((cid) => cid !== catalogueId),
-                            },
-                            isActive: belongsToOtherCatalogues ? product.isActive : false,
-                        },
-                    });
-                }
-                else {
-                    await tx.imageCleaningTask.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.productImage.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.productPricing.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.productCatalogFile.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.productVideo.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.cartItem.deleteMany({ where: { productId: product.id } });
-                    await tx.stockMovement.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.backorderApproval.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.product.delete({
-                        where: { id: product.id },
-                    });
-                }
-            }
             const newRows = parsedRows.filter((r) => r.isNew);
             const existingRows = parsedRows.filter((r) => !r.isNew);
             if (newRows.length > 0) {
                 await tx.product.createMany({
                     data: newRows.map((row) => {
                         const slug = `${this.slugify(row.name)}-${row.sku.toLowerCase()}`;
+                        const assignedCategoryId = row.resolvedCategoryId || defaultCategory.id;
                         return {
                             id: row.id,
                             sku: row.sku,
@@ -1397,11 +1380,11 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                             sizesSetQuantity: row.sizesSetQuantity,
                             colors: row.colors,
                             colorsSetQuantity: row.colorsSetQuantity,
-                            isActive: row.isActive,
+                            isActive: row.isActive !== undefined ? row.isActive : true,
                             barcode: row.sku,
                             barcodeUrl: row.barcodeUrl,
                             stockStatus: row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
-                            categoryId: category.id,
+                            categoryId: assignedCategoryId,
                             catalogueIds: [catalogueId],
                             createdBy: userId,
                         };
@@ -1488,10 +1471,13 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                             sizesSetQuantity: row.sizesSetQuantity,
                             colors: row.colors,
                             colorsSetQuantity: row.colorsSetQuantity,
-                            isActive: row.isActive,
+                            isActive: row.isActive !== undefined ? row.isActive : undefined,
                             barcode: row.sku,
                             barcodeUrl: row.barcodeUrl,
-                            stockStatus: row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+                            stockStatus: row.stockQuantity !== undefined && row.stockQuantity !== null
+                                ? (row.stockQuantity > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK')
+                                : undefined,
+                            categoryId: row.resolvedCategoryId || undefined,
                             catalogueIds: {
                                 set: nextIds,
                             },
@@ -1564,7 +1550,11 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             }
         }, { timeout: 60000 });
         this.logger.log(`Import completed for ${parsedRows.length} products in ${Date.now() - start}ms`);
-        return { message: 'Catalogue products successfully updated and replaced.' };
+        return {
+            message: `Catalogue products successfully imported: ${parsedRows.filter((r) => r.isNew).length} created, ${parsedRows.filter((r) => !r.isNew).length} updated.`,
+            createdCount: parsedRows.filter((r) => r.isNew).length,
+            updatedCount: parsedRows.filter((r) => !r.isNew).length,
+        };
     }
     async bulkAddProducts(catalogueId, files, userId, targetCategoryId) {
         const start = Date.now();
@@ -1608,10 +1598,19 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             select: { sku: true },
         });
         const usedSkus = new Set(allDbProducts.map((p) => p.sku.toUpperCase()));
-        const uploadedSkus = uploadedImages.map((img, idx) => {
-            const { sku } = this.extractCleanNameAndSkuFromFilename(img.filename, `temp-${idx}`, usedSkus);
-            return sku;
+        const processedImages = uploadedImages
+            .filter((img) => !!img.url)
+            .map((img) => {
+            const productId = (0, crypto_1.randomBytes)(12).toString('hex');
+            const { name, sku } = this.extractCleanNameAndSkuFromFilename(img.filename, productId, usedSkus);
+            return {
+                ...img,
+                productId,
+                name,
+                sku,
+            };
         });
+        const uploadedSkus = processedImages.map((img) => img.sku);
         const existingProducts = await this.prisma.product.findMany({
             where: {
                 sku: { in: uploadedSkus },
@@ -1638,37 +1637,33 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
         const newProductImagesData = [];
         const productsToUpdate = [];
         const newImagesForExistingProducts = [];
-        for (const img of uploadedImages) {
-            if (!img.url)
-                continue;
-            const productId = (0, crypto_1.randomBytes)(12).toString('hex');
-            const { name, sku } = this.extractCleanNameAndSkuFromFilename(img.filename, productId, usedSkus);
-            const existingProduct = existingProductsMap.get(sku.toUpperCase());
+        for (const item of processedImages) {
+            const existingProduct = existingProductsMap.get(item.sku.toUpperCase());
             if (existingProduct) {
                 const updatedCatalogueIds = Array.from(new Set([...existingProduct.catalogueIds, catalogueId]));
                 productsToUpdate.push({
                     id: existingProduct.id,
                     catalogueIds: updatedCatalogueIds,
-                    productImage: img.url,
-                    barcode: sku,
-                    barcodeUrl: barcodeMap.get(sku.toUpperCase()) || null,
+                    productImage: item.url,
+                    barcode: item.sku,
+                    barcodeUrl: barcodeMap.get(item.sku.toUpperCase()) || null,
                 });
                 const hasPrimaryImage = existingProduct.images.some((i) => i.isPrimary);
                 if (!hasPrimaryImage) {
                     newImagesForExistingProducts.push({
                         productId: existingProduct.id,
-                        originalUrl: img.url,
+                        originalUrl: item.url,
                         isPrimary: true,
                         createdBy: userId,
                     });
                 }
             }
             else {
-                const slug = this.slugify(sku);
+                const slug = this.slugify(item.sku);
                 newProductsData.push({
-                    id: productId,
-                    sku: sku,
-                    name: name,
+                    id: item.productId,
+                    sku: item.sku,
+                    name: item.name,
                     slug: slug,
                     categoryId: category.id,
                     catalogueIds: [catalogueId],
@@ -1677,13 +1672,13 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                     stockStatus: 'OUT_OF_STOCK',
                     isActive: true,
                     createdBy: userId,
-                    productImage: img.url,
-                    barcode: sku,
-                    barcodeUrl: barcodeMap.get(sku.toUpperCase()) || null,
+                    productImage: item.url,
+                    barcode: item.sku,
+                    barcodeUrl: barcodeMap.get(item.sku.toUpperCase()) || null,
                 });
                 newProductImagesData.push({
-                    productId: productId,
-                    originalUrl: img.url,
+                    productId: item.productId,
+                    originalUrl: item.url,
                     isPrimary: true,
                     createdBy: userId,
                 });
