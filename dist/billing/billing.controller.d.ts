@@ -171,9 +171,6 @@ export declare class BillingController {
                     fixQty: number | null;
                     barcode: string | null;
                     barcodeUrl: string | null;
-                    brand: string | null;
-                    size: string | null;
-                    color: string | null;
                     material: string | null;
                     unit: string | null;
                     hsnCode: string | null;
@@ -193,13 +190,6 @@ export declare class BillingController {
                     productPictureUrl: string | null;
                     privateNotes: string | null;
                     parentProductId: string | null;
-                    setName: string | null;
-                    setQuantity: number | null;
-                    setType: string | null;
-                    sizes: string | null;
-                    sizesSetQuantity: number | null;
-                    colors: string | null;
-                    colorsSetQuantity: number | null;
                     categoryId: string;
                     catalogueIds: string[];
                 };
@@ -300,9 +290,6 @@ export declare class BillingController {
                 fixQty: number | null;
                 barcode: string | null;
                 barcodeUrl: string | null;
-                brand: string | null;
-                size: string | null;
-                color: string | null;
                 material: string | null;
                 unit: string | null;
                 hsnCode: string | null;
@@ -322,13 +309,6 @@ export declare class BillingController {
                 productPictureUrl: string | null;
                 privateNotes: string | null;
                 parentProductId: string | null;
-                setName: string | null;
-                setQuantity: number | null;
-                setType: string | null;
-                sizes: string | null;
-                sizesSetQuantity: number | null;
-                colors: string | null;
-                colorsSetQuantity: number | null;
                 categoryId: string;
                 catalogueIds: string[];
             }) | null;

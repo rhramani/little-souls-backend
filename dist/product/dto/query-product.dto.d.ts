@@ -5,7 +5,6 @@ export declare class QueryProductDto {
     search?: string;
     categoryId?: string;
     catalogueId?: string;
-    brand?: string;
     stockStatus?: StockStatus;
     stockStatuses?: string;
     moqTiers?: string;

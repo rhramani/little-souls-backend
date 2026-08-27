@@ -694,17 +694,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             { header: 'Is Active (YES/NO)', key: 'isActive', width: 18 },
             { header: 'MOQ', key: 'moq', width: 10 },
             { header: 'Fix Qty', key: 'fixQty', width: 12 },
-            { header: 'Brand', key: 'brand', width: 15 },
-            { header: 'Size', key: 'size', width: 12 },
-            { header: 'Color', key: 'color', width: 12 },
             { header: 'Unit', key: 'unit', width: 10 },
-            { header: 'Set Name', key: 'setName', width: 20 },
-            { header: 'Set Quantity', key: 'setQuantity', width: 15 },
-            { header: 'Set Type', key: 'setType', width: 15 },
-            { header: 'sizes', key: 'sizes', width: 15 },
-            { header: 'Sizes Set Quantity', key: 'sizesSetQuantity', width: 18 },
-            { header: 'colors', key: 'colors', width: 15 },
-            { header: 'Colors Set Quantity', key: 'colorsSetQuantity', width: 18 },
         ];
         let addedWholesalerMoq = false;
         pricingGroups.forEach((group) => {
@@ -825,23 +815,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 fixQty: p.fixQty !== null && p.fixQty !== undefined
                     ? p.fixQty
                     : '',
-                brand: p.brand || '',
-                size: p.size || '',
-                color: p.color || '',
                 unit: p.unit || 'PCS',
-                setName: p.setName || '',
-                setQuantity: p.setQuantity !== null && p.setQuantity !== undefined
-                    ? p.setQuantity
-                    : '',
-                setType: p.setType || '',
-                sizes: p.sizes || '',
-                sizesSetQuantity: p.sizesSetQuantity !== null && p.sizesSetQuantity !== undefined
-                    ? p.sizesSetQuantity
-                    : '',
-                colors: p.colors || '',
-                colorsSetQuantity: p.colorsSetQuantity !== null && p.colorsSetQuantity !== undefined
-                    ? p.colorsSetQuantity
-                    : '',
             };
             pricingGroups.forEach((group) => {
                 const pricing = p.pricing.find((pr) => pr.pricingGroupId === group.id);
@@ -978,9 +952,6 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 h.toLowerCase() === 'fixed qty' ||
                 h.toLowerCase() === 'fix quantity' ||
                 h.toLowerCase() === 'fixed quantity'));
-        const brandHeaderKey = headers.find((h) => h && h.toLowerCase() === 'brand');
-        const sizeHeaderKey = headers.find((h) => h && h.toLowerCase() === 'size');
-        const colorHeaderKey = headers.find((h) => h && h.toLowerCase() === 'color');
         const unitHeaderKey = headers.find((h) => h && h.toLowerCase() === 'unit');
         const taxTypeHeaderKey = headers.find((h) => h &&
             (h.toLowerCase() === 'tax type' ||
@@ -1021,13 +992,6 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
         const parentProductSkuHeaderKey = headers.find((h) => h && h.toLowerCase() === 'parent product sku');
         const parentProductIdHeaderKey = headers.find((h) => h && h.toLowerCase() === 'parent product id');
         const privateNotesHeaderKey = headers.find((h) => h && h.toLowerCase() === 'private notes');
-        const setNameHeaderKey = headers.find((h) => h && h.toLowerCase() === 'set name');
-        const setQuantityHeaderKey = headers.find((h) => h && h.toLowerCase() === 'set quantity');
-        const setTypeHeaderKey = headers.find((h) => h && h.toLowerCase() === 'set type');
-        const sizesHeaderKey = headers.find((h) => h && h.toLowerCase() === 'sizes');
-        const sizesSetQuantityHeaderKey = headers.find((h) => h && h.toLowerCase() === 'sizes set quantity');
-        const colorsHeaderKey = headers.find((h) => h && h.toLowerCase() === 'colors');
-        const colorsSetQuantityHeaderKey = headers.find((h) => h && h.toLowerCase() === 'colors set quantity');
         const pricingHeaderMap = {};
         headers.forEach((header, idx) => {
             if (!header)
@@ -1210,9 +1174,6 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             const moq = getValNumber(moqHeaderKey);
             const wholesalerMoq = getValNumber(wholesalerMoqHeaderKey);
             const fixQty = getValNumber(fixQtyHeaderKey);
-            const setQuantity = getValNumber(setQuantityHeaderKey);
-            const sizesSetQuantity = getValNumber(sizesSetQuantityHeaderKey);
-            const colorsSetQuantity = getValNumber(colorsSetQuantityHeaderKey);
             const rawProdImg = getValString(productImageHeaderKey);
             const rawProdPic = getValString(productPictureUrlHeaderKey);
             const embeddedImgUrl = embeddedImageUrlMap.get(rowNumber);
@@ -1279,9 +1240,6 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 moq: roundVal(moq, 1),
                 wholesalerMoq: roundVal(wholesalerMoq, null),
                 fixQty: roundVal(fixQty, null),
-                brand: getValString(brandHeaderKey),
-                size: getValString(sizeHeaderKey),
-                color: getValString(colorHeaderKey),
                 unit: getValString(unitHeaderKey) || 'PCS',
                 taxType: parsedTaxType || null,
                 taxPercent: parsedTaxPercent,
@@ -1289,13 +1247,6 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 parentProductSku: getValString(parentProductSkuHeaderKey),
                 parentProductId: getValString(parentProductIdHeaderKey),
                 privateNotes: getValString(privateNotesHeaderKey),
-                setName: getValString(setNameHeaderKey),
-                setQuantity: roundVal(setQuantity, null),
-                setType: getValString(setTypeHeaderKey),
-                sizes: getValString(sizesHeaderKey),
-                sizesSetQuantity: roundVal(sizesSetQuantity, null),
-                colors: getValString(colorsHeaderKey),
-                colorsSetQuantity: roundVal(colorsSetQuantity, null),
                 isActive,
                 pricingData,
             });
@@ -1457,9 +1408,6 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                             moq: row.moq,
                             wholesalerMoq: row.wholesalerMoq,
                             fixQty: row.fixQty,
-                            brand: row.brand,
-                            size: row.size,
-                            color: row.color,
                             unit: row.unit || 'PCS',
                             taxType: row.taxType,
                             taxPercent: row.taxPercent,
@@ -1467,13 +1415,6 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                             parentProductSku: row.parentProductSku,
                             parentProductId: row.parentProductId,
                             privateNotes: row.privateNotes,
-                            setName: row.setName,
-                            setQuantity: row.setQuantity,
-                            setType: row.setType,
-                            sizes: row.sizes,
-                            sizesSetQuantity: row.sizesSetQuantity,
-                            colors: row.colors,
-                            colorsSetQuantity: row.colorsSetQuantity,
                             isActive: row.isActive !== undefined ? row.isActive : true,
                             barcode: row.sku,
                             barcodeUrl: row.barcodeUrl,
@@ -1549,9 +1490,6 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                             moq: row.moq,
                             wholesalerMoq: wholesalerMoqHeaderKey ? row.wholesalerMoq : undefined,
                             fixQty: row.fixQty,
-                            brand: row.brand,
-                            size: row.size,
-                            color: row.color,
                             unit: row.unit,
                             taxType: taxTypeHeaderKey ? row.taxType : undefined,
                             taxPercent: taxHeaderKey ? row.taxPercent : undefined,
@@ -1559,13 +1497,6 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                             parentProductSku: row.parentProductSku,
                             parentProductId: row.parentProductId,
                             privateNotes: row.privateNotes,
-                            setName: row.setName,
-                            setQuantity: row.setQuantity,
-                            setType: row.setType,
-                            sizes: row.sizes,
-                            sizesSetQuantity: row.sizesSetQuantity,
-                            colors: row.colors,
-                            colorsSetQuantity: row.colorsSetQuantity,
                             isActive: row.isActive !== undefined ? row.isActive : undefined,
                             barcode: row.sku,
                             barcodeUrl: row.barcodeUrl,

@@ -25,9 +25,6 @@ export declare class CreateProductDto {
     wholesalerMoq?: number;
     fixQty?: number;
     barcode?: string;
-    brand?: string;
-    size?: string;
-    color?: string;
     material?: string;
     unit?: string;
     hsnCode?: string;
@@ -46,13 +43,6 @@ export declare class CreateProductDto {
     parentProductSku?: string;
     parentProductId?: string;
     privateNotes?: string;
-    setName?: string;
-    setQuantity?: number;
-    setType?: string;
-    sizes?: string;
-    sizesSetQuantity?: number;
-    colors?: string;
-    colorsSetQuantity?: number;
     isActive?: boolean;
     isFeatured?: boolean;
     sortOrder?: number;

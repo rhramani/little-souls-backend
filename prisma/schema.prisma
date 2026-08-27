@@ -349,9 +349,6 @@ model Product {
   fixQty              Int?        @map("fix_qty")
   barcode             String?
   barcodeUrl          String?
-  brand               String?
-  size                String?
-  color               String?
   material            String?
   unit                String?     @default("PCS")
   hsnCode             String?     @map("hsn_code")
@@ -379,13 +376,6 @@ model Product {
   productPictureUrl            String?   @map("product_picture_url")
   privateNotes                 String?   @map("private_notes")
   parentProductId              String?   @map("parent_product_id")
-  setName                      String?   @map("set_name")
-  setQuantity                  Int?      @map("set_quantity")
-  setType                      String?   @map("set_type")
-  sizes                        String?
-  sizesSetQuantity             Int?      @map("sizes_set_quantity")
-  colors                       String?
-  colorsSetQuantity            Int?      @map("colors_set_quantity")
 
   category      Category @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdByUser User?    @relation("ProductCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)

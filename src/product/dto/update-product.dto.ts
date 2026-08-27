@@ -110,18 +110,6 @@ export class UpdateProductDto {
 
   @IsString()
   @IsOptional()
-  brand?: string;
-
-  @IsString()
-  @IsOptional()
-  size?: string;
-
-  @IsString()
-  @IsOptional()
-  color?: string;
-
-  @IsString()
-  @IsOptional()
   material?: string;
 
   @IsString()
@@ -188,33 +176,7 @@ export class UpdateProductDto {
   @IsOptional()
   privateNotes?: string;
 
-  @IsString()
-  @IsOptional()
-  setName?: string;
 
-  @IsInt()
-  @IsOptional()
-  setQuantity?: number;
-
-  @IsString()
-  @IsOptional()
-  setType?: string;
-
-  @IsString()
-  @IsOptional()
-  sizes?: string;
-
-  @IsInt()
-  @IsOptional()
-  sizesSetQuantity?: number;
-
-  @IsString()
-  @IsOptional()
-  colors?: string;
-
-  @IsInt()
-  @IsOptional()
-  colorsSetQuantity?: number;
 
   @IsBoolean()
   @IsOptional()

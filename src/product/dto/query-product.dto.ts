@@ -32,9 +32,6 @@ export class QueryProductDto {
   @IsOptional()
   catalogueId?: string;
 
-  @IsString()
-  @IsOptional()
-  brand?: string;
 
   @IsEnum(StockStatus)
   @IsOptional()

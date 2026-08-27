@@ -19,7 +19,6 @@ class QueryProductDto {
     search;
     categoryId;
     catalogueId;
-    brand;
     stockStatus;
     stockStatuses;
     moqTiers;
@@ -57,11 +56,6 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], QueryProductDto.prototype, "catalogueId", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], QueryProductDto.prototype, "brand", void 0);
 __decorate([
     (0, class_validator_1.IsEnum)(client_1.StockStatus),
     (0, class_validator_1.IsOptional)(),

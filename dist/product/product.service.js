@@ -91,9 +91,6 @@ let ProductService = class ProductService {
                         : null,
                     fixQty: dto.fixQty || null,
                     barcode: dto.barcode || dto.sku,
-                    brand: dto.brand,
-                    size: dto.size,
-                    color: dto.color,
                     material: dto.material,
                     unit: dto.unit || 'PCS',
                     hsnCode: dto.hsnCode,
@@ -118,13 +115,6 @@ let ProductService = class ProductService {
                     parentProductSku: dto.parentProductSku,
                     parentProductId: dto.parentProductId,
                     privateNotes: dto.privateNotes,
-                    setName: dto.setName,
-                    setQuantity: dto.setQuantity,
-                    setType: dto.setType,
-                    sizes: dto.sizes,
-                    sizesSetQuantity: dto.sizesSetQuantity,
-                    colors: dto.colors,
-                    colorsSetQuantity: dto.colorsSetQuantity,
                     isActive: dto.isActive !== undefined ? dto.isActive : true,
                     isFeatured: dto.isFeatured !== undefined ? dto.isFeatured : false,
                     sortOrder: dto.sortOrder || 0,
@@ -190,7 +180,7 @@ let ProductService = class ProductService {
         return product;
     }
     async findAll(query, userPricingGroupId) {
-        const { page = 1, limit = 10, search, categoryId, catalogueId, brand, stockStatus, isActive, isFeatured, sortBy, sortOrder, moqTiers, stockStatuses, hasCatalogue, } = query;
+        const { page = 1, limit = 10, search, categoryId, catalogueId, stockStatus, isActive, isFeatured, sortBy, sortOrder, moqTiers, stockStatuses, hasCatalogue, } = query;
         const skip = (page - 1) * limit;
         const where = {};
         if (isActive !== undefined) {
@@ -217,9 +207,6 @@ let ProductService = class ProductService {
         }
         if (catalogueId) {
             where.catalogueIds = { has: catalogueId };
-        }
-        if (brand) {
-            where.brand = { equals: brand, mode: 'insensitive' };
         }
         const andConditions = [];
         if (userPricingGroupId) {
@@ -270,7 +257,6 @@ let ProductService = class ProductService {
                 { barcode: { contains: search, mode: 'insensitive' } },
                 { name: { contains: search, mode: 'insensitive' } },
                 { description: { contains: search, mode: 'insensitive' } },
-                { brand: { contains: search, mode: 'insensitive' } },
             ];
             andConditions.push({
                 OR: orConditions,
@@ -480,9 +466,6 @@ let ProductService = class ProductService {
                         : dto.sku !== undefined
                             ? dto.sku
                             : undefined,
-                    brand: dto.brand,
-                    size: dto.size,
-                    color: dto.color,
                     material: dto.material,
                     unit: dto.unit,
                     hsnCode: dto.hsnCode,
@@ -523,17 +506,6 @@ let ProductService = class ProductService {
                         : undefined,
                     parentProductId: dto.parentProductId !== undefined ? dto.parentProductId : undefined,
                     privateNotes: dto.privateNotes !== undefined ? dto.privateNotes : undefined,
-                    setName: dto.setName !== undefined ? dto.setName : undefined,
-                    setQuantity: dto.setQuantity !== undefined ? dto.setQuantity : undefined,
-                    setType: dto.setType !== undefined ? dto.setType : undefined,
-                    sizes: dto.sizes !== undefined ? dto.sizes : undefined,
-                    sizesSetQuantity: dto.sizesSetQuantity !== undefined
-                        ? dto.sizesSetQuantity
-                        : undefined,
-                    colors: dto.colors !== undefined ? dto.colors : undefined,
-                    colorsSetQuantity: dto.colorsSetQuantity !== undefined
-                        ? dto.colorsSetQuantity
-                        : undefined,
                     isActive: dto.isActive,
                     isFeatured: dto.isFeatured,
                     sortOrder: dto.sortOrder,

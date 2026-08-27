@@ -26,9 +26,6 @@ export declare class UpdateProductDto {
     wholesalerMoq?: number;
     fixQty?: number;
     barcode?: string;
-    brand?: string;
-    size?: string;
-    color?: string;
     material?: string;
     unit?: string;
     hsnCode?: string;
@@ -47,13 +44,6 @@ export declare class UpdateProductDto {
     parentProductSku?: string;
     parentProductId?: string;
     privateNotes?: string;
-    setName?: string;
-    setQuantity?: number;
-    setType?: string;
-    sizes?: string;
-    sizesSetQuantity?: number;
-    colors?: string;
-    colorsSetQuantity?: number;
     isActive?: boolean;
     isFeatured?: boolean;
     sortOrder?: number;
