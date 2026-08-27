@@ -16,6 +16,7 @@ class UpdateCatalogueDto {
     description;
     imageUrl;
     isPublished;
+    sortOrder;
 }
 exports.UpdateCatalogueDto = UpdateCatalogueDto;
 __decorate([
@@ -38,4 +39,9 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Boolean)
 ], UpdateCatalogueDto.prototype, "isPublished", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], UpdateCatalogueDto.prototype, "sortOrder", void 0);
 //# sourceMappingURL=update-catalogue.dto.js.map

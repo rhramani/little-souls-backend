@@ -19,6 +19,7 @@ const catalogue_service_1 = require("./catalogue.service");
 const whatsapp_service_1 = require("../notification/whatsapp.service");
 const create_catalogue_dto_1 = require("./dto/create-catalogue.dto");
 const update_catalogue_dto_1 = require("./dto/update-catalogue.dto");
+const move_catalogue_dto_1 = require("./dto/move-catalogue.dto");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const roles_guard_1 = require("../auth/roles.guard");
 const roles_decorator_1 = require("../auth/decorators/roles.decorator");
@@ -101,6 +102,9 @@ let CatalogueController = class CatalogueController {
             throw new common_1.BadRequestException('productIds array is required.');
         }
         return this.catalogueService.addProductsToCatalogue(id, productIds);
+    }
+    async moveAsCategory(id, dto, userId) {
+        return this.catalogueService.moveAsCategory(id, dto.targetCatalogueId, userId);
     }
 };
 exports.CatalogueController = CatalogueController;
@@ -220,6 +224,18 @@ __decorate([
     __metadata("design:paramtypes", [String, Array]),
     __metadata("design:returntype", Promise)
 ], CatalogueController.prototype, "addProducts", null);
+__decorate([
+    (0, common_1.Post)(':id/move-as-category'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(client_1.UserType.SUPER_ADMIN, client_1.UserType.STAFF),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, get_user_decorator_1.GetUser)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, move_catalogue_dto_1.MoveCatalogueAsCategoryDto, String]),
+    __metadata("design:returntype", Promise)
+], CatalogueController.prototype, "moveAsCategory", null);
 exports.CatalogueController = CatalogueController = __decorate([
     (0, common_1.Controller)('catalogues'),
     __metadata("design:paramtypes", [catalogue_service_1.CatalogueService,

@@ -335,7 +335,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
         }
         const catalogues = await this.prisma.catalogue.findMany({
             where,
-            orderBy: { createdAt: 'desc' },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
         });
         return Promise.all(catalogues.map(async (c) => {
             const catalogueProductWhere = {
@@ -415,9 +415,23 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 });
             }
             else {
-                andConditions.push({
-                    categoryId: categoryId,
-                });
+                const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+                if (objectIdRegex.test(categoryId)) {
+                    andConditions.push({
+                        OR: [
+                            { categoryId: categoryId },
+                            { category: { id: categoryId } },
+                        ],
+                    });
+                }
+                else {
+                    andConditions.push({
+                        OR: [
+                            { category: { slug: categoryId } },
+                            { category: { name: { equals: categoryId, mode: 'insensitive' } } },
+                        ],
+                    });
+                }
             }
         }
         if (publishedOnly) {
@@ -473,6 +487,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                 description: dto.description,
                 imageUrl: dto.imageUrl,
                 isPublished: dto.isPublished,
+                ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
             },
         });
         if (dto.isPublished !== undefined) {
@@ -522,6 +537,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             const products = await tx.product.findMany({
                 where: { catalogueIds: { has: id } },
             });
+            const productIdsToDelete = [];
             for (const product of products) {
                 const orderItemCount = await tx.orderItem.count({
                     where: { productId: product.id },
@@ -544,32 +560,37 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                     });
                 }
                 else {
-                    await tx.imageCleaningTask.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.productImage.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.productPricing.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.productCatalogFile.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.productVideo.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.cartItem.deleteMany({ where: { productId: product.id } });
-                    await tx.stockMovement.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.backorderApproval.deleteMany({
-                        where: { productId: product.id },
-                    });
-                    await tx.product.delete({
-                        where: { id: product.id },
-                    });
+                    productIdsToDelete.push(product.id);
                 }
+            }
+            if (productIdsToDelete.length > 0) {
+                await tx.imageCleaningTask.deleteMany({
+                    where: { productId: { in: productIdsToDelete } },
+                });
+                await tx.productImage.deleteMany({
+                    where: { productId: { in: productIdsToDelete } },
+                });
+                await tx.productPricing.deleteMany({
+                    where: { productId: { in: productIdsToDelete } },
+                });
+                await tx.productCatalogFile.deleteMany({
+                    where: { productId: { in: productIdsToDelete } },
+                });
+                await tx.productVideo.deleteMany({
+                    where: { productId: { in: productIdsToDelete } },
+                });
+                await tx.cartItem.deleteMany({
+                    where: { productId: { in: productIdsToDelete } },
+                });
+                await tx.stockMovement.deleteMany({
+                    where: { productId: { in: productIdsToDelete } },
+                });
+                await tx.backorderApproval.deleteMany({
+                    where: { productId: { in: productIdsToDelete } },
+                });
+                await tx.product.deleteMany({
+                    where: { id: { in: productIdsToDelete } },
+                });
             }
             await tx.category.updateMany({
                 where: { catalogueId: id },
@@ -578,7 +599,7 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             await tx.catalogue.delete({
                 where: { id },
             });
-        });
+        }, { timeout: 60000 });
         return {
             message: 'Catalogue and its associated products deleted successfully.',
         };
@@ -1744,12 +1765,39 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
                     data: newImagesForExistingProducts,
                 });
             }
+            const allAssociatedIds = [
+                ...newProductsData.map((p) => p.id),
+                ...productsToUpdate.map((p) => p.id),
+            ];
+            if (allAssociatedIds.length > 0) {
+                const currentCat = await tx.catalogue.findUnique({
+                    where: { id: catalogueId },
+                    select: { productIds: true },
+                });
+                const mergedProductIds = Array.from(new Set([...(currentCat?.productIds || []), ...allAssociatedIds]));
+                await tx.catalogue.update({
+                    where: { id: catalogueId },
+                    data: { productIds: mergedProductIds },
+                });
+            }
         }, { timeout: 60000 });
         this.logger.log(`Bulk added ${newProductsData.length} new and updated ${productsToUpdate.length} existing products in catalogue ${catalogueId} in ${Date.now() - start}ms`);
         return {
             message: `${newProductsData.length} new products created and ${productsToUpdate.length} existing products updated.`,
             addedCount: newProductsData.length,
             updatedCount: productsToUpdate.length,
+            products: newProductsData.map((p) => ({
+                id: p.id,
+                name: p.name,
+                sku: p.sku,
+                categoryId: p.categoryId,
+            })),
+            createdProducts: newProductsData.map((p) => ({
+                id: p.id,
+                name: p.name,
+                sku: p.sku,
+                categoryId: p.categoryId,
+            })),
         };
     }
     async addProductsToCatalogue(catalogueId, productIds) {
@@ -1779,6 +1827,94 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             }
             return { success: true };
         });
+    }
+    async moveAsCategory(sourceCatalogueId, targetCatalogueId, userId) {
+        if (sourceCatalogueId === targetCatalogueId) {
+            throw new common_1.BadRequestException('Cannot move a catalogue into itself.');
+        }
+        const [sourceCatalogue, targetCatalogue] = await Promise.all([
+            this.prisma.catalogue.findUnique({ where: { id: sourceCatalogueId } }),
+            this.prisma.catalogue.findUnique({ where: { id: targetCatalogueId } }),
+        ]);
+        if (!sourceCatalogue) {
+            throw new common_1.NotFoundException(`Source catalogue with ID '${sourceCatalogueId}' not found.`);
+        }
+        if (!targetCatalogue) {
+            throw new common_1.NotFoundException(`Target catalogue with ID '${targetCatalogueId}' not found.`);
+        }
+        return this.prisma.$transaction(async (tx) => {
+            let slug = this.slugify(sourceCatalogue.name);
+            const existingSlug = await tx.category.findUnique({ where: { slug } });
+            if (existingSlug) {
+                slug = `${slug}-${Date.now()}`;
+            }
+            const newCategory = await tx.category.create({
+                data: {
+                    name: sourceCatalogue.name,
+                    slug,
+                    description: sourceCatalogue.description,
+                    catalogueId: targetCatalogueId,
+                    imageUrl: sourceCatalogue.imageUrl,
+                    isActive: sourceCatalogue.isPublished,
+                    createdBy: userId,
+                },
+            });
+            const existingCategories = await tx.category.findMany({
+                where: { catalogueId: sourceCatalogueId },
+                select: { id: true },
+            });
+            const existingCategoryIds = existingCategories.map((c) => c.id);
+            if (existingCategoryIds.length > 0) {
+                await tx.category.updateMany({
+                    where: { id: { in: existingCategoryIds } },
+                    data: {
+                        catalogueId: targetCatalogueId,
+                    },
+                });
+            }
+            const products = await tx.product.findMany({
+                where: {
+                    OR: [
+                        { catalogueIds: { has: sourceCatalogueId } },
+                        ...(existingCategoryIds.length > 0
+                            ? [{ categoryId: { in: existingCategoryIds } }]
+                            : []),
+                    ],
+                },
+            });
+            const movedProductIds = [];
+            for (const product of products) {
+                movedProductIds.push(product.id);
+                const shouldUpdateCategory = !existingCategoryIds.includes(product.categoryId);
+                const nextCategoryId = shouldUpdateCategory ? newCategory.id : product.categoryId;
+                const nextCatalogueIds = Array.from(new Set([
+                    ...product.catalogueIds.filter((cid) => cid !== sourceCatalogueId),
+                    targetCatalogueId,
+                ]));
+                await tx.product.update({
+                    where: { id: product.id },
+                    data: {
+                        categoryId: nextCategoryId,
+                        catalogueIds: nextCatalogueIds,
+                    },
+                });
+            }
+            const updatedTargetProductIds = Array.from(new Set([...(targetCatalogue.productIds || []), ...movedProductIds]));
+            await tx.catalogue.update({
+                where: { id: targetCatalogueId },
+                data: {
+                    productIds: updatedTargetProductIds,
+                },
+            });
+            await tx.catalogue.delete({
+                where: { id: sourceCatalogueId },
+            });
+            return {
+                success: true,
+                category: newCategory,
+                message: `Catalogue "${sourceCatalogue.name}" successfully moved to "${targetCatalogue.name}" as a category.`,
+            };
+        }, { timeout: 60000 });
     }
 };
 exports.CatalogueService = CatalogueService;

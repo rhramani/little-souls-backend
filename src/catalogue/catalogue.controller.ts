@@ -22,6 +22,7 @@ import { CatalogueService } from './catalogue.service';
 import { WhatsappService } from '../notification/whatsapp.service';
 import { CreateCatalogueDto } from './dto/create-catalogue.dto';
 import { UpdateCatalogueDto } from './dto/update-catalogue.dto';
+import { MoveCatalogueAsCategoryDto } from './dto/move-catalogue.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -204,5 +205,17 @@ export class CatalogueController {
       throw new BadRequestException('productIds array is required.');
     }
     return this.catalogueService.addProductsToCatalogue(id, productIds);
+  }
+
+  @Post(':id/move-as-category')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserType.SUPER_ADMIN, UserType.STAFF)
+  @HttpCode(HttpStatus.OK)
+  async moveAsCategory(
+    @Param('id') id: string,
+    @Body() dto: MoveCatalogueAsCategoryDto,
+    @GetUser('id') userId: string,
+  ) {
+    return this.catalogueService.moveAsCategory(id, dto.targetCatalogueId, userId);
   }
 }

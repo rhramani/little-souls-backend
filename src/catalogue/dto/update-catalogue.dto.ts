@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsInt } from 'class-validator';
 
 export class UpdateCatalogueDto {
   @IsString()
@@ -16,4 +16,8 @@ export class UpdateCatalogueDto {
   @IsBoolean()
   @IsOptional()
   isPublished?: boolean;
+
+  @IsInt()
+  @IsOptional()
+  sortOrder?: number;
 }

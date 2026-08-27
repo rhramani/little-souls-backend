@@ -3,4 +3,5 @@ export declare class UpdateCatalogueDto {
     description?: string;
     imageUrl?: string;
     isPublished?: boolean;
+    sortOrder?: number;
 }

@@ -3,6 +3,7 @@ import { CatalogueService } from './catalogue.service';
 import { WhatsappService } from '../notification/whatsapp.service';
 import { CreateCatalogueDto } from './dto/create-catalogue.dto';
 import { UpdateCatalogueDto } from './dto/update-catalogue.dto';
+import { MoveCatalogueAsCategoryDto } from './dto/move-catalogue.dto';
 export declare class CatalogueController {
     private readonly catalogueService;
     private readonly whatsappService;
@@ -80,6 +81,7 @@ export declare class CatalogueController {
         name: string;
         description: string | null;
         imageUrl: string | null;
+        sortOrder: number | null;
         isPublished: boolean;
         productIds: string[];
     }>;
@@ -205,6 +207,7 @@ export declare class CatalogueController {
         name: string;
         description: string | null;
         imageUrl: string | null;
+        sortOrder: number | null;
         isPublished: boolean;
         productIds: string[];
     }>;
@@ -215,6 +218,7 @@ export declare class CatalogueController {
         name: string;
         description: string | null;
         imageUrl: string | null;
+        sortOrder: number | null;
         isPublished: boolean;
         productIds: string[];
     }>;
@@ -240,8 +244,40 @@ export declare class CatalogueController {
         message: string;
         addedCount: number;
         updatedCount: number;
+        products: {
+            id: any;
+            name: any;
+            sku: any;
+            categoryId: any;
+        }[];
+        createdProducts: {
+            id: any;
+            name: any;
+            sku: any;
+            categoryId: any;
+        }[];
     }>;
     addProducts(id: string, productIds: string[]): Promise<{
         success: boolean;
+    }>;
+    moveAsCategory(id: string, dto: MoveCatalogueAsCategoryDto, userId: string): Promise<{
+        success: boolean;
+        category: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            createdBy: string | null;
+            description: string | null;
+            isActive: boolean;
+            slug: string;
+            parentCategoryId: string | null;
+            imageUrl: string | null;
+            bannerUrl: string | null;
+            catalogueId: string | null;
+            sortOrder: number | null;
+            updatedBy: string | null;
+        };
+        message: string;
     }>;
 }

@@ -355,7 +355,7 @@ export class CatalogueService {
     }
     const catalogues = await this.prisma.catalogue.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
 
     return Promise.all(
@@ -453,9 +453,22 @@ export class CatalogueService {
           ],
         });
       } else {
-        andConditions.push({
-          categoryId: categoryId,
-        });
+        const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+        if (objectIdRegex.test(categoryId)) {
+          andConditions.push({
+            OR: [
+              { categoryId: categoryId },
+              { category: { id: categoryId } },
+            ],
+          });
+        } else {
+          andConditions.push({
+            OR: [
+              { category: { slug: categoryId } },
+              { category: { name: { equals: categoryId, mode: 'insensitive' as const } } },
+            ],
+          });
+        }
       }
     }
 
@@ -520,6 +533,7 @@ export class CatalogueService {
         description: dto.description,
         imageUrl: dto.imageUrl,
         isPublished: dto.isPublished,
+        ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
       },
     });
 
@@ -578,83 +592,94 @@ export class CatalogueService {
       throw new NotFoundException(`Catalogue with ID '${id}' not found.`);
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      // Find all products associated with this catalogue
-      const products = await tx.product.findMany({
-        where: { catalogueIds: { has: id } },
-      });
-
-      for (const product of products) {
-        // Check for references in OrderItem and BackorderApproval
-        const orderItemCount = await tx.orderItem.count({
-          where: { productId: product.id },
-        });
-        const backorderApprovalCount = await tx.backorderApproval.count({
-          where: { productId: product.id },
+    await this.prisma.$transaction(
+      async (tx) => {
+        // Find all products associated with this catalogue
+        const products = await tx.product.findMany({
+          where: { catalogueIds: { has: id } },
         });
 
-        const isReferenced =
-          orderItemCount > 0 ||
-          backorderApprovalCount > 0;
+        const productIdsToDelete: string[] = [];
 
-        const belongsToOtherCatalogues = product.catalogueIds.some(
-          (cid) => cid !== id,
-        );
-
-        if (isReferenced || belongsToOtherCatalogues) {
-          // Dissociate product from catalogue and deactivate it only if it doesn't belong to other catalogues
-          await tx.product.update({
-            where: { id: product.id },
-            data: {
-              catalogueIds: {
-                set: product.catalogueIds.filter((cid) => cid !== id),
-              },
-              isActive: belongsToOtherCatalogues ? product.isActive : false,
-            },
-          });
-        } else {
-          // Cascade delete product relations inside the transaction
-          await tx.imageCleaningTask.deleteMany({
+        for (const product of products) {
+          // Check for references in OrderItem and BackorderApproval
+          const orderItemCount = await tx.orderItem.count({
             where: { productId: product.id },
+          });
+          const backorderApprovalCount = await tx.backorderApproval.count({
+            where: { productId: product.id },
+          });
+
+          const isReferenced =
+            orderItemCount > 0 ||
+            backorderApprovalCount > 0;
+
+          const belongsToOtherCatalogues = product.catalogueIds.some(
+            (cid) => cid !== id,
+          );
+
+          if (isReferenced || belongsToOtherCatalogues) {
+            // Dissociate product from catalogue and deactivate it only if it doesn't belong to other catalogues
+            await tx.product.update({
+              where: { id: product.id },
+              data: {
+                catalogueIds: {
+                  set: product.catalogueIds.filter((cid) => cid !== id),
+                },
+                isActive: belongsToOtherCatalogues ? product.isActive : false,
+              },
+            });
+          } else {
+            productIdsToDelete.push(product.id);
+          }
+        }
+
+        if (productIdsToDelete.length > 0) {
+          // Cascade delete product relations inside the transaction in batches
+          await tx.imageCleaningTask.deleteMany({
+            where: { productId: { in: productIdsToDelete } },
           });
           await tx.productImage.deleteMany({
-            where: { productId: product.id },
+            where: { productId: { in: productIdsToDelete } },
           });
           await tx.productPricing.deleteMany({
-            where: { productId: product.id },
+            where: { productId: { in: productIdsToDelete } },
           });
           await tx.productCatalogFile.deleteMany({
-            where: { productId: product.id },
+            where: { productId: { in: productIdsToDelete } },
           });
           await tx.productVideo.deleteMany({
-            where: { productId: product.id },
+            where: { productId: { in: productIdsToDelete } },
           });
-          await tx.cartItem.deleteMany({ where: { productId: product.id } });
+          await tx.cartItem.deleteMany({
+            where: { productId: { in: productIdsToDelete } },
+          });
           await tx.stockMovement.deleteMany({
-            where: { productId: product.id },
+            where: { productId: { in: productIdsToDelete } },
           });
           await tx.backorderApproval.deleteMany({
-            where: { productId: product.id },
+            where: { productId: { in: productIdsToDelete } },
           });
 
-          // Safely delete product
-          await tx.product.delete({
-            where: { id: product.id },
+          // Safely delete products
+          await tx.product.deleteMany({
+            where: { id: { in: productIdsToDelete } },
           });
         }
-      }
 
-      // Unlink any categories associated with this catalogue
-      await tx.category.updateMany({
-        where: { catalogueId: id },
-        data: { catalogueId: null },
-      });
+        // Unlink any categories associated with this catalogue
+        await tx.category.updateMany({
+          where: { catalogueId: id },
+          data: { catalogueId: null },
+        });
 
-      // Finally delete the catalogue itself
-      await tx.catalogue.delete({
-        where: { id },
-      });
-    });
+        // Finally delete the catalogue itself
+        await tx.catalogue.delete({
+          where: { id },
+        });
+      },
+      { timeout: 60000 },
+    );
 
     return {
       message: 'Catalogue and its associated products deleted successfully.',
@@ -2115,6 +2140,25 @@ export class CatalogueService {
             data: newImagesForExistingProducts,
           });
         }
+
+        // 4. Ensure catalogue productIds list includes all new and updated products
+        const allAssociatedIds = [
+          ...newProductsData.map((p) => p.id),
+          ...productsToUpdate.map((p) => p.id),
+        ];
+        if (allAssociatedIds.length > 0) {
+          const currentCat = await tx.catalogue.findUnique({
+            where: { id: catalogueId },
+            select: { productIds: true },
+          });
+          const mergedProductIds = Array.from(
+            new Set([...(currentCat?.productIds || []), ...allAssociatedIds]),
+          );
+          await tx.catalogue.update({
+            where: { id: catalogueId },
+            data: { productIds: mergedProductIds },
+          });
+        }
       },
       { timeout: 60000 },
     );
@@ -2127,6 +2171,18 @@ export class CatalogueService {
       message: `${newProductsData.length} new products created and ${productsToUpdate.length} existing products updated.`,
       addedCount: newProductsData.length,
       updatedCount: productsToUpdate.length,
+      products: newProductsData.map((p) => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        categoryId: p.categoryId,
+      })),
+      createdProducts: newProductsData.map((p) => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        categoryId: p.categoryId,
+      })),
     };
   }
 
@@ -2163,4 +2219,129 @@ export class CatalogueService {
       return { success: true };
     });
   }
+
+  async moveAsCategory(
+    sourceCatalogueId: string,
+    targetCatalogueId: string,
+    userId: string,
+  ) {
+    if (sourceCatalogueId === targetCatalogueId) {
+      throw new BadRequestException('Cannot move a catalogue into itself.');
+    }
+
+    const [sourceCatalogue, targetCatalogue] = await Promise.all([
+      this.prisma.catalogue.findUnique({ where: { id: sourceCatalogueId } }),
+      this.prisma.catalogue.findUnique({ where: { id: targetCatalogueId } }),
+    ]);
+
+    if (!sourceCatalogue) {
+      throw new NotFoundException(
+        `Source catalogue with ID '${sourceCatalogueId}' not found.`,
+      );
+    }
+    if (!targetCatalogue) {
+      throw new NotFoundException(
+        `Target catalogue with ID '${targetCatalogueId}' not found.`,
+      );
+    }
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        // 1. Generate unique slug for category
+        let slug = this.slugify(sourceCatalogue.name);
+        const existingSlug = await tx.category.findUnique({ where: { slug } });
+        if (existingSlug) {
+          slug = `${slug}-${Date.now()}`;
+        }
+
+        // 2. Create category under target catalogue
+        const newCategory = await tx.category.create({
+          data: {
+            name: sourceCatalogue.name,
+            slug,
+            description: sourceCatalogue.description,
+            catalogueId: targetCatalogueId,
+            imageUrl: sourceCatalogue.imageUrl,
+            isActive: sourceCatalogue.isPublished,
+            createdBy: userId,
+          },
+        });
+
+        // 3. Move existing categories under source catalogue
+        const existingCategories = await tx.category.findMany({
+          where: { catalogueId: sourceCatalogueId },
+          select: { id: true },
+        });
+        const existingCategoryIds = existingCategories.map((c) => c.id);
+
+        if (existingCategoryIds.length > 0) {
+          await tx.category.updateMany({
+            where: { id: { in: existingCategoryIds } },
+            data: {
+              catalogueId: targetCatalogueId,
+            },
+          });
+        }
+
+        // 4. Find all products associated with source catalogue
+        const products = await tx.product.findMany({
+          where: {
+            OR: [
+              { catalogueIds: { has: sourceCatalogueId } },
+              ...(existingCategoryIds.length > 0
+                ? [{ categoryId: { in: existingCategoryIds } }]
+                : []),
+            ],
+          },
+        });
+
+        const movedProductIds: string[] = [];
+
+        for (const product of products) {
+          movedProductIds.push(product.id);
+          const shouldUpdateCategory = !existingCategoryIds.includes(product.categoryId);
+          const nextCategoryId = shouldUpdateCategory ? newCategory.id : product.categoryId;
+
+          const nextCatalogueIds = Array.from(
+            new Set([
+              ...product.catalogueIds.filter((cid) => cid !== sourceCatalogueId),
+              targetCatalogueId,
+            ]),
+          );
+
+          await tx.product.update({
+            where: { id: product.id },
+            data: {
+              categoryId: nextCategoryId,
+              catalogueIds: nextCatalogueIds,
+            },
+          });
+        }
+
+        // 5. Update target catalogue's productIds
+        const updatedTargetProductIds = Array.from(
+          new Set([...(targetCatalogue.productIds || []), ...movedProductIds]),
+        );
+        await tx.catalogue.update({
+          where: { id: targetCatalogueId },
+          data: {
+            productIds: updatedTargetProductIds,
+          },
+        });
+
+        // 6. Delete source catalogue
+        await tx.catalogue.delete({
+          where: { id: sourceCatalogueId },
+        });
+
+        return {
+          success: true,
+          category: newCategory,
+          message: `Catalogue "${sourceCatalogue.name}" successfully moved to "${targetCatalogue.name}" as a category.`,
+        };
+      },
+      { timeout: 60000 },
+    );
+  }
 }
+

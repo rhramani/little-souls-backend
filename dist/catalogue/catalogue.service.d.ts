@@ -87,6 +87,7 @@ export declare class CatalogueService {
         name: string;
         description: string | null;
         imageUrl: string | null;
+        sortOrder: number | null;
         isPublished: boolean;
         productIds: string[];
     }>;
@@ -212,6 +213,7 @@ export declare class CatalogueService {
         name: string;
         description: string | null;
         imageUrl: string | null;
+        sortOrder: number | null;
         isPublished: boolean;
         productIds: string[];
     }>;
@@ -222,6 +224,7 @@ export declare class CatalogueService {
         name: string;
         description: string | null;
         imageUrl: string | null;
+        sortOrder: number | null;
         isPublished: boolean;
         productIds: string[];
     }>;
@@ -241,8 +244,40 @@ export declare class CatalogueService {
         message: string;
         addedCount: number;
         updatedCount: number;
+        products: {
+            id: any;
+            name: any;
+            sku: any;
+            categoryId: any;
+        }[];
+        createdProducts: {
+            id: any;
+            name: any;
+            sku: any;
+            categoryId: any;
+        }[];
     }>;
     addProductsToCatalogue(catalogueId: string, productIds: string[]): Promise<{
         success: boolean;
+    }>;
+    moveAsCategory(sourceCatalogueId: string, targetCatalogueId: string, userId: string): Promise<{
+        success: boolean;
+        category: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            createdBy: string | null;
+            description: string | null;
+            isActive: boolean;
+            slug: string;
+            parentCategoryId: string | null;
+            imageUrl: string | null;
+            bannerUrl: string | null;
+            catalogueId: string | null;
+            sortOrder: number | null;
+            updatedBy: string | null;
+        };
+        message: string;
     }>;
 }
