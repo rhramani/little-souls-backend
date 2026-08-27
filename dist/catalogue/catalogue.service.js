@@ -337,49 +337,88 @@ let CatalogueService = CatalogueService_1 = class CatalogueService {
             where,
             orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
         });
-        return Promise.all(catalogues.map(async (c) => {
-            const catalogueProductWhere = {
-                OR: [
-                    { catalogueIds: { has: c.id } },
-                    { category: { catalogueId: c.id } },
-                ],
-            };
-            const [productsCount, categoriesCount, previewProducts] = await Promise.all([
-                this.prisma.product.count({
-                    where: catalogueProductWhere,
-                }),
-                this.prisma.category.count({
-                    where: { catalogueId: c.id },
-                }),
-                this.prisma.product.findMany({
-                    where: catalogueProductWhere,
-                    take: 4,
-                    select: {
-                        productImage: true,
-                        productPictureUrl: true,
-                        images: {
-                            take: 1,
-                            orderBy: { sortOrder: 'asc' },
-                            select: { originalUrl: true, cleanedUrl: true, thumbnailUrl: true },
-                        },
-                    },
-                }),
-            ]);
-            const previewImages = previewProducts
-                .map((p) => p.images?.[0]?.originalUrl || p.images?.[0]?.cleanedUrl || p.images?.[0]?.thumbnailUrl || p.productImage || p.productPictureUrl)
-                .filter((url) => !!url);
-            return {
-                id: c.id,
-                name: c.name,
-                description: c.description,
-                imageUrl: c.imageUrl,
-                isPublished: c.isPublished,
-                createdAt: c.createdAt,
-                updatedAt: c.updatedAt,
-                productsCount,
-                categoriesCount,
-                previewImages,
-            };
+        if (catalogues.length === 0) {
+            return [];
+        }
+        const catalogueIds = catalogues.map((c) => c.id);
+        const categories = await this.prisma.category.findMany({
+            where: { catalogueId: { in: catalogueIds } },
+            select: { id: true, catalogueId: true },
+        });
+        const categoryCountByCatalogueId = new Map();
+        const categoryIdToCatalogueId = new Map();
+        const categoryIds = [];
+        for (const cat of categories) {
+            categoryIds.push(cat.id);
+            if (cat.catalogueId) {
+                categoryIdToCatalogueId.set(cat.id, cat.catalogueId);
+                categoryCountByCatalogueId.set(cat.catalogueId, (categoryCountByCatalogueId.get(cat.catalogueId) || 0) + 1);
+            }
+        }
+        const productOrConditions = [
+            { catalogueIds: { hasSome: catalogueIds } },
+        ];
+        if (categoryIds.length > 0) {
+            productOrConditions.push({ categoryId: { in: categoryIds } });
+        }
+        const products = await this.prisma.product.findMany({
+            where: {
+                OR: productOrConditions,
+            },
+            select: {
+                id: true,
+                catalogueIds: true,
+                categoryId: true,
+                productImage: true,
+                productPictureUrl: true,
+                images: {
+                    take: 1,
+                    orderBy: { sortOrder: 'asc' },
+                    select: { originalUrl: true, cleanedUrl: true, thumbnailUrl: true },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        const productCountByCatalogueId = new Map();
+        const previewImagesByCatalogueId = new Map();
+        for (const p of products) {
+            const imgUrl = p.images?.[0]?.originalUrl ||
+                p.images?.[0]?.cleanedUrl ||
+                p.images?.[0]?.thumbnailUrl ||
+                p.productImage ||
+                p.productPictureUrl;
+            const matchedCatalogueIds = new Set();
+            if (Array.isArray(p.catalogueIds)) {
+                for (const cid of p.catalogueIds) {
+                    if (cid)
+                        matchedCatalogueIds.add(cid);
+                }
+            }
+            if (p.categoryId && categoryIdToCatalogueId.has(p.categoryId)) {
+                matchedCatalogueIds.add(categoryIdToCatalogueId.get(p.categoryId));
+            }
+            for (const cid of matchedCatalogueIds) {
+                productCountByCatalogueId.set(cid, (productCountByCatalogueId.get(cid) || 0) + 1);
+                if (imgUrl) {
+                    const existingImages = previewImagesByCatalogueId.get(cid) || [];
+                    if (existingImages.length < 4) {
+                        existingImages.push(imgUrl);
+                        previewImagesByCatalogueId.set(cid, existingImages);
+                    }
+                }
+            }
+        }
+        return catalogues.map((c) => ({
+            id: c.id,
+            name: c.name,
+            description: c.description,
+            imageUrl: c.imageUrl,
+            isPublished: c.isPublished,
+            createdAt: c.createdAt,
+            updatedAt: c.updatedAt,
+            productsCount: productCountByCatalogueId.get(c.id) || 0,
+            categoriesCount: categoryCountByCatalogueId.get(c.id) || 0,
+            previewImages: previewImagesByCatalogueId.get(c.id) || [],
         }));
     }
     async findOne(id, search, page, limit, publishedOnly = false, categoryId) {
