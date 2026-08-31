@@ -245,6 +245,98 @@ export class CatalogueService {
     return { taxType, taxValue };
   }
 
+  private serializeSizesForExcel(sizes: any): string {
+    if (!sizes || !Array.isArray(sizes) || sizes.length === 0) return '';
+    return sizes
+      .map((s: any) => {
+        const name = s.size || s.name || '';
+        const qty = s.fixQty !== null && s.fixQty !== undefined && String(s.fixQty).trim() !== '' ? `:${s.fixQty}` : '';
+        return `${name}${qty}`;
+      })
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  private serializeColorsForExcel(colors: any): string {
+    if (!colors || !Array.isArray(colors) || colors.length === 0) return '';
+    return colors
+      .map((c: any) => {
+        const name = c.color || c.name || '';
+        const qty = c.fixQty !== null && c.fixQty !== undefined && String(c.fixQty).trim() !== '' ? `:${c.fixQty}` : '';
+        return `${name}${qty}`;
+      })
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  private serializeSingleColorForExcel(c: any): string {
+    if (!c) return '';
+    const name = c.color || c.name || '';
+    const qty =
+      c.fixQty !== null && c.fixQty !== undefined && String(c.fixQty).trim() !== ''
+        ? `:${c.fixQty}`
+        : '';
+    return `${name}${qty}`;
+  }
+
+  private parseSizesFromExcel(val: string | null | undefined): { size: string; fixQty: number | null }[] | null {
+    if (!val || typeof val !== 'string' || !val.trim()) return null;
+    const trimmed = val.trim();
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    const parts = trimmed.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 0) return null;
+    return parts.map((part) => {
+      const colonIdx = part.indexOf(':');
+      if (colonIdx !== -1) {
+        const name = part.substring(0, colonIdx).trim();
+        const qtyStr = part.substring(colonIdx + 1).trim();
+        const qtyNum = parseFloat(qtyStr);
+        return { size: name, fixQty: isNaN(qtyNum) ? null : Math.round(qtyNum) };
+      }
+      const parenMatch = part.match(/^([^(]+)\s*\(([^)]+)\)$/);
+      if (parenMatch) {
+        const name = parenMatch[1].trim();
+        const qtyNum = parseFloat(parenMatch[2].trim());
+        return { size: name, fixQty: isNaN(qtyNum) ? null : Math.round(qtyNum) };
+      }
+      return { size: part, fixQty: null };
+    });
+  }
+
+  private parseColorsFromExcel(val: string | null | undefined): { color: string; fixQty: number | null; images: string[] }[] | null {
+    if (!val || typeof val !== 'string' || !val.trim()) return null;
+    const trimmed = val.trim();
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    const parts = trimmed.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 0) return null;
+    return parts.map((part) => {
+      const colonIdx = part.indexOf(':');
+      if (colonIdx !== -1) {
+        const name = part.substring(0, colonIdx).trim();
+        const qtyStr = part.substring(colonIdx + 1).trim();
+        const qtyNum = parseFloat(qtyStr);
+        return { color: name, fixQty: isNaN(qtyNum) ? null : Math.round(qtyNum), images: [] };
+      }
+      const parenMatch = part.match(/^([^(]+)\s*\(([^)]+)\)$/);
+      if (parenMatch) {
+        const name = parenMatch[1].trim();
+        const qtyNum = parseFloat(parenMatch[2].trim());
+        return { color: name, fixQty: isNaN(qtyNum) ? null : Math.round(qtyNum), images: [] };
+      }
+      return { color: part, fixQty: null, images: [] };
+    });
+  }
+
   async create(dto: CreateCatalogueDto, userId: string) {
     const start = Date.now();
 
@@ -843,6 +935,18 @@ export class CatalogueService {
       });
     }
 
+    // Conditionally add Size/Color columns if any product uses them
+    const anyHasSize = products.some((p) => (p as any).hasSize);
+    const anyHasColor = products.some((p) => (p as any).hasColor);
+    if (anyHasSize) {
+      columns.push({ header: 'Has Size (YES/NO)', key: 'hasSize', width: 18 });
+      columns.push({ header: 'Sizes', key: 'sizes', width: 40 });
+    }
+    if (anyHasColor) {
+      columns.push({ header: 'Has Color (YES/NO)', key: 'hasColor', width: 18 });
+      columns.push({ header: 'Colors', key: 'colors', width: 50 });
+    }
+
     sheet.columns = columns;
 
     // Set header row height
@@ -859,30 +963,63 @@ export class CatalogueService {
       `Preparing ${products.length} product images & barcodes in parallel (concurrency=10)...`,
     );
 
+    // Collect all image download tasks (product images + color images + barcodes)
+    const imageTasks: {
+      key: string;
+      imageUrl: string | null;
+      barcodeSku: string | null;
+    }[] = [];
+
+    for (const p of products) {
+      const formattedSku = this.formatSku(p.sku, p.id);
+      const primaryImageUrl = p.images[0]?.originalUrl || '';
+      const mainImageUrl = p.productImage || primaryImageUrl || null;
+
+      // Main product image + barcode task
+      imageTasks.push({
+        key: p.id,
+        imageUrl: mainImageUrl,
+        barcodeSku: formattedSku,
+      });
+
+      // Color-specific image tasks
+      if ((p as any).hasColor && Array.isArray((p as any).colors)) {
+        for (const c of (p as any).colors) {
+          const cName = (c.color || c.name || '').trim();
+          if (cName && Array.isArray(c.images) && c.images.length > 0 && c.images[0]) {
+            imageTasks.push({
+              key: `${p.id}_COLOR_${cName.toUpperCase()}`,
+              imageUrl: c.images[0],
+              barcodeSku: null,
+            });
+          }
+        }
+      }
+    }
+
     const imageResults = await Promise.all(
-      products.map((p) =>
+      imageTasks.map((task) =>
         limit(async () => {
-          const primaryImageUrl = p.images[0]?.originalUrl || '';
-          const imageUrl = p.productImage || primaryImageUrl;
           const result: {
-            productId: string;
+            key: string;
             productImageBuffer: Buffer | null;
             barcodeBuffer: Buffer | null;
           } = {
-            productId: p.id,
+            key: task.key,
             productImageBuffer: null,
             barcodeBuffer: null,
           };
 
-          const formattedSku = this.formatSku(p.sku, p.id);
           const [imgRes, barcodeRes] = await Promise.allSettled([
-            imageUrl
-              ? axios.get(imageUrl, {
+            task.imageUrl
+              ? axios.get(task.imageUrl, {
                   responseType: 'arraybuffer',
                   timeout: 5000,
                 })
               : Promise.resolve(null),
-            this.generateBarcodeBuffer(formattedSku),
+            task.barcodeSku
+              ? this.generateBarcodeBuffer(task.barcodeSku)
+              : Promise.resolve(null),
           ]);
 
           if (imgRes.status === 'fulfilled' && imgRes.value) {
@@ -894,7 +1031,7 @@ export class CatalogueService {
                 .toBuffer();
             } catch (err) {
               this.logger.warn(
-                `Failed to resize image for product ${p.id}: ${err.message}`,
+                `Failed to resize image for ${task.key}: ${err.message}`,
               );
             }
           }
@@ -908,14 +1045,11 @@ export class CatalogueService {
       ),
     );
 
-    const imageMap = new Map(imageResults.map((r) => [r.productId, r]));
+    const imageMap = new Map(imageResults.map((r) => [r.key, r]));
 
     // Populate rows
     let rowIndex = 1; // Header is row 1
     for (const p of products) {
-      rowIndex++;
-      const primaryImageUrl = p.images[0]?.originalUrl || '';
-      const imageUrl = p.productImage || primaryImageUrl;
       const formattedSku = this.formatSku(p.sku, p.id);
 
       if (p.sku !== formattedSku) {
@@ -954,7 +1088,7 @@ export class CatalogueService {
           );
       }
 
-      const rowData: any = {
+      const baseRowData: any = {
         productImage: '',
         barcodeImage: '',
         id: p.id,
@@ -979,42 +1113,111 @@ export class CatalogueService {
         unit: p.unit || 'PCS',
       };
 
+      // Conditionally add size data in clean, readable format (e.g. S:6, M:12, ALL:24)
+      if (anyHasSize) {
+        baseRowData.hasSize = (p as any).hasSize ? 'YES' : 'NO';
+        baseRowData.sizes = this.serializeSizesForExcel((p as any).sizes);
+      }
+
       pricingGroups.forEach((group) => {
         const pricing = p.pricing.find((pr) => pr.pricingGroupId === group.id);
-        rowData[`price_${group.id}`] = pricing
+        baseRowData[`price_${group.id}`] = pricing
           ? pricing.price.toString()
           : '';
       });
 
-      sheet.addRow(rowData);
-      const row = sheet.getRow(rowIndex);
-      row.height = 95;
-      row.alignment = { vertical: 'middle' };
+      const mainImgData = imageMap.get(p.id);
+      const barcodeBuffer = mainImgData?.barcodeBuffer;
 
-      // Use pre-downloaded and resized buffers
-      const imgData = imageMap.get(p.id);
-      if (imgData?.productImageBuffer) {
-        const imageId = workbook.addImage({
-          buffer: imgData.productImageBuffer,
-          extension: 'jpeg',
-        });
-        sheet.addImage(imageId, {
-          tl: { col: 0.05, row: rowIndex - 1 + 0.05 },
-          ext: { width: 120, height: 110 },
-          editAs: 'oneCell',
-        });
-      }
+      const hasColors =
+        (p as any).hasColor &&
+        Array.isArray((p as any).colors) &&
+        (p as any).colors.length > 0;
 
-      if (imgData?.barcodeBuffer) {
-        const imageId = workbook.addImage({
-          buffer: imgData.barcodeBuffer,
-          extension: 'png',
-        });
-        sheet.addImage(imageId, {
-          tl: { col: barcodeColIdx + 0.05, row: rowIndex - 1 + 0.08 },
-          ext: { width: 200, height: 100 },
-          editAs: 'oneCell',
-        });
+      if (hasColors) {
+        // Multi-row color export: 1 row per color with the SAME SKU
+        for (const c of (p as any).colors) {
+          rowIndex++;
+          const cName = (c.color || c.name || '').trim();
+          const rowData = { ...baseRowData };
+          if (anyHasColor) {
+            rowData.hasColor = 'YES';
+            rowData.colors = this.serializeSingleColorForExcel(c);
+          }
+
+          sheet.addRow(rowData);
+          const row = sheet.getRow(rowIndex);
+          row.height = 95;
+          row.alignment = { vertical: 'middle' };
+
+          // Try color image first, fallback to main product image
+          const colorImgData = cName
+            ? imageMap.get(`${p.id}_COLOR_${cName.toUpperCase()}`)
+            : null;
+          const imgBuffer =
+            colorImgData?.productImageBuffer || mainImgData?.productImageBuffer;
+
+          if (imgBuffer) {
+            const imageId = workbook.addImage({
+              buffer: imgBuffer,
+              extension: 'jpeg',
+            });
+            sheet.addImage(imageId, {
+              tl: { col: 0.05, row: rowIndex - 1 + 0.05 },
+              ext: { width: 120, height: 110 },
+              editAs: 'oneCell',
+            });
+          }
+
+          if (barcodeBuffer) {
+            const imageId = workbook.addImage({
+              buffer: barcodeBuffer,
+              extension: 'png',
+            });
+            sheet.addImage(imageId, {
+              tl: { col: barcodeColIdx + 0.05, row: rowIndex - 1 + 0.08 },
+              ext: { width: 200, height: 100 },
+              editAs: 'oneCell',
+            });
+          }
+        }
+      } else {
+        // Single row product export
+        rowIndex++;
+        const rowData = { ...baseRowData };
+        if (anyHasColor) {
+          rowData.hasColor = (p as any).hasColor ? 'YES' : 'NO';
+          rowData.colors = this.serializeColorsForExcel((p as any).colors);
+        }
+
+        sheet.addRow(rowData);
+        const row = sheet.getRow(rowIndex);
+        row.height = 95;
+        row.alignment = { vertical: 'middle' };
+
+        if (mainImgData?.productImageBuffer) {
+          const imageId = workbook.addImage({
+            buffer: mainImgData.productImageBuffer,
+            extension: 'jpeg',
+          });
+          sheet.addImage(imageId, {
+            tl: { col: 0.05, row: rowIndex - 1 + 0.05 },
+            ext: { width: 120, height: 110 },
+            editAs: 'oneCell',
+          });
+        }
+
+        if (barcodeBuffer) {
+          const imageId = workbook.addImage({
+            buffer: barcodeBuffer,
+            extension: 'png',
+          });
+          sheet.addImage(imageId, {
+            tl: { col: barcodeColIdx + 0.05, row: rowIndex - 1 + 0.08 },
+            ext: { width: 200, height: 100 },
+            editAs: 'oneCell',
+          });
+        }
       }
     }
 
@@ -1218,6 +1421,26 @@ export class CatalogueService {
     );
     const privateNotesHeaderKey = headers.find(
       (h) => h && h.toLowerCase() === 'private notes',
+    );
+    const hasSizeHeaderKey = headers.find(
+      (h) =>
+        h &&
+        (h.toLowerCase() === 'has size' ||
+          h.toLowerCase() === 'has size (yes/no)' ||
+          h.toLowerCase() === 'hassize'),
+    );
+    const sizesHeaderKey = headers.find(
+      (h) => h && h.toLowerCase() === 'sizes',
+    );
+    const hasColorHeaderKey = headers.find(
+      (h) =>
+        h &&
+        (h.toLowerCase() === 'has color' ||
+          h.toLowerCase() === 'has color (yes/no)' ||
+          h.toLowerCase() === 'hascolor'),
+    );
+    const colorsHeaderKey = headers.find(
+      (h) => h && h.toLowerCase() === 'colors',
     );
 
     const pricingHeaderMap: {
@@ -1514,6 +1737,28 @@ export class CatalogueService {
         privateNotes: getValString(privateNotesHeaderKey),
         isActive,
         pricingData,
+        hasSize: (() => {
+          if (!hasSizeHeaderKey) return undefined;
+          const val = getValString(hasSizeHeaderKey);
+          if (!val) return false;
+          return val.trim().toUpperCase() === 'YES' || val.trim().toUpperCase() === 'TRUE' || val.trim() === '1';
+        })(),
+        sizes: (() => {
+          if (!sizesHeaderKey) return undefined;
+          const val = getValString(sizesHeaderKey);
+          return this.parseSizesFromExcel(val);
+        })(),
+        hasColor: (() => {
+          if (!hasColorHeaderKey) return undefined;
+          const val = getValString(hasColorHeaderKey);
+          if (!val) return false;
+          return val.trim().toUpperCase() === 'YES' || val.trim().toUpperCase() === 'TRUE' || val.trim() === '1';
+        })(),
+        colors: (() => {
+          if (!colorsHeaderKey) return undefined;
+          const val = getValString(colorsHeaderKey);
+          return this.parseColorsFromExcel(val);
+        })(),
       });
     });
 
@@ -1521,6 +1766,127 @@ export class CatalogueService {
     const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
     const isValidObjectId = (v: string | null) =>
       !!v && OBJECT_ID_REGEX.test(v);
+
+    // ─── Group parsed rows by SKU / ID to merge multi-row color entries ───
+    const groupedRowsMap = new Map<string, any[]>();
+    for (const row of parsedRows) {
+      if (!row.sku) {
+        throw new BadRequestException(`Row ${row.rowNumber}: SKU is required.`);
+      }
+      if (!row.name) {
+        throw new BadRequestException(
+          `Row ${row.rowNumber}: Product name is required.`,
+        );
+      }
+      const rawSkuKey = this.formatSku(row.rawSku || row.sku) || row.sku.trim();
+      const key =
+        row.id && isValidObjectId(row.id)
+          ? `ID_${row.id}`
+          : `SKU_${rawSkuKey.toUpperCase()}`;
+      if (!groupedRowsMap.has(key)) {
+        groupedRowsMap.set(key, []);
+      }
+      groupedRowsMap.get(key)!.push(row);
+    }
+
+    const mergedParsedRows: any[] = [];
+    for (const [, group] of groupedRowsMap) {
+      if (group.length === 1) {
+        const row = group[0];
+        const rowImg =
+          embeddedImageUrlMap.get(row.rowNumber) ||
+          row.productImage ||
+          row.productPictureUrl;
+        if (
+          rowImg &&
+          row.colors &&
+          Array.isArray(row.colors) &&
+          row.colors.length === 1
+        ) {
+          if (!row.colors[0].images || row.colors[0].images.length === 0) {
+            row.colors[0].images = [rowImg];
+          }
+        }
+        mergedParsedRows.push(row);
+      } else {
+        // Multi-row color variants sharing the same SKU
+        const baseRow = { ...group[0] };
+        const mergedColors: {
+          color: string;
+          fixQty: number | null;
+          images: string[];
+        }[] = [];
+        let totalStockQuantity = 0;
+        let hasStockVal = false;
+
+        for (const r of group) {
+          const rowImg =
+            embeddedImageUrlMap.get(r.rowNumber) ||
+            r.productImage ||
+            r.productPictureUrl;
+          if (r.stockQuantity !== undefined && r.stockQuantity !== null) {
+            totalStockQuantity += Number(r.stockQuantity) || 0;
+            hasStockVal = true;
+          }
+
+          if (r.colors && Array.isArray(r.colors) && r.colors.length > 0) {
+            for (const c of r.colors) {
+              const cName = (c.color || c.name || '').trim();
+              if (!cName) continue;
+              const colorKey = cName.toUpperCase();
+              let existingColor = mergedColors.find(
+                (mc) => mc.color.toUpperCase() === colorKey,
+              );
+              if (!existingColor) {
+                const imgs: string[] = Array.isArray(c.images) ? [...c.images] : [];
+                if (rowImg && !imgs.includes(rowImg)) {
+                  imgs.push(rowImg);
+                }
+                existingColor = {
+                  color: cName,
+                  fixQty:
+                    c.fixQty !== undefined && c.fixQty !== null
+                      ? c.fixQty
+                      : r.fixQty || null,
+                  images: imgs,
+                };
+                mergedColors.push(existingColor);
+              } else {
+                if (rowImg && !existingColor.images.includes(rowImg)) {
+                  existingColor.images.push(rowImg);
+                }
+                if (existingColor.fixQty === null && c.fixQty !== null) {
+                  existingColor.fixQty = c.fixQty;
+                }
+              }
+            }
+          } else if (r.hasColor) {
+            const defaultName = r.name || 'Color';
+            const imgs = rowImg ? [rowImg] : [];
+            mergedColors.push({
+              color: defaultName,
+              fixQty: r.fixQty || null,
+              images: imgs,
+            });
+          }
+        }
+
+        if (mergedColors.length > 0) {
+          baseRow.hasColor = true;
+          baseRow.colors = mergedColors;
+          if (!baseRow.productImage && mergedColors[0]?.images?.[0]) {
+            baseRow.productImage = mergedColors[0].images[0];
+            baseRow.productPictureUrl = mergedColors[0].images[0];
+          }
+        }
+
+        if (hasStockVal) {
+          baseRow.stockQuantity = totalStockQuantity;
+        }
+
+        mergedParsedRows.push(baseRow);
+      }
+    }
 
     // ─── Classify rows: existing products to UPDATE vs new products to CREATE ──
     const allDbProducts = await this.prisma.product.findMany({
@@ -1535,7 +1901,7 @@ export class CatalogueService {
 
     const barcodeLimit = pLimit(10);
     await Promise.all(
-      parsedRows.map((row) =>
+      mergedParsedRows.map((row) =>
         barcodeLimit(async () => {
           let dbProduct: any = null;
           if (isValidObjectId(row.id)) {
@@ -1574,7 +1940,7 @@ export class CatalogueService {
 
     // ─── SKU uniqueness check ───
     const skuSet = new Set<string>();
-    for (const row of parsedRows) {
+    for (const row of mergedParsedRows) {
       if (!row.sku)
         throw new BadRequestException(`Row ${row.rowNumber}: SKU is required.`);
       if (!row.name)
@@ -1591,7 +1957,7 @@ export class CatalogueService {
     }
 
     // --- OPTIMIZATION: Pre-fetch ALL existing product images in ONE query, build in-memory lookup ---
-    const allProductIds = parsedRows.map((r) => r.id);
+    const allProductIds = mergedParsedRows.map((r) => r.id);
     const existingImages = await this.prisma.productImage.findMany({
       where: { productId: { in: allProductIds } },
       select: { productId: true, originalUrl: true, isPrimary: true },
@@ -1606,7 +1972,7 @@ export class CatalogueService {
 
     // --- OPTIMIZATION: Pre-fetch all pricing groups in one query ---
     const allGroupIdentifiers = [
-      ...new Set(parsedRows.flatMap((r) => Object.keys(r.pricingData))),
+      ...new Set(mergedParsedRows.flatMap((r) => Object.keys(r.pricingData))),
     ];
     const allDbPricingGroups = await this.prisma.pricingGroup.findMany();
     const pricingGroupMap = new Map<string, any>();
@@ -1615,21 +1981,20 @@ export class CatalogueService {
       if (g.code) pricingGroupMap.set(g.code.trim().toUpperCase(), g);
     }
 
-    // Execute updates inside Transaction
+    // Wrap the entire catalogue upload operations in an interactive transaction with extended timeout (60s)
     await this.prisma.$transaction(
       async (tx) => {
-        // 1. Resolve default category (from targetCategoryId or Uncategorized fallback)
-        let defaultCategory: any = null;
-        if (targetCategoryId) {
-          defaultCategory = await tx.category.findUnique({
-            where: { id: targetCategoryId },
-          });
-        }
+        // 1. Resolve or create default "Uncategorized" category inside transaction if needed
+        let defaultCategory = await tx.category.findUnique({
+          where: { slug: 'uncategorized' },
+        });
         if (!defaultCategory) {
-          defaultCategory = await tx.category.findUnique({
-            where: { slug: 'uncategorized' },
+          const firstCat = await tx.category.findFirst({
+            where: { isActive: true },
           });
-          if (!defaultCategory) {
+          if (firstCat) {
+            defaultCategory = firstCat;
+          } else {
             defaultCategory = await tx.category.create({
               data: {
                 name: 'Uncategorized',
@@ -1686,8 +2051,8 @@ export class CatalogueService {
 
         // 2. Process all rows: CREATE new rows in bulk, UPDATE existing rows in concurrency-limited batches
         // (NOTE: We deliberately DO NOT delete or dissociate omitted products to ensure products from other categories remain safe and untouched)
-        const newRows = parsedRows.filter((r) => r.isNew);
-        const existingRows = parsedRows.filter((r) => !r.isNew);
+        const newRows = mergedParsedRows.filter((r) => r.isNew);
+        const existingRows = mergedParsedRows.filter((r) => !r.isNew);
 
         // Bulk Create New Products
         if (newRows.length > 0) {
@@ -1716,6 +2081,10 @@ export class CatalogueService {
                 parentProductSku: row.parentProductSku,
                 parentProductId: row.parentProductId,
                 privateNotes: row.privateNotes,
+                hasSize: row.hasSize || false,
+                hasColor: row.hasColor || false,
+                sizes: row.sizes || null,
+                colors: row.colors || null,
                 isActive: row.isActive !== undefined ? row.isActive : true,
                 barcode: row.sku,
                 barcodeUrl: row.barcodeUrl,
@@ -1738,6 +2107,29 @@ export class CatalogueService {
                 isPrimary: true,
                 createdBy: userId,
               });
+            }
+            if (row.colors && Array.isArray(row.colors)) {
+              for (const c of row.colors) {
+                if (c.images && Array.isArray(c.images)) {
+                  for (const imgUrl of c.images) {
+                    if (
+                      imgUrl &&
+                      !newProductImagesData.some(
+                        (pi) =>
+                          pi.productId === row.id && pi.originalUrl === imgUrl,
+                      )
+                    ) {
+                      newProductImagesData.push({
+                        productId: row.id,
+                        originalUrl: imgUrl,
+                        isPrimary: false,
+                        color: c.color,
+                        createdBy: userId,
+                      });
+                    }
+                  }
+                }
+              }
             }
           }
           if (newProductImagesData.length > 0) {
@@ -1808,6 +2200,10 @@ export class CatalogueService {
                     parentProductSku: row.parentProductSku,
                     parentProductId: row.parentProductId,
                     privateNotes: row.privateNotes,
+                    hasSize: row.hasSize !== undefined ? row.hasSize : undefined,
+                    hasColor: row.hasColor !== undefined ? row.hasColor : undefined,
+                    sizes: row.sizes !== undefined ? row.sizes : undefined,
+                    colors: row.colors !== undefined ? row.colors : undefined,
                     isActive: row.isActive !== undefined ? row.isActive : undefined,
                     barcode: row.sku,
                     barcodeUrl: row.barcodeUrl,
@@ -1823,34 +2219,57 @@ export class CatalogueService {
                 });
 
                 // Smart Image Sync
-                const urlsToSync = [
-                  row.productImage,
-                  row.productPictureUrl,
-                ].filter((url): url is string => !!url && url.trim().length > 0);
-                const knownUrls = existingImageMap.get(row.id) ?? new Set<string>();
-                const newUrls = urlsToSync
-                  .map((u) => u.trim())
-                  .filter((u) => !knownUrls.has(u));
+                const urlsToSync: { url: string; color?: string }[] = [];
+                if (row.productImage) urlsToSync.push({ url: row.productImage });
+                if (
+                  row.productPictureUrl &&
+                  row.productPictureUrl !== row.productImage
+                ) {
+                  urlsToSync.push({ url: row.productPictureUrl });
+                }
+                if (row.colors && Array.isArray(row.colors)) {
+                  for (const c of row.colors) {
+                    if (c.images && Array.isArray(c.images)) {
+                      for (const imgUrl of c.images) {
+                        if (imgUrl && !urlsToSync.some((u) => u.url === imgUrl)) {
+                          urlsToSync.push({ url: imgUrl, color: c.color });
+                        }
+                      }
+                    }
+                  }
+                }
 
-                if (newUrls.length > 0) {
-                  await tx.productImage.updateMany({
-                    where: { productId: row.id, isPrimary: true },
-                    data: { isPrimary: false },
-                  });
-                  await tx.productImage.create({
-                    data: {
-                      productId: row.id,
-                      originalUrl: newUrls[0],
-                      isPrimary: true,
-                      createdBy: userId,
-                    },
-                  });
-                  if (newUrls.length > 1) {
-                    await tx.productImage.createMany({
-                      data: newUrls.slice(1).map((u) => ({
+                const knownUrls = existingImageMap.get(row.id) ?? new Set<string>();
+                const newImageEntries = urlsToSync
+                  .filter((item) => item.url && item.url.trim().length > 0)
+                  .filter((item) => !knownUrls.has(item.url.trim()));
+
+                if (newImageEntries.length > 0) {
+                  if (row.productImage && !knownUrls.has(row.productImage.trim())) {
+                    await tx.productImage.updateMany({
+                      where: { productId: row.id, isPrimary: true },
+                      data: { isPrimary: false },
+                    });
+                    await tx.productImage.create({
+                      data: {
                         productId: row.id,
-                        originalUrl: u,
+                        originalUrl: row.productImage.trim(),
+                        isPrimary: true,
+                        createdBy: userId,
+                      },
+                    });
+                  }
+                  const remaining = newImageEntries.filter(
+                    (item) =>
+                      item.url.trim() !== (row.productImage || '').trim(),
+                  );
+                  if (remaining.length > 0) {
+                    await tx.productImage.createMany({
+                      data: remaining.map((item) => ({
+                        productId: row.id,
+                        originalUrl: item.url.trim(),
                         isPrimary: false,
+                        color: item.color || null,
                         createdBy: userId,
                       })),
                     });

@@ -377,6 +377,11 @@ model Product {
   privateNotes                 String?   @map("private_notes")
   parentProductId              String?   @map("parent_product_id")
 
+  hasSize                      Boolean   @default(false) @map("has_size")
+  hasColor                     Boolean   @default(false) @map("has_color")
+  sizes                        Json?     // [{size:"S",fixQty:6},{size:"ALL",fixQty:10}]
+  colors                       Json?     // [{color:"Red",fixQty:3,images:["url1","url2"]},..]
+
   category      Category @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdByUser User?    @relation("ProductCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedByUser User?    @relation("ProductUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -409,6 +414,7 @@ model ProductImage {
   altText        String?             @map("alt_text")
   sortOrder      Int?                @map("sort_order")
   isPrimary      Boolean             @default(false) @map("is_primary")
+  color          String?             // Color this image belongs to (null = general)
   cleaningStatus ImageCleaningStatus @default(NOT_REQUIRED) @map("cleaning_status")
   createdBy      String?             @map("created_by") @db.ObjectId
   createdAt      DateTime            @default(now()) @map("created_at")

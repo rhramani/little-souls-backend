@@ -156,6 +156,10 @@ export class ImportService {
                   rowData.allowBackorder === true ||
                   rowData.allowBackorder === 'true',
                 createdBy: userId,
+                hasSize: rowData.hasSize === true || rowData.hasSize === 'true' || rowData.hasSize === 'YES',
+                hasColor: rowData.hasColor === true || rowData.hasColor === 'true' || rowData.hasColor === 'YES',
+                sizes: this.parseSizesFromExcel(rowData.sizes),
+                colors: this.parseColorsFromExcel(rowData.colors),
               },
             });
 
@@ -242,6 +246,18 @@ export class ImportService {
                   return num > 0 && num <= 1 ? Math.round(num * 100) : num;
                 })(),
                 updatedBy: userId,
+                ...(rowData.hasSize !== undefined ? {
+                  hasSize: rowData.hasSize === true || rowData.hasSize === 'true' || rowData.hasSize === 'YES',
+                } : {}),
+                ...(rowData.hasColor !== undefined ? {
+                  hasColor: rowData.hasColor === true || rowData.hasColor === 'true' || rowData.hasColor === 'YES',
+                } : {}),
+                ...(rowData.sizes !== undefined ? {
+                  sizes: this.parseSizesFromExcel(rowData.sizes),
+                } : {}),
+                ...(rowData.colors !== undefined ? {
+                  colors: this.parseColorsFromExcel(rowData.colors),
+                } : {}),
               },
             });
             break;
@@ -448,17 +464,103 @@ export class ImportService {
       }
     }
 
-    // If taxValue is empty or 0 and rawType is numeric (e.g. legacy data with taxType = "0.18" or "18")
-    if ((!taxValue || taxValue === '0') && rawType && !isNaN(Number(rawType))) {
-      const num = Number(rawType);
-      if (num > 0 && num <= 1) {
-        taxValue = String(Math.round(num * 100)); // "0.18" -> "18"
-      } else if (num > 0) {
-        taxValue = String(num);
-      }
-    }
-
     return { taxType, taxValue };
+  }
+
+  private serializeSizesForExcel(sizes: any): string {
+    if (!sizes || !Array.isArray(sizes) || sizes.length === 0) return '';
+    return sizes
+      .map((s: any) => {
+        const name = s.size || s.name || '';
+        const qty = s.fixQty !== null && s.fixQty !== undefined && String(s.fixQty).trim() !== '' ? `:${s.fixQty}` : '';
+        return `${name}${qty}`;
+      })
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  private serializeColorsForExcel(colors: any): string {
+    if (!colors || !Array.isArray(colors) || colors.length === 0) return '';
+    return colors
+      .map((c: any) => {
+        const name = c.color || c.name || '';
+        const qty = c.fixQty !== null && c.fixQty !== undefined && String(c.fixQty).trim() !== '' ? `:${c.fixQty}` : '';
+        return `${name}${qty}`;
+      })
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  private serializeSingleColorForExcel(c: any): string {
+    if (!c) return '';
+    const name = c.color || c.name || '';
+    const qty =
+      c.fixQty !== null && c.fixQty !== undefined && String(c.fixQty).trim() !== ''
+        ? `:${c.fixQty}`
+        : '';
+    return `${name}${qty}`;
+  }
+
+  private parseSizesFromExcel(val: any): { size: string; fixQty: number | null }[] | null {
+    if (!val) return null;
+    if (Array.isArray(val)) return val;
+    if (typeof val !== 'string' || !val.trim()) return null;
+    const trimmed = val.trim();
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    const parts = trimmed.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 0) return null;
+    return parts.map((part) => {
+      const colonIdx = part.indexOf(':');
+      if (colonIdx !== -1) {
+        const name = part.substring(0, colonIdx).trim();
+        const qtyStr = part.substring(colonIdx + 1).trim();
+        const qtyNum = parseFloat(qtyStr);
+        return { size: name, fixQty: isNaN(qtyNum) ? null : Math.round(qtyNum) };
+      }
+      const parenMatch = part.match(/^([^(]+)\s*\(([^)]+)\)$/);
+      if (parenMatch) {
+        const name = parenMatch[1].trim();
+        const qtyNum = parseFloat(parenMatch[2].trim());
+        return { size: name, fixQty: isNaN(qtyNum) ? null : Math.round(qtyNum) };
+      }
+      return { size: part, fixQty: null };
+    });
+  }
+
+  private parseColorsFromExcel(val: any): { color: string; fixQty: number | null; images: string[] }[] | null {
+    if (!val) return null;
+    if (Array.isArray(val)) return val;
+    if (typeof val !== 'string' || !val.trim()) return null;
+    const trimmed = val.trim();
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    const parts = trimmed.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 0) return null;
+    return parts.map((part) => {
+      const colonIdx = part.indexOf(':');
+      if (colonIdx !== -1) {
+        const name = part.substring(0, colonIdx).trim();
+        const qtyStr = part.substring(colonIdx + 1).trim();
+        const qtyNum = parseFloat(qtyStr);
+        return { color: name, fixQty: isNaN(qtyNum) ? null : Math.round(qtyNum), images: [] };
+      }
+      const parenMatch = part.match(/^([^(]+)\s*\(([^)]+)\)$/);
+      if (parenMatch) {
+        const name = parenMatch[1].trim();
+        const qtyNum = parseFloat(parenMatch[2].trim());
+        return { color: name, fixQty: isNaN(qtyNum) ? null : Math.round(qtyNum), images: [] };
+      }
+      return { color: part, fixQty: null, images: [] };
+    });
   }
 
   async exportCatalog(): Promise<Buffer> {
@@ -481,6 +583,10 @@ export class ImportService {
       { header: 'Tax Type', key: 'taxType', width: 18 },
       { header: 'Tax Value', key: 'taxValue', width: 15 },
       { header: 'Stock Quantity', key: 'stockQuantity', width: 15 },
+      { header: 'Has Size (YES/NO)', key: 'hasSize', width: 18 },
+      { header: 'Sizes', key: 'sizes', width: 40 },
+      { header: 'Has Color (YES/NO)', key: 'hasColor', width: 18 },
+      { header: 'Colors', key: 'colors', width: 50 },
     ];
 
     const products = await this.prisma.product.findMany({
@@ -490,7 +596,7 @@ export class ImportService {
     products.forEach((p) => {
       const { taxType: exportTaxType, taxValue: exportTaxValue } =
         this.normalizeProductTax(p);
-      productsSheet.addRow({
+      const baseRow = {
         sku: p.sku,
         name: p.name,
         description: p.description,
@@ -504,7 +610,29 @@ export class ImportService {
         taxType: exportTaxType,
         taxValue: exportTaxValue,
         stockQuantity: p.stockQuantity,
-      });
+        hasSize: (p as any).hasSize ? 'YES' : 'NO',
+        sizes: this.serializeSizesForExcel((p as any).sizes),
+      };
+
+      if (
+        (p as any).hasColor &&
+        Array.isArray((p as any).colors) &&
+        (p as any).colors.length > 0
+      ) {
+        for (const c of (p as any).colors) {
+          productsSheet.addRow({
+            ...baseRow,
+            hasColor: 'YES',
+            colors: this.serializeSingleColorForExcel(c),
+          });
+        }
+      } else {
+        productsSheet.addRow({
+          ...baseRow,
+          hasColor: (p as any).hasColor ? 'YES' : 'NO',
+          colors: this.serializeColorsForExcel((p as any).colors),
+        });
+      }
     });
 
     // Pricing Sheet

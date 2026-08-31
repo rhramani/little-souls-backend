@@ -687,8 +687,8 @@ export class OrderService {
         },
       });
 
-      // Restore product inventory ONLY if stock was actually deducted (i.e. status was APPROVED/SHIPPED/DELIVERED)
-      const stockDeductedStatuses = ['APPROVED', 'SHIPPED', 'DELIVERED'];
+      // Restore product inventory ONLY if stock was actually deducted (i.e. status was APPROVED/PACKED/SHIPPED/DELIVERED)
+      const stockDeductedStatuses = ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'];
       if (stockDeductedStatuses.includes(order.orderStatus)) {
         const restoreStockPromises = order.items.map(async (item) => {
           const product = await tx.product.findUnique({
@@ -721,7 +721,7 @@ export class OrderService {
                 quantity: item.quantity,
                 stockBefore: product.stockQuantity,
                 stockAfter: restoredStock,
-                note: `Stock returned from cancelled approved Order '${order.orderNumber}'`,
+                note: `Stock returned from cancelled ${order.orderStatus} Order '${order.orderNumber}'`,
                 createdBy: userId,
               },
             });
@@ -1464,6 +1464,8 @@ export class OrderService {
         taxPercent: number;
       }[] = [];
 
+      const productStockMap = new Map<string, number>();
+
       for (const itemInput of dto.items) {
         const product = await tx.product.findUnique({
           where: { id: itemInput.productId },
@@ -1476,11 +1478,17 @@ export class OrderService {
           );
         }
 
-        if (product.stockQuantity < itemInput.quantity) {
+        const currentStock = productStockMap.has(product.id)
+          ? productStockMap.get(product.id)!
+          : product.stockQuantity;
+
+        if (currentStock < itemInput.quantity) {
           throw new BadRequestException(
-            `Insufficient stock for '${product.name}'. Available: ${product.stockQuantity}, Requested: ${itemInput.quantity}`,
+            `Insufficient stock for '${product.name}'. Available: ${currentStock}, Requested: ${itemInput.quantity}`,
           );
         }
+
+        productStockMap.set(product.id, currentStock - itemInput.quantity);
 
         const quantity = itemInput.quantity;
         totalQuantity += quantity;
@@ -1531,6 +1539,14 @@ export class OrderService {
 
         const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
 
+        // Get latest actual stock before deduction
+        const currentProd = await tx.product.findUnique({
+          where: { id: product.id },
+          select: { stockQuantity: true },
+        });
+        const prevStock = currentProd?.stockQuantity ?? product.stockQuantity;
+        const newStock = prevStock - quantity;
+
         orderItemsData.push({
           productId: product.id,
           sku: product.sku,
@@ -1538,7 +1554,7 @@ export class OrderService {
           productImageUrl: getProductImageUrl(product),
           quantity,
           moq: product.moq,
-          availableStock: product.stockQuantity, // Pre-deduction snapshot
+          availableStock: prevStock, // Pre-deduction snapshot
           price,
           mrp: product.productPrice ? Number(product.productPrice) : null,
           discountPercent:
@@ -1551,13 +1567,12 @@ export class OrderService {
         });
 
         // Deduct inventory immediately
-        const newStock = product.stockQuantity - quantity;
         await tx.product.update({
           where: { id: product.id },
           data: {
             stockQuantity: newStock,
             stockStatus:
-              newStock === 0
+              newStock <= 0
                 ? 'OUT_OF_STOCK'
                 : newStock <= 5
                   ? 'LOW_STOCK'
@@ -1570,7 +1585,7 @@ export class OrderService {
           movementType: 'ORDER_OUT',
           referenceType: 'ORDER',
           quantity,
-          stockBefore: product.stockQuantity,
+          stockBefore: prevStock,
           stockAfter: newStock,
           note: `Stock deducted for POS Order '${orderNumber}'`,
           createdBy: userId,
@@ -1696,14 +1711,57 @@ export class OrderService {
   async remove(id: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },
-      include: { invoices: true },
+      include: { invoices: true, items: true },
     });
 
     if (!order) {
       throw new NotFoundException(`Order with ID '${id}' not found.`);
     }
 
+    const activeStatuses = ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'];
+    const hadDeductedStock = activeStatuses.includes(order.orderStatus);
+
     return this.prisma.$transaction(async (tx) => {
+      // 1. Restore product inventory if stock was deducted
+      if (hadDeductedStock && order.items && order.items.length > 0) {
+        for (const item of order.items) {
+          const product = await tx.product.findUnique({
+            where: { id: item.productId },
+            select: { id: true, stockQuantity: true },
+          });
+
+          if (product) {
+            const restoredStock = product.stockQuantity + item.quantity;
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stockQuantity: restoredStock,
+                stockStatus:
+                  restoredStock > 5
+                    ? 'IN_STOCK'
+                    : restoredStock > 0
+                      ? 'LOW_STOCK'
+                      : 'OUT_OF_STOCK',
+              },
+            });
+
+            // Log StockMovement deletion restoration audit
+            await tx.stockMovement.create({
+              data: {
+                productId: item.productId,
+                movementType: 'RETURN_IN',
+                referenceType: 'ORDER',
+                referenceId: order.id,
+                quantity: item.quantity,
+                stockBefore: product.stockQuantity,
+                stockAfter: restoredStock,
+                note: `Stock returned from deleted Order '${order.orderNumber}' (Status was: ${order.orderStatus})`,
+              },
+            });
+          }
+        }
+      }
+
       if (order.invoices && order.invoices.length > 0) {
         const invoiceIds = order.invoices.map((i) => i.id);
 
@@ -1752,8 +1810,52 @@ export class OrderService {
     return this.prisma.$transaction(async (tx) => {
       const orders = await tx.order.findMany({
         where: { id: { in: ids } },
-        include: { invoices: true },
+        include: { invoices: true, items: true },
       });
+
+      const activeStatuses = ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'];
+
+      // 1. Restore product inventory for all deleted orders where stock was deducted
+      for (const order of orders) {
+        if (activeStatuses.includes(order.orderStatus) && order.items && order.items.length > 0) {
+          for (const item of order.items) {
+            const product = await tx.product.findUnique({
+              where: { id: item.productId },
+              select: { id: true, stockQuantity: true },
+            });
+
+            if (product) {
+              const restoredStock = product.stockQuantity + item.quantity;
+              await tx.product.update({
+                where: { id: item.productId },
+                data: {
+                  stockQuantity: restoredStock,
+                  stockStatus:
+                    restoredStock > 5
+                      ? 'IN_STOCK'
+                      : restoredStock > 0
+                        ? 'LOW_STOCK'
+                        : 'OUT_OF_STOCK',
+                },
+              });
+
+              // Log StockMovement bulk-deletion restoration audit
+              await tx.stockMovement.create({
+                data: {
+                  productId: item.productId,
+                  movementType: 'RETURN_IN',
+                  referenceType: 'ORDER',
+                  referenceId: order.id,
+                  quantity: item.quantity,
+                  stockBefore: product.stockQuantity,
+                  stockAfter: restoredStock,
+                  note: `Stock returned from bulk-deleted Order '${order.orderNumber}' (Status was: ${order.orderStatus})`,
+                },
+              });
+            }
+          }
+        }
+      }
 
       const invoiceIds = orders.flatMap((o) => o.invoices.map((i) => i.id));
 

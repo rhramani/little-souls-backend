@@ -1,6 +1,7 @@
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCatalogueDto } from './dto/create-catalogue.dto';
 import { UpdateCatalogueDto } from './dto/update-catalogue.dto';
+import { Prisma } from '@prisma/client';
 import { UploadService } from '../upload/upload.service';
 export declare class CatalogueService {
     private readonly prisma;
@@ -14,6 +15,11 @@ export declare class CatalogueService {
     private getUniqueSku;
     private extractCleanNameAndSkuFromFilename;
     private normalizeProductTax;
+    private serializeSizesForExcel;
+    private serializeColorsForExcel;
+    private serializeSingleColorForExcel;
+    private parseSizesFromExcel;
+    private parseColorsFromExcel;
     create(dto: CreateCatalogueDto, userId: string): Promise<{
         products: ({
             images: {
@@ -28,6 +34,7 @@ export declare class CatalogueService {
                 productId: string;
                 cleanedUrl: string | null;
                 thumbnailUrl: string | null;
+                color: string | null;
                 cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
             }[];
         } & {
@@ -68,6 +75,10 @@ export declare class CatalogueService {
             productPictureUrl: string | null;
             privateNotes: string | null;
             parentProductId: string | null;
+            hasSize: boolean;
+            hasColor: boolean;
+            sizes: Prisma.JsonValue | null;
+            colors: Prisma.JsonValue | null;
             categoryId: string;
             catalogueIds: string[];
         })[];
@@ -112,6 +123,7 @@ export declare class CatalogueService {
                 productId: string;
                 cleanedUrl: string | null;
                 thumbnailUrl: string | null;
+                color: string | null;
                 cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
             }[];
             pricing: ({
@@ -178,6 +190,10 @@ export declare class CatalogueService {
             productPictureUrl: string | null;
             privateNotes: string | null;
             parentProductId: string | null;
+            hasSize: boolean;
+            hasColor: boolean;
+            sizes: Prisma.JsonValue | null;
+            colors: Prisma.JsonValue | null;
             categoryId: string;
             catalogueIds: string[];
         })[];

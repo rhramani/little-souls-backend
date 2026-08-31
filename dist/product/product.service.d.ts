@@ -2,6 +2,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductDto } from './dto/query-product.dto';
+import { Prisma } from '@prisma/client';
 export declare class ProductService {
     private readonly prisma;
     constructor(prisma: PrismaService);
@@ -35,6 +36,7 @@ export declare class ProductService {
             productId: string;
             cleanedUrl: string | null;
             thumbnailUrl: string | null;
+            color: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
         pricing: ({
@@ -101,6 +103,10 @@ export declare class ProductService {
         productPictureUrl: string | null;
         privateNotes: string | null;
         parentProductId: string | null;
+        hasSize: boolean;
+        hasColor: boolean;
+        sizes: Prisma.JsonValue | null;
+        colors: Prisma.JsonValue | null;
         categoryId: string;
         catalogueIds: string[];
     }) | null>;
@@ -135,6 +141,7 @@ export declare class ProductService {
                 productId: string;
                 cleanedUrl: string | null;
                 thumbnailUrl: string | null;
+                color: string | null;
                 cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
             }[];
             pricing: ({
@@ -200,6 +207,10 @@ export declare class ProductService {
             productPictureUrl: string | null;
             privateNotes: string | null;
             parentProductId: string | null;
+            hasSize: boolean;
+            hasColor: boolean;
+            sizes: Prisma.JsonValue | null;
+            colors: Prisma.JsonValue | null;
             categoryId: string;
             catalogueIds: string[];
         }[];
@@ -240,6 +251,7 @@ export declare class ProductService {
             productId: string;
             cleanedUrl: string | null;
             thumbnailUrl: string | null;
+            color: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
         pricing: ({
@@ -305,6 +317,10 @@ export declare class ProductService {
         productPictureUrl: string | null;
         privateNotes: string | null;
         parentProductId: string | null;
+        hasSize: boolean;
+        hasColor: boolean;
+        sizes: Prisma.JsonValue | null;
+        colors: Prisma.JsonValue | null;
         categoryId: string;
         catalogueIds: string[];
     }>;
@@ -338,6 +354,7 @@ export declare class ProductService {
             productId: string;
             cleanedUrl: string | null;
             thumbnailUrl: string | null;
+            color: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
         pricing: ({
@@ -403,6 +420,10 @@ export declare class ProductService {
         productPictureUrl: string | null;
         privateNotes: string | null;
         parentProductId: string | null;
+        hasSize: boolean;
+        hasColor: boolean;
+        sizes: Prisma.JsonValue | null;
+        colors: Prisma.JsonValue | null;
         categoryId: string;
         catalogueIds: string[];
     }>;
@@ -435,6 +456,7 @@ export declare class ProductService {
             productId: string;
             cleanedUrl: string | null;
             thumbnailUrl: string | null;
+            color: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
         pricing: ({
@@ -501,6 +523,10 @@ export declare class ProductService {
         productPictureUrl: string | null;
         privateNotes: string | null;
         parentProductId: string | null;
+        hasSize: boolean;
+        hasColor: boolean;
+        sizes: Prisma.JsonValue | null;
+        colors: Prisma.JsonValue | null;
         categoryId: string;
         catalogueIds: string[];
     }) | null>;
@@ -548,6 +574,7 @@ export declare class ProductService {
         productId: string;
         cleanedUrl: string | null;
         thumbnailUrl: string | null;
+        color: string | null;
         cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
     }>;
 }

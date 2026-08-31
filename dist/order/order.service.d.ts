@@ -160,6 +160,7 @@ export declare class OrderService {
                         productId: string;
                         cleanedUrl: string | null;
                         thumbnailUrl: string | null;
+                        color: string | null;
                         cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
                     }[];
                 };
@@ -300,6 +301,7 @@ export declare class OrderService {
                     productId: string;
                     cleanedUrl: string | null;
                     thumbnailUrl: string | null;
+                    color: string | null;
                     cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
                 }[];
             };
@@ -613,6 +615,7 @@ export declare class OrderService {
                     productId: string;
                     cleanedUrl: string | null;
                     thumbnailUrl: string | null;
+                    color: string | null;
                     cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
                 }[];
             };

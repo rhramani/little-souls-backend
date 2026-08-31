@@ -258,6 +258,7 @@ export declare class OrderController {
                         productId: string;
                         cleanedUrl: string | null;
                         thumbnailUrl: string | null;
+                        color: string | null;
                         cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
                     }[];
                 };
@@ -398,6 +399,7 @@ export declare class OrderController {
                     productId: string;
                     cleanedUrl: string | null;
                     thumbnailUrl: string | null;
+                    color: string | null;
                     cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
                 }[];
             };
@@ -588,6 +590,7 @@ export declare class OrderController {
                     productId: string;
                     cleanedUrl: string | null;
                     thumbnailUrl: string | null;
+                    color: string | null;
                     cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
                 }[];
             };

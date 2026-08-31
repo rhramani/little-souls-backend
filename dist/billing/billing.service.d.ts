@@ -1,6 +1,7 @@
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { QueryBillingDto } from './dto/query-billing.dto';
+import { Prisma } from '@prisma/client';
 export declare class BillingService {
     private readonly prisma;
     constructor(prisma: PrismaService);
@@ -198,6 +199,7 @@ export declare class BillingService {
                         productId: string;
                         cleanedUrl: string | null;
                         thumbnailUrl: string | null;
+                        color: string | null;
                         cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
                     }[];
                 } & {
@@ -238,6 +240,10 @@ export declare class BillingService {
                     productPictureUrl: string | null;
                     privateNotes: string | null;
                     parentProductId: string | null;
+                    hasSize: boolean;
+                    hasColor: boolean;
+                    sizes: Prisma.JsonValue | null;
+                    colors: Prisma.JsonValue | null;
                     categoryId: string;
                     catalogueIds: string[];
                 };
@@ -317,6 +323,7 @@ export declare class BillingService {
                     productId: string;
                     cleanedUrl: string | null;
                     thumbnailUrl: string | null;
+                    color: string | null;
                     cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
                 }[];
             } & {
@@ -357,6 +364,10 @@ export declare class BillingService {
                 productPictureUrl: string | null;
                 privateNotes: string | null;
                 parentProductId: string | null;
+                hasSize: boolean;
+                hasColor: boolean;
+                sizes: Prisma.JsonValue | null;
+                colors: Prisma.JsonValue | null;
                 categoryId: string;
                 catalogueIds: string[];
             }) | null;

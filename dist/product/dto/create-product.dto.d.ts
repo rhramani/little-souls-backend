@@ -43,6 +43,10 @@ export declare class CreateProductDto {
     parentProductSku?: string;
     parentProductId?: string;
     privateNotes?: string;
+    hasSize?: boolean;
+    hasColor?: boolean;
+    sizes?: any;
+    colors?: any;
     isActive?: boolean;
     isFeatured?: boolean;
     sortOrder?: number;

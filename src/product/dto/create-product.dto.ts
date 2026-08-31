@@ -173,7 +173,19 @@ export class CreateProductDto {
   @IsOptional()
   privateNotes?: string;
 
+  @IsBoolean()
+  @IsOptional()
+  hasSize?: boolean;
 
+  @IsBoolean()
+  @IsOptional()
+  hasColor?: boolean;
+
+  @IsOptional()
+  sizes?: any; // JSON: [{size:"S",fixQty:6},...]
+
+  @IsOptional()
+  colors?: any; // JSON: [{color:"Red",fixQty:3,images:["url1","url2"]},...]
 
   @IsBoolean()
   @IsOptional()

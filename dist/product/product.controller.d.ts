@@ -37,6 +37,7 @@ export declare class ProductController {
             productId: string;
             cleanedUrl: string | null;
             thumbnailUrl: string | null;
+            color: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
         pricing: ({
@@ -103,6 +104,10 @@ export declare class ProductController {
         productPictureUrl: string | null;
         privateNotes: string | null;
         parentProductId: string | null;
+        hasSize: boolean;
+        hasColor: boolean;
+        sizes: import("@prisma/client/runtime/library").JsonValue | null;
+        colors: import("@prisma/client/runtime/library").JsonValue | null;
         categoryId: string;
         catalogueIds: string[];
     }) | null>;
@@ -137,6 +142,7 @@ export declare class ProductController {
                 productId: string;
                 cleanedUrl: string | null;
                 thumbnailUrl: string | null;
+                color: string | null;
                 cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
             }[];
             pricing: ({
@@ -202,6 +208,10 @@ export declare class ProductController {
             productPictureUrl: string | null;
             privateNotes: string | null;
             parentProductId: string | null;
+            hasSize: boolean;
+            hasColor: boolean;
+            sizes: import("@prisma/client/runtime/library").JsonValue | null;
+            colors: import("@prisma/client/runtime/library").JsonValue | null;
             categoryId: string;
             catalogueIds: string[];
         }[];
@@ -242,6 +252,7 @@ export declare class ProductController {
             productId: string;
             cleanedUrl: string | null;
             thumbnailUrl: string | null;
+            color: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
         pricing: ({
@@ -307,6 +318,10 @@ export declare class ProductController {
         productPictureUrl: string | null;
         privateNotes: string | null;
         parentProductId: string | null;
+        hasSize: boolean;
+        hasColor: boolean;
+        sizes: import("@prisma/client/runtime/library").JsonValue | null;
+        colors: import("@prisma/client/runtime/library").JsonValue | null;
         categoryId: string;
         catalogueIds: string[];
     }>;
@@ -340,6 +355,7 @@ export declare class ProductController {
             productId: string;
             cleanedUrl: string | null;
             thumbnailUrl: string | null;
+            color: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
         pricing: ({
@@ -405,6 +421,10 @@ export declare class ProductController {
         productPictureUrl: string | null;
         privateNotes: string | null;
         parentProductId: string | null;
+        hasSize: boolean;
+        hasColor: boolean;
+        sizes: import("@prisma/client/runtime/library").JsonValue | null;
+        colors: import("@prisma/client/runtime/library").JsonValue | null;
         categoryId: string;
         catalogueIds: string[];
     }>;
@@ -437,6 +457,7 @@ export declare class ProductController {
             productId: string;
             cleanedUrl: string | null;
             thumbnailUrl: string | null;
+            color: string | null;
             cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
         }[];
         pricing: ({
@@ -503,6 +524,10 @@ export declare class ProductController {
         productPictureUrl: string | null;
         privateNotes: string | null;
         parentProductId: string | null;
+        hasSize: boolean;
+        hasColor: boolean;
+        sizes: import("@prisma/client/runtime/library").JsonValue | null;
+        colors: import("@prisma/client/runtime/library").JsonValue | null;
         categoryId: string;
         catalogueIds: string[];
     }) | null>;
@@ -550,6 +575,7 @@ export declare class ProductController {
         productId: string;
         cleanedUrl: string | null;
         thumbnailUrl: string | null;
+        color: string | null;
         cleaningStatus: import("@prisma/client").$Enums.ImageCleaningStatus;
     }>;
 }

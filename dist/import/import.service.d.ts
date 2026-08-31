@@ -56,5 +56,10 @@ export declare class ImportService {
     }>;
     private slugify;
     private normalizeProductTax;
+    private serializeSizesForExcel;
+    private serializeColorsForExcel;
+    private serializeSingleColorForExcel;
+    private parseSizesFromExcel;
+    private parseColorsFromExcel;
     exportCatalog(): Promise<Buffer>;
 }

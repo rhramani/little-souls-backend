@@ -554,7 +554,7 @@ let OrderService = class OrderService {
                     newStatus: 'CANCELLED',
                 },
             });
-            const stockDeductedStatuses = ['APPROVED', 'SHIPPED', 'DELIVERED'];
+            const stockDeductedStatuses = ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'];
             if (stockDeductedStatuses.includes(order.orderStatus)) {
                 const restoreStockPromises = order.items.map(async (item) => {
                     const product = await tx.product.findUnique({
@@ -583,7 +583,7 @@ let OrderService = class OrderService {
                                 quantity: item.quantity,
                                 stockBefore: product.stockQuantity,
                                 stockAfter: restoredStock,
-                                note: `Stock returned from cancelled approved Order '${order.orderNumber}'`,
+                                note: `Stock returned from cancelled ${order.orderStatus} Order '${order.orderNumber}'`,
                                 createdBy: userId,
                             },
                         });
@@ -1154,6 +1154,7 @@ let OrderService = class OrderService {
             let subTotal = 0;
             const orderDiscountTotal = Number(dto.discountTotal || 0);
             const resolvedItems = [];
+            const productStockMap = new Map();
             for (const itemInput of dto.items) {
                 const product = await tx.product.findUnique({
                     where: { id: itemInput.productId },
@@ -1162,9 +1163,13 @@ let OrderService = class OrderService {
                 if (!product) {
                     throw new common_1.BadRequestException(`Product ID '${itemInput.productId}' not found.`);
                 }
-                if (product.stockQuantity < itemInput.quantity) {
-                    throw new common_1.BadRequestException(`Insufficient stock for '${product.name}'. Available: ${product.stockQuantity}, Requested: ${itemInput.quantity}`);
+                const currentStock = productStockMap.has(product.id)
+                    ? productStockMap.get(product.id)
+                    : product.stockQuantity;
+                if (currentStock < itemInput.quantity) {
+                    throw new common_1.BadRequestException(`Insufficient stock for '${product.name}'. Available: ${currentStock}, Requested: ${itemInput.quantity}`);
                 }
+                productStockMap.set(product.id, currentStock - itemInput.quantity);
                 const quantity = itemInput.quantity;
                 totalQuantity += quantity;
                 const price = Number(itemInput.price);
@@ -1202,6 +1207,12 @@ let OrderService = class OrderService {
                 const lineTaxTotal = (taxableLineValue * taxPercent) / 100;
                 taxTotal = taxTotal + lineTaxTotal;
                 const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
+                const currentProd = await tx.product.findUnique({
+                    where: { id: product.id },
+                    select: { stockQuantity: true },
+                });
+                const prevStock = currentProd?.stockQuantity ?? product.stockQuantity;
+                const newStock = prevStock - quantity;
                 orderItemsData.push({
                     productId: product.id,
                     sku: product.sku,
@@ -1209,7 +1220,7 @@ let OrderService = class OrderService {
                     productImageUrl: getProductImageUrl(product),
                     quantity,
                     moq: product.moq,
-                    availableStock: product.stockQuantity,
+                    availableStock: prevStock,
                     price,
                     mrp: product.productPrice ? Number(product.productPrice) : null,
                     discountPercent: lineSubTotal > 0 ? (lineDiscountTotal * 100) / lineSubTotal : 0,
@@ -1219,12 +1230,11 @@ let OrderService = class OrderService {
                     lineTotal,
                     fulfillmentStatus: 'FULFILLED',
                 });
-                const newStock = product.stockQuantity - quantity;
                 await tx.product.update({
                     where: { id: product.id },
                     data: {
                         stockQuantity: newStock,
-                        stockStatus: newStock === 0
+                        stockStatus: newStock <= 0
                             ? 'OUT_OF_STOCK'
                             : newStock <= 5
                                 ? 'LOW_STOCK'
@@ -1236,7 +1246,7 @@ let OrderService = class OrderService {
                     movementType: 'ORDER_OUT',
                     referenceType: 'ORDER',
                     quantity,
-                    stockBefore: product.stockQuantity,
+                    stockBefore: prevStock,
                     stockAfter: newStock,
                     note: `Stock deducted for POS Order '${orderNumber}'`,
                     createdBy: userId,
@@ -1342,12 +1352,48 @@ let OrderService = class OrderService {
     async remove(id) {
         const order = await this.prisma.order.findUnique({
             where: { id },
-            include: { invoices: true },
+            include: { invoices: true, items: true },
         });
         if (!order) {
             throw new common_1.NotFoundException(`Order with ID '${id}' not found.`);
         }
+        const activeStatuses = ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'];
+        const hadDeductedStock = activeStatuses.includes(order.orderStatus);
         return this.prisma.$transaction(async (tx) => {
+            if (hadDeductedStock && order.items && order.items.length > 0) {
+                for (const item of order.items) {
+                    const product = await tx.product.findUnique({
+                        where: { id: item.productId },
+                        select: { id: true, stockQuantity: true },
+                    });
+                    if (product) {
+                        const restoredStock = product.stockQuantity + item.quantity;
+                        await tx.product.update({
+                            where: { id: item.productId },
+                            data: {
+                                stockQuantity: restoredStock,
+                                stockStatus: restoredStock > 5
+                                    ? 'IN_STOCK'
+                                    : restoredStock > 0
+                                        ? 'LOW_STOCK'
+                                        : 'OUT_OF_STOCK',
+                            },
+                        });
+                        await tx.stockMovement.create({
+                            data: {
+                                productId: item.productId,
+                                movementType: 'RETURN_IN',
+                                referenceType: 'ORDER',
+                                referenceId: order.id,
+                                quantity: item.quantity,
+                                stockBefore: product.stockQuantity,
+                                stockAfter: restoredStock,
+                                note: `Stock returned from deleted Order '${order.orderNumber}' (Status was: ${order.orderStatus})`,
+                            },
+                        });
+                    }
+                }
+            }
             if (order.invoices && order.invoices.length > 0) {
                 const invoiceIds = order.invoices.map((i) => i.id);
                 await tx.invoiceItem.deleteMany({
@@ -1386,8 +1432,45 @@ let OrderService = class OrderService {
         return this.prisma.$transaction(async (tx) => {
             const orders = await tx.order.findMany({
                 where: { id: { in: ids } },
-                include: { invoices: true },
+                include: { invoices: true, items: true },
             });
+            const activeStatuses = ['APPROVED', 'PACKED', 'SHIPPED', 'DELIVERED'];
+            for (const order of orders) {
+                if (activeStatuses.includes(order.orderStatus) && order.items && order.items.length > 0) {
+                    for (const item of order.items) {
+                        const product = await tx.product.findUnique({
+                            where: { id: item.productId },
+                            select: { id: true, stockQuantity: true },
+                        });
+                        if (product) {
+                            const restoredStock = product.stockQuantity + item.quantity;
+                            await tx.product.update({
+                                where: { id: item.productId },
+                                data: {
+                                    stockQuantity: restoredStock,
+                                    stockStatus: restoredStock > 5
+                                        ? 'IN_STOCK'
+                                        : restoredStock > 0
+                                            ? 'LOW_STOCK'
+                                            : 'OUT_OF_STOCK',
+                                },
+                            });
+                            await tx.stockMovement.create({
+                                data: {
+                                    productId: item.productId,
+                                    movementType: 'RETURN_IN',
+                                    referenceType: 'ORDER',
+                                    referenceId: order.id,
+                                    quantity: item.quantity,
+                                    stockBefore: product.stockQuantity,
+                                    stockAfter: restoredStock,
+                                    note: `Stock returned from bulk-deleted Order '${order.orderNumber}' (Status was: ${order.orderStatus})`,
+                                },
+                            });
+                        }
+                    }
+                }
+            }
             const invoiceIds = orders.flatMap((o) => o.invoices.map((i) => i.id));
             if (invoiceIds.length > 0) {
                 await tx.invoiceItem.deleteMany({
