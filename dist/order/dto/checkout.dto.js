@@ -13,9 +13,21 @@ exports.CheckoutDto = void 0;
 const class_validator_1 = require("class-validator");
 class CheckoutDto {
     deliveryAddress;
+    billingAddress;
     notes;
     orderSource = 'WEBSITE';
     shippingCharge = '0';
+    paymentMethod;
+    items;
+    subTotal;
+    taxAmount;
+    taxPercent;
+    totalAmount;
+    withGst;
+    gstin;
+    contactName;
+    mobile;
+    email;
 }
 exports.CheckoutDto = CheckoutDto;
 __decorate([
@@ -23,6 +35,11 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CheckoutDto.prototype, "deliveryAddress", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CheckoutDto.prototype, "billingAddress", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsOptional)(),
@@ -38,4 +55,59 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CheckoutDto.prototype, "shippingCharge", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CheckoutDto.prototype, "paymentMethod", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Array)
+], CheckoutDto.prototype, "items", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CheckoutDto.prototype, "subTotal", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CheckoutDto.prototype, "taxAmount", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CheckoutDto.prototype, "taxPercent", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CheckoutDto.prototype, "totalAmount", void 0);
+__decorate([
+    (0, class_validator_1.IsBoolean)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Boolean)
+], CheckoutDto.prototype, "withGst", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CheckoutDto.prototype, "gstin", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CheckoutDto.prototype, "contactName", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CheckoutDto.prototype, "mobile", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CheckoutDto.prototype, "email", void 0);
 //# sourceMappingURL=checkout.dto.js.map

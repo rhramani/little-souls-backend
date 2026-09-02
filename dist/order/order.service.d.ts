@@ -58,6 +58,7 @@ export declare class OrderService {
             price: number;
             mrp: number | null;
             productId: string;
+            color: string | null;
             productName: string;
             productImageUrl: string | null;
             quantity: number;
@@ -71,6 +72,9 @@ export declare class OrderService {
             packedQuantity: number | null;
             shippedQuantity: number | null;
             deliveredQuantity: number | null;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
         }[];
         statusHistory: {
             id: string;
@@ -176,6 +180,7 @@ export declare class OrderService {
                 price: number;
                 mrp: number | null;
                 productId: string;
+                color: string | null;
                 productName: string;
                 productImageUrl: string | null;
                 quantity: number;
@@ -189,6 +194,9 @@ export declare class OrderService {
                 packedQuantity: number | null;
                 shippedQuantity: number | null;
                 deliveredQuantity: number | null;
+                size: string | null;
+                selectedSize: string | null;
+                selectedColor: string | null;
             })[];
         } & {
             id: string;
@@ -317,6 +325,7 @@ export declare class OrderService {
             price: number;
             mrp: number | null;
             productId: string;
+            color: string | null;
             productName: string;
             productImageUrl: string | null;
             quantity: number;
@@ -330,6 +339,9 @@ export declare class OrderService {
             packedQuantity: number | null;
             shippedQuantity: number | null;
             deliveredQuantity: number | null;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
         })[];
         statusHistory: {
             id: string;
@@ -631,6 +643,7 @@ export declare class OrderService {
             price: number;
             mrp: number | null;
             productId: string;
+            color: string | null;
             productName: string;
             productImageUrl: string | null;
             quantity: number;
@@ -644,6 +657,9 @@ export declare class OrderService {
             packedQuantity: number | null;
             shippedQuantity: number | null;
             deliveredQuantity: number | null;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
         })[];
         statusHistory: {
             id: string;
@@ -738,6 +754,7 @@ export declare class OrderService {
             price: number;
             mrp: number | null;
             productId: string;
+            color: string | null;
             productName: string;
             productImageUrl: string | null;
             quantity: number;
@@ -751,6 +768,9 @@ export declare class OrderService {
             packedQuantity: number | null;
             shippedQuantity: number | null;
             deliveredQuantity: number | null;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
         }[];
     } & {
         id: string;

@@ -27,6 +27,30 @@ function getProductImageUrl(product: any): string | null {
   );
 }
 
+function getProductVariantImageUrl(product: any, color?: string | null): string | null {
+  if (!product) return null;
+  if (color && typeof color === 'string' && color.trim().toUpperCase() !== 'ALL') {
+    const cleanColor = color.trim().toLowerCase();
+    if (Array.isArray(product.colors)) {
+      const matchedColorObj = product.colors.find(
+        (c: any) => c && c.color && String(c.color).trim().toLowerCase() === cleanColor,
+      );
+      if (matchedColorObj && Array.isArray(matchedColorObj.images) && matchedColorObj.images.length > 0) {
+        return matchedColorObj.images[0];
+      }
+    }
+    if (Array.isArray(product.images)) {
+      const colorImg = product.images.find(
+        (img: any) => img && img.color && String(img.color).trim().toLowerCase() === cleanColor,
+      );
+      if (colorImg) {
+        return colorImg.thumbnailUrl || colorImg.cleanedUrl || colorImg.originalUrl;
+      }
+    }
+  }
+  return getProductImageUrl(product);
+}
+
 @Injectable()
 export class OrderService {
   constructor(
@@ -48,9 +72,6 @@ export class OrderService {
             product: {
               include: {
                 images: { orderBy: { sortOrder: 'asc' } },
-                // NOTE: Do NOT include catalogues here — Prisma MongoDB m2m include
-                // queries the wrong collection (products instead of catalogues).
-                // We check catalogue published status via a direct query below.
               },
             },
           },
@@ -58,7 +79,8 @@ export class OrderService {
       },
     });
 
-    if (!cart || cart.items.length === 0) {
+    const hasExplicitItems = Array.isArray(dto.items) && dto.items.length > 0;
+    if (!hasExplicitItems && (!cart || cart.items.length === 0)) {
       throw new BadRequestException('Your B2B cart is empty.');
     }
 
@@ -113,129 +135,293 @@ export class OrderService {
       const shippingCharge = Number(dto.shippingCharge || 0);
 
       const orderItemsData: any[] = [];
-      const productUpdates: any[] = [];
 
-      for (const item of cart.items) {
-        const product = item.product;
-        if (!product || !product.isActive) {
-          throw new BadRequestException(
-            `Product '${product?.name || 'Unknown'}' is no longer available.`,
-          );
+      // Fetch customer and B2B pricing group
+      const customer = await tx.customer.findUnique({
+        where: { id: customerId },
+        include: { pricingGroup: true },
+      });
+
+      const isWholesaler =
+        customer?.pricingGroup?.name?.toUpperCase() === 'WHOLESALER' ||
+        customer?.pricingGroup?.code?.toUpperCase() === 'WHOLESALER' ||
+        customer?.pricingGroup?.code?.toUpperCase() === 'VIP' ||
+        customer?.businessType?.toUpperCase() === 'WHOLESALER' ||
+        customer?.businessType?.toUpperCase()?.includes('WHOLESALE');
+
+      if (hasExplicitItems) {
+        // --- Flow A: Customer sent explicit variant line items ---
+        // 1. Group requested quantities by product to validate aggregate inventory
+        const productQtyMap = new Map<string, number>();
+        for (const itemInput of dto.items!) {
+          const pId = itemInput.productId;
+          const qty = Number(itemInput.quantity) || 1;
+          productQtyMap.set(pId, (productQtyMap.get(pId) || 0) + qty);
         }
 
-        // Check catalogue published status via direct query
-        // (Prisma MongoDB m2m include: { catalogues: true } is broken — queries wrong collection)
-        if (
-          Array.isArray(product.catalogueIds) &&
-          product.catalogueIds.length > 0
-        ) {
-          const publishedCatalogues = await tx.catalogue.findMany({
-            where: {
-              id: { in: product.catalogueIds },
-              isPublished: true,
-            },
-            select: { id: true },
+        // 2. Validate product stock and catalogue publication
+        for (const [pId, reqQty] of productQtyMap.entries()) {
+          const product = await tx.product.findUnique({
+            where: { id: pId },
+            include: { images: { orderBy: { sortOrder: 'asc' } } },
           });
-          if (publishedCatalogues.length === 0) {
+
+          if (!product || !product.isActive) {
             throw new BadRequestException(
-              `Product '${product.name}' belongs to a catalogue that is no longer published.`,
+              `Product '${product?.name || pId}' is no longer available.`,
+            );
+          }
+
+          if (
+            Array.isArray(product.catalogueIds) &&
+            product.catalogueIds.length > 0
+          ) {
+            const publishedCatalogues = await tx.catalogue.findMany({
+              where: {
+                id: { in: product.catalogueIds },
+                isPublished: true,
+              },
+              select: { id: true },
+            });
+            if (publishedCatalogues.length === 0) {
+              throw new BadRequestException(
+                `Product '${product.name}' belongs to a catalogue that is no longer published.`,
+              );
+            }
+          }
+
+          if (product.stockQuantity < reqQty) {
+            throw new BadRequestException(
+              `Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, requested: ${reqQty}. Please adjust quantity before placing order.`,
             );
           }
         }
 
-        const quantity = item.quantity;
-        totalQuantity += quantity;
-
-        // Resolve product tax rate
-        const taxPercent =
-          (product as any).taxPercent !== null && (product as any).taxPercent !== undefined
-            ? Number((product as any).taxPercent)
-            : (product as any).taxValue !== null && (product as any).taxValue !== undefined
-              ? Number((product as any).taxValue)
-              : 18;
-
-        // Fetch B2B product custom pricing group definition
-        const customer = await tx.customer.findUnique({
-          where: { id: customerId },
-          include: { pricingGroup: true },
-        });
-
-        const isWholesaler =
-          customer?.pricingGroup?.name?.toUpperCase() === 'WHOLESALER' ||
-          customer?.pricingGroup?.code?.toUpperCase() === 'WHOLESALER' ||
-          customer?.pricingGroup?.code?.toUpperCase() === 'VIP' ||
-          customer?.businessType?.toUpperCase() === 'WHOLESALER' ||
-          customer?.businessType?.toUpperCase()?.includes('WHOLESALE');
-
-        const effectiveMoq =
-          isWholesaler &&
-          product.wholesalerMoq !== null &&
-          product.wholesalerMoq !== undefined &&
-          product.wholesalerMoq > 0
-            ? product.wholesalerMoq
-            : product.moq;
-
-        let price = product.productPrice ? Number(product.productPrice) : 0;
-        let mrp: number | null = null;
-        let discountPercent = 0;
-
-        if (customer && customer.pricingGroupId) {
-          const pricing = await tx.productPricing.findUnique({
-            where: {
-              productId_pricingGroupId: {
-                productId: product.id,
-                pricingGroupId: customer.pricingGroupId,
-              },
-            },
+        // 3. Process each variant line item
+        for (const itemInput of dto.items!) {
+          const product = await tx.product.findUnique({
+            where: { id: itemInput.productId },
+            include: { images: { orderBy: { sortOrder: 'asc' } } },
           });
 
-          if (pricing) {
-            price = Number(pricing.price);
-            mrp = pricing.mrp ? Number(pricing.mrp) : null;
-            discountPercent = pricing.discountPercent
-              ? Number(pricing.discountPercent)
-              : 0;
+          if (!product) continue;
+
+          const quantity = Number(itemInput.quantity) || 1;
+          totalQuantity += quantity;
+
+          const effectiveMoq =
+            isWholesaler &&
+            product.wholesalerMoq !== null &&
+            product.wholesalerMoq !== undefined &&
+            product.wholesalerMoq > 0
+              ? product.wholesalerMoq
+              : product.moq;
+
+          let price = product.productPrice ? Number(product.productPrice) : 0;
+          let mrp: number | null = null;
+          let discountPercent = 0;
+
+          if (customer && customer.pricingGroupId) {
+            const pricing = await tx.productPricing.findUnique({
+              where: {
+                productId_pricingGroupId: {
+                  productId: product.id,
+                  pricingGroupId: customer.pricingGroupId,
+                },
+              },
+            });
+
+            if (pricing) {
+              price = Number(pricing.price);
+              mrp = pricing.mrp ? Number(pricing.mrp) : null;
+              discountPercent = pricing.discountPercent
+                ? Number(pricing.discountPercent)
+                : 0;
+            }
+          } else if (itemInput.price !== undefined && itemInput.price !== null) {
+            price = Number(itemInput.price);
           }
+
+          // Fetch SKU-specific GST rate from Product Master (0% if not configured, never 18% default)
+          const taxPercent =
+            (product as any).taxPercent !== null &&
+            (product as any).taxPercent !== undefined &&
+            !isNaN(Number((product as any).taxPercent))
+              ? Number((product as any).taxPercent)
+              : (product as any).taxValue !== null &&
+                  (product as any).taxValue !== undefined &&
+                  !isNaN(Number((product as any).taxValue))
+                ? Number((product as any).taxValue)
+                : itemInput.taxPercent !== undefined &&
+                    itemInput.taxPercent !== null &&
+                    !isNaN(Number(itemInput.taxPercent))
+                  ? Number(itemInput.taxPercent)
+                  : 0;
+
+          const lineSubTotal = price * quantity;
+          subTotal = subTotal + lineSubTotal;
+
+          const lineTaxTotal = lineSubTotal * (taxPercent / 100);
+          taxTotal = taxTotal + lineTaxTotal;
+
+          const lineDiscountTotal = lineSubTotal * (discountPercent / 100);
+          discountTotal = discountTotal + lineDiscountTotal;
+
+          const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
+
+          const selectedSize =
+            itemInput.selectedSize || itemInput.size || null;
+          const selectedColor =
+            itemInput.selectedColor || itemInput.color || null;
+          const itemImg =
+            itemInput.productImageUrl ||
+            getProductVariantImageUrl(product, selectedColor);
+
+          orderItemsData.push({
+            productId: product.id,
+            sku: itemInput.sku || product.sku,
+            productName: itemInput.productName || product.name,
+            productImageUrl: itemImg,
+            quantity,
+            moq: effectiveMoq,
+            availableStock: product.stockQuantity,
+            shortageQuantity: null,
+            backorderQuantity: null,
+            price,
+            mrp,
+            discountPercent,
+            taxPercent,
+            lineSubTotal,
+            lineTaxTotal,
+            lineTotal,
+            fulfillmentStatus: 'FULFILLED',
+            size: selectedSize,
+            color: selectedColor,
+            selectedSize,
+            selectedColor,
+          });
         }
+      } else if (cart && cart.items.length > 0) {
+        // --- Flow B: Fallback from Cart Items ---
+        for (const item of cart.items) {
+          const product = item.product;
+          if (!product || !product.isActive) {
+            throw new BadRequestException(
+              `Product '${product?.name || 'Unknown'}' is no longer available.`,
+            );
+          }
 
-        // Calculations exclusive of tax
-        const lineSubTotal = price * quantity;
-        subTotal = subTotal + lineSubTotal;
+          if (
+            Array.isArray(product.catalogueIds) &&
+            product.catalogueIds.length > 0
+          ) {
+            const publishedCatalogues = await tx.catalogue.findMany({
+              where: {
+                id: { in: product.catalogueIds },
+                isPublished: true,
+              },
+              select: { id: true },
+            });
+            if (publishedCatalogues.length === 0) {
+              throw new BadRequestException(
+                `Product '${product.name}' belongs to a catalogue that is no longer published.`,
+              );
+            }
+          }
 
-        const lineTaxTotal = lineSubTotal * (taxPercent / 100);
-        taxTotal = taxTotal + lineTaxTotal;
+          const quantity = item.quantity;
+          totalQuantity += quantity;
 
-        const lineDiscountTotal = lineSubTotal * (discountPercent / 100);
-        discountTotal = discountTotal + lineDiscountTotal;
+          // Fetch SKU-specific GST rate from Product Master (0% if not configured, never 18% default)
+          const taxPercent =
+            (product as any).taxPercent !== null &&
+            (product as any).taxPercent !== undefined &&
+            !isNaN(Number((product as any).taxPercent))
+              ? Number((product as any).taxPercent)
+              : (product as any).taxValue !== null &&
+                  (product as any).taxValue !== undefined &&
+                  !isNaN(Number((product as any).taxValue))
+                ? Number((product as any).taxValue)
+                : 0;
 
-        const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
+          const effectiveMoq =
+            isWholesaler &&
+            product.wholesalerMoq !== null &&
+            product.wholesalerMoq !== undefined &&
+            product.wholesalerMoq > 0
+              ? product.wholesalerMoq
+              : product.moq;
 
-        // Inventory check
-        if (product.stockQuantity < quantity) {
-          throw new BadRequestException(
-            `Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, requested: ${quantity}. Please reduce quantity or select a different product before placing your order.`,
-          );
+          let price = product.productPrice ? Number(product.productPrice) : 0;
+          let mrp: number | null = null;
+          let discountPercent = 0;
+
+          if (customer && customer.pricingGroupId) {
+            const pricing = await tx.productPricing.findUnique({
+              where: {
+                productId_pricingGroupId: {
+                  productId: product.id,
+                  pricingGroupId: customer.pricingGroupId,
+                },
+              },
+            });
+
+            if (pricing) {
+              price = Number(pricing.price);
+              mrp = pricing.mrp ? Number(pricing.mrp) : null;
+              discountPercent = pricing.discountPercent
+                ? Number(pricing.discountPercent)
+                : 0;
+            }
+          }
+
+          const lineSubTotal = price * quantity;
+          subTotal = subTotal + lineSubTotal;
+
+          const lineTaxTotal = lineSubTotal * (taxPercent / 100);
+          taxTotal = taxTotal + lineTaxTotal;
+
+          const lineDiscountTotal = lineSubTotal * (discountPercent / 100);
+          discountTotal = discountTotal + lineDiscountTotal;
+
+          const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
+
+          if (product.stockQuantity < quantity) {
+            throw new BadRequestException(
+              `Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, requested: ${quantity}. Please reduce quantity before placing your order.`,
+            );
+          }
+
+          const selectedSize =
+            item.selectedSize || item.size || null;
+          const selectedColor =
+            item.selectedColor || item.color || null;
+          const itemImg = getProductVariantImageUrl(product, selectedColor);
+
+          orderItemsData.push({
+            productId: product.id,
+            sku: product.sku,
+            productName: product.name,
+            productImageUrl: itemImg,
+            quantity,
+            moq: effectiveMoq,
+            availableStock: product.stockQuantity,
+            shortageQuantity: null,
+            backorderQuantity: null,
+            price,
+            mrp,
+            discountPercent,
+            taxPercent,
+            lineSubTotal,
+            lineTaxTotal,
+            lineTotal,
+            fulfillmentStatus: 'FULFILLED',
+            size: selectedSize,
+            color: selectedColor,
+            selectedSize,
+            selectedColor,
+          });
         }
-
-        orderItemsData.push({
-          productId: product.id,
-          sku: product.sku,
-          productName: product.name,
-          productImageUrl: getProductImageUrl(product),
-          quantity,
-          moq: effectiveMoq,
-          availableStock: product.stockQuantity,
-          shortageQuantity: null,
-          backorderQuantity: null,
-          price,
-          mrp,
-          discountPercent,
-          taxPercent,
-          lineSubTotal,
-          lineTaxTotal,
-          lineTotal,
-          fulfillmentStatus: 'FULFILLED',
-        });
       }
 
       // Final calculations
@@ -279,11 +465,13 @@ export class OrderService {
         },
       });
 
-      // Set active cart to converted
-      await tx.cart.update({
-        where: { id: cart.id },
-        data: { status: 'CONVERTED' },
-      });
+      // Set active cart to converted if cart exists
+      if (cart) {
+        await tx.cart.update({
+          where: { id: cart.id },
+          data: { status: 'CONVERTED' },
+        });
+      }
 
       return tx.order.findUnique({
         where: { id: order.id },
@@ -1081,22 +1269,20 @@ export class OrderService {
         const quantity = itemInput.quantity;
         totalQuantity += quantity;
 
-        const hasGst =
-          (dto.taxAmount !== undefined && Number(dto.taxAmount) > 0) ||
-          (dto.taxPercent !== undefined && Number(dto.taxPercent) > 0) ||
-          (itemInput.taxPercent !== undefined && Number(itemInput.taxPercent) > 0);
-
-        const taxPercent = hasGst
-          ? itemInput.taxPercent !== undefined && Number(itemInput.taxPercent) > 0
+        const taxPercent =
+          itemInput.taxPercent !== undefined &&
+          itemInput.taxPercent !== null &&
+          !isNaN(Number(itemInput.taxPercent))
             ? Number(itemInput.taxPercent)
-            : (product as any).taxPercent !== undefined && (product as any).taxPercent !== null && Number((product as any).taxPercent) > 0
+            : (product as any).taxPercent !== undefined &&
+                (product as any).taxPercent !== null &&
+                !isNaN(Number((product as any).taxPercent))
               ? Number((product as any).taxPercent)
-              : (product as any).taxValue !== undefined && (product as any).taxValue !== null && Number((product as any).taxValue) > 0
+              : (product as any).taxValue !== undefined &&
+                  (product as any).taxValue !== null &&
+                  !isNaN(Number((product as any).taxValue))
                 ? Number((product as any).taxValue)
-                : dto.taxPercent !== undefined && Number(dto.taxPercent) > 0
-                  ? Number(dto.taxPercent)
-                  : 18
-          : 0;
+                : 0;
 
         const price = Number(itemInput.price);
 
@@ -1157,12 +1343,20 @@ export class OrderService {
 
         const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
 
+        const selectedSize =
+          itemInput.selectedSize || itemInput.size || null;
+        const selectedColor =
+          itemInput.selectedColor || itemInput.color || null;
+        const itemImg =
+          itemInput.productImageUrl ||
+          getProductVariantImageUrl(product, selectedColor);
+
         orderItemsData.push({
           orderId: order.id,
           productId: product.id,
-          sku: product.sku,
-          productName: product.name,
-          productImageUrl: getProductImageUrl(product),
+          sku: itemInput.sku || product.sku,
+          productName: itemInput.productName || product.name,
+          productImageUrl: itemImg,
           quantity: itemInput.quantity,
           moq: product.moq,
           availableStock: product.stockQuantity,
@@ -1181,6 +1375,10 @@ export class OrderService {
           lineTaxTotal,
           lineTotal,
           fulfillmentStatus: 'FULFILLED',
+          size: selectedSize,
+          color: selectedColor,
+          selectedSize,
+          selectedColor,
         });
       }
 
@@ -1497,13 +1695,21 @@ export class OrderService {
         const taxPercent =
           dto.withGst === false
             ? 0
-            : itemInput.taxPercent !== undefined && itemInput.taxPercent !== null
+            : itemInput.taxPercent !== undefined &&
+                itemInput.taxPercent !== null &&
+                !isNaN(Number(itemInput.taxPercent))
               ? Number(itemInput.taxPercent)
-              : product.taxPercent !== null && product.taxPercent !== undefined
+              : product.taxPercent !== null &&
+                  product.taxPercent !== undefined &&
+                  !isNaN(Number(product.taxPercent))
                 ? Number(product.taxPercent)
-                : dto.taxPercent !== undefined
-                  ? Number(dto.taxPercent)
-                  : 0;
+                : (product as any).taxValue !== null &&
+                    (product as any).taxValue !== undefined &&
+                    !isNaN(Number((product as any).taxValue))
+                  ? Number((product as any).taxValue)
+                  : dto.taxPercent !== undefined && !isNaN(Number(dto.taxPercent))
+                    ? Number(dto.taxPercent)
+                    : 0;
 
         const lineSubTotal = price * quantity;
         subTotal = subTotal + lineSubTotal;
@@ -1547,11 +1753,19 @@ export class OrderService {
         const prevStock = currentProd?.stockQuantity ?? product.stockQuantity;
         const newStock = prevStock - quantity;
 
+        const selectedSize =
+          itemInput.selectedSize || itemInput.size || null;
+        const selectedColor =
+          itemInput.selectedColor || itemInput.color || null;
+        const itemImg =
+          itemInput.productImageUrl ||
+          getProductVariantImageUrl(product, selectedColor);
+
         orderItemsData.push({
           productId: product.id,
-          sku: product.sku,
-          productName: product.name,
-          productImageUrl: getProductImageUrl(product),
+          sku: itemInput.sku || product.sku,
+          productName: itemInput.productName || product.name,
+          productImageUrl: itemImg,
           quantity,
           moq: product.moq,
           availableStock: prevStock, // Pre-deduction snapshot
@@ -1564,6 +1778,10 @@ export class OrderService {
           lineTaxTotal,
           lineTotal,
           fulfillmentStatus: 'FULFILLED',
+          size: selectedSize,
+          color: selectedColor,
+          selectedSize,
+          selectedColor,
         });
 
         // Deduct inventory immediately

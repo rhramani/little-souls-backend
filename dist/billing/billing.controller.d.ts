@@ -15,12 +15,16 @@ export declare class BillingController {
             taxPercent: number;
             price: number;
             productId: string | null;
+            color: string | null;
             productName: string;
             productImageUrl: string | null;
             quantity: number;
             lineSubTotal: number;
             lineTaxTotal: number;
             lineTotal: number;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
             invoiceId: string;
         }[];
     } & {
@@ -210,6 +214,7 @@ export declare class BillingController {
                 price: number;
                 mrp: number | null;
                 productId: string;
+                color: string | null;
                 productName: string;
                 productImageUrl: string | null;
                 quantity: number;
@@ -223,6 +228,9 @@ export declare class BillingController {
                 packedQuantity: number | null;
                 shippedQuantity: number | null;
                 deliveredQuantity: number | null;
+                size: string | null;
+                selectedSize: string | null;
+                selectedColor: string | null;
             })[];
         } & {
             id: string;
@@ -329,12 +337,16 @@ export declare class BillingController {
             taxPercent: number;
             price: number;
             productId: string | null;
+            color: string | null;
             productName: string;
             productImageUrl: string | null;
             quantity: number;
             lineSubTotal: number;
             lineTaxTotal: number;
             lineTotal: number;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
             invoiceId: string;
         })[];
     } & {

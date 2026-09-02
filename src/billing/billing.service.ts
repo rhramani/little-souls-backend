@@ -154,6 +154,10 @@ export class BillingService {
         lineSubTotal: item.lineSubTotal,
         lineTaxTotal: item.lineTaxTotal,
         lineTotal: item.lineTotal,
+        size: (item as any).selectedSize || (item as any).size || null,
+        color: (item as any).selectedColor || (item as any).color || null,
+        selectedSize: (item as any).selectedSize || (item as any).size || null,
+        selectedColor: (item as any).selectedColor || (item as any).color || null,
       }));
 
       await tx.invoiceItem.createMany({

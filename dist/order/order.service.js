@@ -26,6 +26,26 @@ function getProductImageUrl(product) {
         product.productPictureUrl ||
         null);
 }
+function getProductVariantImageUrl(product, color) {
+    if (!product)
+        return null;
+    if (color && typeof color === 'string' && color.trim().toUpperCase() !== 'ALL') {
+        const cleanColor = color.trim().toLowerCase();
+        if (Array.isArray(product.colors)) {
+            const matchedColorObj = product.colors.find((c) => c && c.color && String(c.color).trim().toLowerCase() === cleanColor);
+            if (matchedColorObj && Array.isArray(matchedColorObj.images) && matchedColorObj.images.length > 0) {
+                return matchedColorObj.images[0];
+            }
+        }
+        if (Array.isArray(product.images)) {
+            const colorImg = product.images.find((img) => img && img.color && String(img.color).trim().toLowerCase() === cleanColor);
+            if (colorImg) {
+                return colorImg.thumbnailUrl || colorImg.cleanedUrl || colorImg.originalUrl;
+            }
+        }
+    }
+    return getProductImageUrl(product);
+}
 let OrderService = class OrderService {
     prisma;
     whatsappService;
@@ -53,7 +73,8 @@ let OrderService = class OrderService {
                 },
             },
         });
-        if (!cart || cart.items.length === 0) {
+        const hasExplicitItems = Array.isArray(dto.items) && dto.items.length > 0;
+        if (!hasExplicitItems && (!cart || cart.items.length === 0)) {
             throw new common_1.BadRequestException('Your B2B cart is empty.');
         }
         let deliveryAddress = dto.deliveryAddress;
@@ -100,96 +121,227 @@ let OrderService = class OrderService {
             let discountTotal = 0;
             const shippingCharge = Number(dto.shippingCharge || 0);
             const orderItemsData = [];
-            const productUpdates = [];
-            for (const item of cart.items) {
-                const product = item.product;
-                if (!product || !product.isActive) {
-                    throw new common_1.BadRequestException(`Product '${product?.name || 'Unknown'}' is no longer available.`);
+            const customer = await tx.customer.findUnique({
+                where: { id: customerId },
+                include: { pricingGroup: true },
+            });
+            const isWholesaler = customer?.pricingGroup?.name?.toUpperCase() === 'WHOLESALER' ||
+                customer?.pricingGroup?.code?.toUpperCase() === 'WHOLESALER' ||
+                customer?.pricingGroup?.code?.toUpperCase() === 'VIP' ||
+                customer?.businessType?.toUpperCase() === 'WHOLESALER' ||
+                customer?.businessType?.toUpperCase()?.includes('WHOLESALE');
+            if (hasExplicitItems) {
+                const productQtyMap = new Map();
+                for (const itemInput of dto.items) {
+                    const pId = itemInput.productId;
+                    const qty = Number(itemInput.quantity) || 1;
+                    productQtyMap.set(pId, (productQtyMap.get(pId) || 0) + qty);
                 }
-                if (Array.isArray(product.catalogueIds) &&
-                    product.catalogueIds.length > 0) {
-                    const publishedCatalogues = await tx.catalogue.findMany({
-                        where: {
-                            id: { in: product.catalogueIds },
-                            isPublished: true,
-                        },
-                        select: { id: true },
+                for (const [pId, reqQty] of productQtyMap.entries()) {
+                    const product = await tx.product.findUnique({
+                        where: { id: pId },
+                        include: { images: { orderBy: { sortOrder: 'asc' } } },
                     });
-                    if (publishedCatalogues.length === 0) {
-                        throw new common_1.BadRequestException(`Product '${product.name}' belongs to a catalogue that is no longer published.`);
+                    if (!product || !product.isActive) {
+                        throw new common_1.BadRequestException(`Product '${product?.name || pId}' is no longer available.`);
                     }
-                }
-                const quantity = item.quantity;
-                totalQuantity += quantity;
-                const taxPercent = product.taxPercent !== null && product.taxPercent !== undefined
-                    ? Number(product.taxPercent)
-                    : product.taxValue !== null && product.taxValue !== undefined
-                        ? Number(product.taxValue)
-                        : 18;
-                const customer = await tx.customer.findUnique({
-                    where: { id: customerId },
-                    include: { pricingGroup: true },
-                });
-                const isWholesaler = customer?.pricingGroup?.name?.toUpperCase() === 'WHOLESALER' ||
-                    customer?.pricingGroup?.code?.toUpperCase() === 'WHOLESALER' ||
-                    customer?.pricingGroup?.code?.toUpperCase() === 'VIP' ||
-                    customer?.businessType?.toUpperCase() === 'WHOLESALER' ||
-                    customer?.businessType?.toUpperCase()?.includes('WHOLESALE');
-                const effectiveMoq = isWholesaler &&
-                    product.wholesalerMoq !== null &&
-                    product.wholesalerMoq !== undefined &&
-                    product.wholesalerMoq > 0
-                    ? product.wholesalerMoq
-                    : product.moq;
-                let price = product.productPrice ? Number(product.productPrice) : 0;
-                let mrp = null;
-                let discountPercent = 0;
-                if (customer && customer.pricingGroupId) {
-                    const pricing = await tx.productPricing.findUnique({
-                        where: {
-                            productId_pricingGroupId: {
-                                productId: product.id,
-                                pricingGroupId: customer.pricingGroupId,
+                    if (Array.isArray(product.catalogueIds) &&
+                        product.catalogueIds.length > 0) {
+                        const publishedCatalogues = await tx.catalogue.findMany({
+                            where: {
+                                id: { in: product.catalogueIds },
+                                isPublished: true,
                             },
-                        },
-                    });
-                    if (pricing) {
-                        price = Number(pricing.price);
-                        mrp = pricing.mrp ? Number(pricing.mrp) : null;
-                        discountPercent = pricing.discountPercent
-                            ? Number(pricing.discountPercent)
-                            : 0;
+                            select: { id: true },
+                        });
+                        if (publishedCatalogues.length === 0) {
+                            throw new common_1.BadRequestException(`Product '${product.name}' belongs to a catalogue that is no longer published.`);
+                        }
+                    }
+                    if (product.stockQuantity < reqQty) {
+                        throw new common_1.BadRequestException(`Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, requested: ${reqQty}. Please adjust quantity before placing order.`);
                     }
                 }
-                const lineSubTotal = price * quantity;
-                subTotal = subTotal + lineSubTotal;
-                const lineTaxTotal = lineSubTotal * (taxPercent / 100);
-                taxTotal = taxTotal + lineTaxTotal;
-                const lineDiscountTotal = lineSubTotal * (discountPercent / 100);
-                discountTotal = discountTotal + lineDiscountTotal;
-                const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
-                if (product.stockQuantity < quantity) {
-                    throw new common_1.BadRequestException(`Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, requested: ${quantity}. Please reduce quantity or select a different product before placing your order.`);
+                for (const itemInput of dto.items) {
+                    const product = await tx.product.findUnique({
+                        where: { id: itemInput.productId },
+                        include: { images: { orderBy: { sortOrder: 'asc' } } },
+                    });
+                    if (!product)
+                        continue;
+                    const quantity = Number(itemInput.quantity) || 1;
+                    totalQuantity += quantity;
+                    const effectiveMoq = isWholesaler &&
+                        product.wholesalerMoq !== null &&
+                        product.wholesalerMoq !== undefined &&
+                        product.wholesalerMoq > 0
+                        ? product.wholesalerMoq
+                        : product.moq;
+                    let price = product.productPrice ? Number(product.productPrice) : 0;
+                    let mrp = null;
+                    let discountPercent = 0;
+                    if (customer && customer.pricingGroupId) {
+                        const pricing = await tx.productPricing.findUnique({
+                            where: {
+                                productId_pricingGroupId: {
+                                    productId: product.id,
+                                    pricingGroupId: customer.pricingGroupId,
+                                },
+                            },
+                        });
+                        if (pricing) {
+                            price = Number(pricing.price);
+                            mrp = pricing.mrp ? Number(pricing.mrp) : null;
+                            discountPercent = pricing.discountPercent
+                                ? Number(pricing.discountPercent)
+                                : 0;
+                        }
+                    }
+                    else if (itemInput.price !== undefined && itemInput.price !== null) {
+                        price = Number(itemInput.price);
+                    }
+                    const taxPercent = product.taxPercent !== null &&
+                        product.taxPercent !== undefined &&
+                        !isNaN(Number(product.taxPercent))
+                        ? Number(product.taxPercent)
+                        : product.taxValue !== null &&
+                            product.taxValue !== undefined &&
+                            !isNaN(Number(product.taxValue))
+                            ? Number(product.taxValue)
+                            : itemInput.taxPercent !== undefined &&
+                                itemInput.taxPercent !== null &&
+                                !isNaN(Number(itemInput.taxPercent))
+                                ? Number(itemInput.taxPercent)
+                                : 0;
+                    const lineSubTotal = price * quantity;
+                    subTotal = subTotal + lineSubTotal;
+                    const lineTaxTotal = lineSubTotal * (taxPercent / 100);
+                    taxTotal = taxTotal + lineTaxTotal;
+                    const lineDiscountTotal = lineSubTotal * (discountPercent / 100);
+                    discountTotal = discountTotal + lineDiscountTotal;
+                    const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
+                    const selectedSize = itemInput.selectedSize || itemInput.size || null;
+                    const selectedColor = itemInput.selectedColor || itemInput.color || null;
+                    const itemImg = itemInput.productImageUrl ||
+                        getProductVariantImageUrl(product, selectedColor);
+                    orderItemsData.push({
+                        productId: product.id,
+                        sku: itemInput.sku || product.sku,
+                        productName: itemInput.productName || product.name,
+                        productImageUrl: itemImg,
+                        quantity,
+                        moq: effectiveMoq,
+                        availableStock: product.stockQuantity,
+                        shortageQuantity: null,
+                        backorderQuantity: null,
+                        price,
+                        mrp,
+                        discountPercent,
+                        taxPercent,
+                        lineSubTotal,
+                        lineTaxTotal,
+                        lineTotal,
+                        fulfillmentStatus: 'FULFILLED',
+                        size: selectedSize,
+                        color: selectedColor,
+                        selectedSize,
+                        selectedColor,
+                    });
                 }
-                orderItemsData.push({
-                    productId: product.id,
-                    sku: product.sku,
-                    productName: product.name,
-                    productImageUrl: getProductImageUrl(product),
-                    quantity,
-                    moq: effectiveMoq,
-                    availableStock: product.stockQuantity,
-                    shortageQuantity: null,
-                    backorderQuantity: null,
-                    price,
-                    mrp,
-                    discountPercent,
-                    taxPercent,
-                    lineSubTotal,
-                    lineTaxTotal,
-                    lineTotal,
-                    fulfillmentStatus: 'FULFILLED',
-                });
+            }
+            else if (cart && cart.items.length > 0) {
+                for (const item of cart.items) {
+                    const product = item.product;
+                    if (!product || !product.isActive) {
+                        throw new common_1.BadRequestException(`Product '${product?.name || 'Unknown'}' is no longer available.`);
+                    }
+                    if (Array.isArray(product.catalogueIds) &&
+                        product.catalogueIds.length > 0) {
+                        const publishedCatalogues = await tx.catalogue.findMany({
+                            where: {
+                                id: { in: product.catalogueIds },
+                                isPublished: true,
+                            },
+                            select: { id: true },
+                        });
+                        if (publishedCatalogues.length === 0) {
+                            throw new common_1.BadRequestException(`Product '${product.name}' belongs to a catalogue that is no longer published.`);
+                        }
+                    }
+                    const quantity = item.quantity;
+                    totalQuantity += quantity;
+                    const taxPercent = product.taxPercent !== null &&
+                        product.taxPercent !== undefined &&
+                        !isNaN(Number(product.taxPercent))
+                        ? Number(product.taxPercent)
+                        : product.taxValue !== null &&
+                            product.taxValue !== undefined &&
+                            !isNaN(Number(product.taxValue))
+                            ? Number(product.taxValue)
+                            : 0;
+                    const effectiveMoq = isWholesaler &&
+                        product.wholesalerMoq !== null &&
+                        product.wholesalerMoq !== undefined &&
+                        product.wholesalerMoq > 0
+                        ? product.wholesalerMoq
+                        : product.moq;
+                    let price = product.productPrice ? Number(product.productPrice) : 0;
+                    let mrp = null;
+                    let discountPercent = 0;
+                    if (customer && customer.pricingGroupId) {
+                        const pricing = await tx.productPricing.findUnique({
+                            where: {
+                                productId_pricingGroupId: {
+                                    productId: product.id,
+                                    pricingGroupId: customer.pricingGroupId,
+                                },
+                            },
+                        });
+                        if (pricing) {
+                            price = Number(pricing.price);
+                            mrp = pricing.mrp ? Number(pricing.mrp) : null;
+                            discountPercent = pricing.discountPercent
+                                ? Number(pricing.discountPercent)
+                                : 0;
+                        }
+                    }
+                    const lineSubTotal = price * quantity;
+                    subTotal = subTotal + lineSubTotal;
+                    const lineTaxTotal = lineSubTotal * (taxPercent / 100);
+                    taxTotal = taxTotal + lineTaxTotal;
+                    const lineDiscountTotal = lineSubTotal * (discountPercent / 100);
+                    discountTotal = discountTotal + lineDiscountTotal;
+                    const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
+                    if (product.stockQuantity < quantity) {
+                        throw new common_1.BadRequestException(`Insufficient stock for product '${product.name}'. Available: ${product.stockQuantity}, requested: ${quantity}. Please reduce quantity before placing your order.`);
+                    }
+                    const selectedSize = item.selectedSize || item.size || null;
+                    const selectedColor = item.selectedColor || item.color || null;
+                    const itemImg = getProductVariantImageUrl(product, selectedColor);
+                    orderItemsData.push({
+                        productId: product.id,
+                        sku: product.sku,
+                        productName: product.name,
+                        productImageUrl: itemImg,
+                        quantity,
+                        moq: effectiveMoq,
+                        availableStock: product.stockQuantity,
+                        shortageQuantity: null,
+                        backorderQuantity: null,
+                        price,
+                        mrp,
+                        discountPercent,
+                        taxPercent,
+                        lineSubTotal,
+                        lineTaxTotal,
+                        lineTotal,
+                        fulfillmentStatus: 'FULFILLED',
+                        size: selectedSize,
+                        color: selectedColor,
+                        selectedSize,
+                        selectedColor,
+                    });
+                }
             }
             const grandTotal = subTotal + taxTotal - discountTotal + shippingCharge;
             const order = await tx.order.create({
@@ -224,10 +376,12 @@ let OrderService = class OrderService {
                     newStatus: 'SUBMITTED',
                 },
             });
-            await tx.cart.update({
-                where: { id: cart.id },
-                data: { status: 'CONVERTED' },
-            });
+            if (cart) {
+                await tx.cart.update({
+                    where: { id: cart.id },
+                    data: { status: 'CONVERTED' },
+                });
+            }
             return tx.order.findUnique({
                 where: { id: order.id },
                 include: {
@@ -860,20 +1014,19 @@ let OrderService = class OrderService {
                 }
                 const quantity = itemInput.quantity;
                 totalQuantity += quantity;
-                const hasGst = (dto.taxAmount !== undefined && Number(dto.taxAmount) > 0) ||
-                    (dto.taxPercent !== undefined && Number(dto.taxPercent) > 0) ||
-                    (itemInput.taxPercent !== undefined && Number(itemInput.taxPercent) > 0);
-                const taxPercent = hasGst
-                    ? itemInput.taxPercent !== undefined && Number(itemInput.taxPercent) > 0
-                        ? Number(itemInput.taxPercent)
-                        : product.taxPercent !== undefined && product.taxPercent !== null && Number(product.taxPercent) > 0
-                            ? Number(product.taxPercent)
-                            : product.taxValue !== undefined && product.taxValue !== null && Number(product.taxValue) > 0
-                                ? Number(product.taxValue)
-                                : dto.taxPercent !== undefined && Number(dto.taxPercent) > 0
-                                    ? Number(dto.taxPercent)
-                                    : 18
-                    : 0;
+                const taxPercent = itemInput.taxPercent !== undefined &&
+                    itemInput.taxPercent !== null &&
+                    !isNaN(Number(itemInput.taxPercent))
+                    ? Number(itemInput.taxPercent)
+                    : product.taxPercent !== undefined &&
+                        product.taxPercent !== null &&
+                        !isNaN(Number(product.taxPercent))
+                        ? Number(product.taxPercent)
+                        : product.taxValue !== undefined &&
+                            product.taxValue !== null &&
+                            !isNaN(Number(product.taxValue))
+                            ? Number(product.taxValue)
+                            : 0;
                 const price = Number(itemInput.price);
                 const oldItem = order.items.find((i) => i.productId === itemInput.productId);
                 const discountPercent = oldItem?.discountPercent
@@ -912,12 +1065,16 @@ let OrderService = class OrderService {
                 const lineTaxTotal = taxableLineValue * (taxPercent / 100);
                 taxTotal = taxTotal + lineTaxTotal;
                 const lineTotal = lineSubTotal + lineTaxTotal - lineDiscountTotal;
+                const selectedSize = itemInput.selectedSize || itemInput.size || null;
+                const selectedColor = itemInput.selectedColor || itemInput.color || null;
+                const itemImg = itemInput.productImageUrl ||
+                    getProductVariantImageUrl(product, selectedColor);
                 orderItemsData.push({
                     orderId: order.id,
                     productId: product.id,
-                    sku: product.sku,
-                    productName: product.name,
-                    productImageUrl: getProductImageUrl(product),
+                    sku: itemInput.sku || product.sku,
+                    productName: itemInput.productName || product.name,
+                    productImageUrl: itemImg,
                     quantity: itemInput.quantity,
                     moq: product.moq,
                     availableStock: product.stockQuantity,
@@ -935,6 +1092,10 @@ let OrderService = class OrderService {
                     lineTaxTotal,
                     lineTotal,
                     fulfillmentStatus: 'FULFILLED',
+                    size: selectedSize,
+                    color: selectedColor,
+                    selectedSize,
+                    selectedColor,
                 });
             }
             const finalDiscountTotal = orderDiscountTotal !== null
@@ -1175,13 +1336,21 @@ let OrderService = class OrderService {
                 const price = Number(itemInput.price);
                 const taxPercent = dto.withGst === false
                     ? 0
-                    : itemInput.taxPercent !== undefined && itemInput.taxPercent !== null
+                    : itemInput.taxPercent !== undefined &&
+                        itemInput.taxPercent !== null &&
+                        !isNaN(Number(itemInput.taxPercent))
                         ? Number(itemInput.taxPercent)
-                        : product.taxPercent !== null && product.taxPercent !== undefined
+                        : product.taxPercent !== null &&
+                            product.taxPercent !== undefined &&
+                            !isNaN(Number(product.taxPercent))
                             ? Number(product.taxPercent)
-                            : dto.taxPercent !== undefined
-                                ? Number(dto.taxPercent)
-                                : 0;
+                            : product.taxValue !== null &&
+                                product.taxValue !== undefined &&
+                                !isNaN(Number(product.taxValue))
+                                ? Number(product.taxValue)
+                                : dto.taxPercent !== undefined && !isNaN(Number(dto.taxPercent))
+                                    ? Number(dto.taxPercent)
+                                    : 0;
                 const lineSubTotal = price * quantity;
                 subTotal = subTotal + lineSubTotal;
                 resolvedItems.push({
@@ -1213,11 +1382,15 @@ let OrderService = class OrderService {
                 });
                 const prevStock = currentProd?.stockQuantity ?? product.stockQuantity;
                 const newStock = prevStock - quantity;
+                const selectedSize = itemInput.selectedSize || itemInput.size || null;
+                const selectedColor = itemInput.selectedColor || itemInput.color || null;
+                const itemImg = itemInput.productImageUrl ||
+                    getProductVariantImageUrl(product, selectedColor);
                 orderItemsData.push({
                     productId: product.id,
-                    sku: product.sku,
-                    productName: product.name,
-                    productImageUrl: getProductImageUrl(product),
+                    sku: itemInput.sku || product.sku,
+                    productName: itemInput.productName || product.name,
+                    productImageUrl: itemImg,
                     quantity,
                     moq: product.moq,
                     availableStock: prevStock,
@@ -1229,6 +1402,10 @@ let OrderService = class OrderService {
                     lineTaxTotal,
                     lineTotal,
                     fulfillmentStatus: 'FULFILLED',
+                    size: selectedSize,
+                    color: selectedColor,
+                    selectedSize,
+                    selectedColor,
                 });
                 await tx.product.update({
                     where: { id: product.id },

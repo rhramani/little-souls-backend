@@ -575,14 +575,19 @@ model Cart {
 }
 
 model CartItem {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  cartId    String   @map("cart_id") @db.ObjectId
-  productId String   @map("product_id") @db.ObjectId
-  quantity  Int
-  price     Float
-  lineTotal Float  @map("line_total")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  cartId        String   @map("cart_id") @db.ObjectId
+  productId     String   @map("product_id") @db.ObjectId
+  quantity      Int
+  price         Float
+  lineTotal     Float    @map("line_total")
+  size          String?
+  color         String?
+  selectedSize  String?  @map("selected_size")
+  selectedColor String?  @map("selected_color")
+  variants      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   cart    Cart    @relation(fields: [cartId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   product Product @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -657,15 +662,19 @@ model OrderItem {
   backorderQuantity Int?     @map("backorder_quantity")
   price             Float
   mrp               Float?
-  discountPercent   Float? @map("discount_percent")
-  taxPercent        Float? @map("tax_percent")
-  lineSubTotal      Float  @map("line_sub_total")
-  lineTaxTotal      Float  @map("line_tax_total")
-  lineTotal         Float  @map("line_total")
+  discountPercent   Float?   @map("discount_percent")
+  taxPercent        Float?   @map("tax_percent")
+  lineSubTotal      Float    @map("line_sub_total")
+  lineTaxTotal      Float    @map("line_tax_total")
+  lineTotal         Float    @map("line_total")
   fulfillmentStatus String   @map("fulfillment_status") // "IN_STOCK", "SHORTAGE", "BACKORDER", "PARTIAL_FULFILLMENT", "FULFILLED"
   packedQuantity    Int?     @default(0) @map("packed_quantity")
   shippedQuantity   Int?     @default(0) @map("shipped_quantity")
   deliveredQuantity Int?     @default(0) @map("delivered_quantity")
+  size              String?
+  color             String?
+  selectedSize      String?  @map("selected_size")
+  selectedColor     String?  @map("selected_color")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -797,10 +806,14 @@ model InvoiceItem {
   productImageUrl String?  @map("product_image_url")
   quantity        Int
   price           Float
-  taxPercent      Float  @map("tax_percent")
-  lineSubTotal    Float  @map("line_sub_total")
-  lineTaxTotal    Float  @map("line_tax_total")
-  lineTotal       Float  @map("line_total")
+  taxPercent      Float    @map("tax_percent")
+  lineSubTotal    Float    @map("line_sub_total")
+  lineTaxTotal    Float    @map("line_tax_total")
+  lineTotal       Float    @map("line_total")
+  size            String?
+  color           String?
+  selectedSize    String?  @map("selected_size")
+  selectedColor   String?  @map("selected_color")
   createdAt       DateTime @default(now()) @map("created_at")
 
   invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: NoAction, onUpdate: NoAction)

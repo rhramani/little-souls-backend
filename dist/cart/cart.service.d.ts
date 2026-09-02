@@ -73,9 +73,14 @@ export declare class CartService {
             updatedAt: Date;
             price: number;
             productId: string;
+            color: string | null;
             quantity: number;
             lineTotal: number;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
             cartId: string;
+            variants: import("@prisma/client/runtime/library").JsonValue | null;
         })[];
     } & {
         id: string;
@@ -156,9 +161,14 @@ export declare class CartService {
             updatedAt: Date;
             price: number;
             productId: string;
+            color: string | null;
             quantity: number;
             lineTotal: number;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
             cartId: string;
+            variants: import("@prisma/client/runtime/library").JsonValue | null;
         })[];
     } & {
         id: string;
@@ -237,9 +247,14 @@ export declare class CartService {
             updatedAt: Date;
             price: number;
             productId: string;
+            color: string | null;
             quantity: number;
             lineTotal: number;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
             cartId: string;
+            variants: import("@prisma/client/runtime/library").JsonValue | null;
         })[];
     } & {
         id: string;
@@ -318,9 +333,14 @@ export declare class CartService {
             updatedAt: Date;
             price: number;
             productId: string;
+            color: string | null;
             quantity: number;
             lineTotal: number;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
             cartId: string;
+            variants: import("@prisma/client/runtime/library").JsonValue | null;
         })[];
     } & {
         id: string;
@@ -399,9 +419,14 @@ export declare class CartService {
             updatedAt: Date;
             price: number;
             productId: string;
+            color: string | null;
             quantity: number;
             lineTotal: number;
+            size: string | null;
+            selectedSize: string | null;
+            selectedColor: string | null;
             cartId: string;
+            variants: import("@prisma/client/runtime/library").JsonValue | null;
         })[];
     } & {
         id: string;

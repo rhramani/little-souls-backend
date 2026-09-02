@@ -132,6 +132,10 @@ let BillingService = class BillingService {
                 lineSubTotal: item.lineSubTotal,
                 lineTaxTotal: item.lineTaxTotal,
                 lineTotal: item.lineTotal,
+                size: item.selectedSize || item.size || null,
+                color: item.selectedColor || item.color || null,
+                selectedSize: item.selectedSize || item.size || null,
+                selectedColor: item.selectedColor || item.color || null,
             }));
             await tx.invoiceItem.createMany({
                 data: invoiceItemsData,
